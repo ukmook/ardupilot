@@ -448,6 +448,9 @@ private:
 
     MAV_RESULT handle_servorelay_message(const mavlink_command_long_t &packet);
 
+    static bool command_long_stores_location(const MAV_CMD command);
+    static void convert_COMMAND_LONG_to_COMMAND_INT(const mavlink_command_long_t &in, mavlink_command_int_t &out);
+
     bool calibrate_gyros();
 
     /// The stream we are communicating over
@@ -626,6 +629,7 @@ private:
                                                      const float yaw,
                                                      const uint16_t payload_size);
     void log_vision_position_estimate_data(const uint64_t usec,
+                                           const uint32_t corrected_msec,
                                            const float x,
                                            const float y,
                                            const float z,
@@ -678,6 +682,7 @@ private:
         uint32_t no_space_for_message;
         uint16_t statustext_last_sent_ms;
         uint32_t behind;
+        uint32_t out_of_time;
         uint16_t fnbts_maxtime;
         uint32_t max_retry_deferred_body_us;
         uint8_t max_retry_deferred_body_type;

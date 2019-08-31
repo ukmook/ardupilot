@@ -981,6 +981,9 @@ int8_t GCS_MAVLINK::deferred_message_to_send_index()
             if (ms_since_last_sent > interval_ms) {
                 // should already have sent this one!
                 ms_before_send_this_message = 0;
+#if GCS_DEBUG_SEND_MESSAGE_TIMINGS
+                try_send_message_stats.behind++;
+#endif
             } else {
                 ms_before_send_this_message = interval_ms - ms_since_last_sent;
             }
@@ -1023,6 +1026,9 @@ void GCS_MAVLINK::update_send()
     const uint32_t start = AP_HAL::millis();
     while (AP_HAL::millis() - start < 5) { // spend a max of 5ms sending messages.  This should never trigger - out_of_time() should become true
         if (gcs().out_of_time()) {
+#if GCS_DEBUG_SEND_MESSAGE_TIMINGS
+            try_send_message_stats.out_of_time++;
+#endif
             break;
         }
 
@@ -1390,6 +1396,13 @@ GCS_MAVLINK::update_receive(uint32_t max_time_us)
                             chan,
                             try_send_message_stats.no_space_for_message);
             try_send_message_stats.no_space_for_message = 0;
+        }
+        if (try_send_message_stats.out_of_time) {
+            gcs().send_text(MAV_SEVERITY_INFO,
+                            "GCS.chan(%u): out-of-time=%u",
+                            chan,
+                            try_send_message_stats.out_of_time);
+            try_send_message_stats.out_of_time = 0;
         }
         if (max_slowdown_ms) {
             gcs().send_text(MAV_SEVERITY_INFO,
@@ -2819,10 +2832,11 @@ void GCS_MAVLINK::handle_common_vision_position_estimate_data(const uint64_t use
                                timestamp_ms,
                                reset_timestamp_ms);
 
-    log_vision_position_estimate_data(usec, x, y, z, roll, pitch, yaw);
+    log_vision_position_estimate_data(usec, timestamp_ms, x, y, z, roll, pitch, yaw);
 }
 
 void GCS_MAVLINK::log_vision_position_estimate_data(const uint64_t usec,
+                                                    const uint32_t corrected_msec,
                                                     const float x,
                                                     const float y,
                                                     const float z,
@@ -2830,16 +2844,17 @@ void GCS_MAVLINK::log_vision_position_estimate_data(const uint64_t usec,
                                                     const float pitch,
                                                     const float yaw)
 {
-    AP::logger().Write("VISP", "TimeUS,RemTimeUS,PX,PY,PZ,Roll,Pitch,Yaw",
-                                           "ssmmmddh", "FF000000", "QQffffff",
-                                           (uint64_t)AP_HAL::micros64(),
-                                           (uint64_t)usec,
-                                           (double)x,
-                                           (double)y,
-                                           (double)z,
-                                           (double)(roll * RAD_TO_DEG),
-                                           (double)(pitch * RAD_TO_DEG),
-                                           (double)(yaw * RAD_TO_DEG));
+    AP::logger().Write("VISP", "TimeUS,RemTimeUS,CTimeMS,PX,PY,PZ,Roll,Pitch,Yaw",
+                       "sssmmmddh", "FFC000000", "QQIffffff",
+                       (uint64_t)AP_HAL::micros64(),
+                       (uint64_t)usec,
+                       corrected_msec,
+                       (double)x,
+                       (double)y,
+                       (double)z,
+                       (double)(roll * RAD_TO_DEG),
+                       (double)(pitch * RAD_TO_DEG),
+                       (double)(yaw * RAD_TO_DEG));
 }
 
 void GCS_MAVLINK::handle_att_pos_mocap(const mavlink_message_t &msg)
@@ -2875,7 +2890,7 @@ void GCS_MAVLINK::handle_att_pos_mocap(const mavlink_message_t &msg)
     float yaw;
     attitude.to_euler(roll, pitch, yaw);
 
-    log_vision_position_estimate_data(m.time_usec, m.x, m.y, m.z, roll, pitch, yaw);
+    log_vision_position_estimate_data(m.time_usec, timestamp_ms, m.x, m.y, m.z, roll, pitch, yaw);
 }
 
 void GCS_MAVLINK::handle_command_ack(const mavlink_message_t &msg)
@@ -3658,6 +3673,41 @@ MAV_RESULT GCS_MAVLINK::handle_command_long_packet(const mavlink_command_long_t 
     return result;
 }
 
+bool GCS_MAVLINK::command_long_stores_location(const MAV_CMD command)
+{
+    switch(command) {
+    case MAV_CMD_DO_SET_HOME:
+    case MAV_CMD_DO_SET_ROI:
+    case MAV_CMD_NAV_TAKEOFF:
+        return true;
+    default:
+        return false;
+    }
+    return false;
+}
+
+void GCS_MAVLINK::convert_COMMAND_LONG_to_COMMAND_INT(const mavlink_command_long_t &in, mavlink_command_int_t &out)
+{
+    out.target_system = in.target_system;
+    out.target_component = in.target_component;
+    out.frame = MAV_FRAME_GLOBAL_RELATIVE_ALT; // FIXME?
+    out.command = in.command;
+    out.current = 0;
+    out.autocontinue = 0;
+    out.param1 = in.param1;
+    out.param2 = in.param2;
+    out.param3 = in.param3;
+    out.param4 = in.param4;
+    if (command_long_stores_location((MAV_CMD)in.command)) {
+        out.x = in.param5 *1e7;
+        out.y = in.param6 *1e7;
+    } else {
+        out.x = in.param5;
+        out.y = in.param6;
+    }
+    out.z = in.param7;
+}
+
 void GCS_MAVLINK::handle_command_long(const mavlink_message_t &msg)
 {
     // decode packet
@@ -3670,6 +3720,11 @@ void GCS_MAVLINK::handle_command_long(const mavlink_message_t &msg)
 
     // send ACK or NAK
     mavlink_msg_command_ack_send(chan, packet.command, result);
+
+    // log the packet:
+    mavlink_command_int_t packet_int;
+    convert_COMMAND_LONG_to_COMMAND_INT(packet, packet_int);
+    AP::logger().Write_Command(packet_int, result, true);
 
     hal.util->persistent_data.last_mavlink_cmd = 0;
 }
@@ -3791,6 +3846,8 @@ void GCS_MAVLINK::handle_command_int(const mavlink_message_t &msg)
 
     // send ACK or NAK
     mavlink_msg_command_ack_send(chan, packet.command, result);
+
+    AP::logger().Write_Command(packet, result);
 
     hal.util->persistent_data.last_mavlink_cmd = 0;
 }
