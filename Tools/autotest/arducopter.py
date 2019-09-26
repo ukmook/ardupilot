@@ -2,13 +2,12 @@
 
 # Fly ArduCopter in SITL
 from __future__ import print_function
+import copy
 import math
 import os
 import shutil
 import time
-import traceback
 
-import pexpect
 from pymavlink import mavutil
 from pymavlink import mavextra
 
@@ -1832,7 +1831,6 @@ class AutoTestCopter(AutoTest):
             self.reboot_sitl()
 
             self.progress("Waiting for location")
-            old_pos = self.mav.location()
             self.zero_throttle()
             self.takeoff(10, 1800)
             self.change_mode("LAND")
@@ -2614,6 +2612,28 @@ class AutoTestCopter(AutoTest):
         if ex is not None:
             raise ex
 
+    def test_spline_last_waypoint(self):
+        self.context_push()
+        ex = None
+        try:
+            self.load_mission("copter-spline-last-waypoint.txt")
+            self.mavproxy.send('mode loiter\n')
+            self.wait_ready_to_arm()
+            self.arm_vehicle()
+            self.mavproxy.send('mode auto\n')
+            self.wait_mode('AUTO')
+            self.set_rc(3, 1500)
+            self.wait_altitude(10, 3000, relative=True)
+        except Exception as e:
+            self.progress("Exception caught: %s" % (
+                self.get_exception_stacktrace(e)))
+            ex = e
+        self.context_pop()
+        self.do_RTL()
+        self.mav.motors_disarmed_wait()
+        if ex is not None:
+            raise ex
+
     def fly_manual_throttle_mode_change(self):
         self.set_parameter("FS_GCS_ENABLE", 0) # avoid GUIDED instant disarm
         self.change_mode("STABILIZE")
@@ -3339,6 +3359,61 @@ class AutoTestCopter(AutoTest):
         if ex is not None:
             raise ex
 
+    def global_position_int_for_location(self, loc, time, heading=0):
+        return self.mav.mav.global_position_int_encode(
+            int(time * 1000), # time_boot_ms
+            int(loc.lat * 1e7),
+            int(loc.lng * 1e7),
+            int(loc.alt * 1000), # alt in mm
+            20, # relative alt - urp.
+            vx = 0,
+            vy = 0,
+            vz = 0,
+            hdg = heading
+        )
+
+    def fly_follow_mode(self):
+        self.set_parameter("FOLL_ENABLE", 1)
+        self.set_parameter("FOLL_SYSID", 255)
+        foll_ofs_x = 30 # metres
+        self.set_parameter("FOLL_OFS_X", -foll_ofs_x)
+        self.set_parameter("FOLL_OFS_TYPE", 1) # relative to other vehicle heading
+        self.takeoff(10, mode="LOITER")
+        self.set_parameter("SIM_SPEEDUP", 1)
+        self.change_mode("FOLLOW")
+        new_loc = self.mav.location()
+        new_loc_offset_n = 20
+        new_loc_offset_e = 30
+        self.location_offset_ne(new_loc, new_loc_offset_n, new_loc_offset_e)
+        self.progress("new_loc: %s" % str(new_loc))
+        heading = 0
+        self.mavproxy.send("map icon %f %f greenplane %f\n" %
+                           (new_loc.lat, new_loc.lng, heading))
+
+        expected_loc = copy.copy(new_loc)
+        self.location_offset_ne(expected_loc, -foll_ofs_x, 0)
+        self.mavproxy.send("map icon %f %f hoop\n" %
+                           (expected_loc.lat, expected_loc.lng))
+        self.progress("expected_loc: %s" % str(expected_loc))
+
+        last_sent = 0
+        while True:
+            now = self.get_sim_time_cached()
+            if now - last_sent > 0.5:
+                gpi = self.global_position_int_for_location(new_loc,
+                                                            now,
+                                                            heading=heading)
+                gpi.pack(self.mav.mav)
+                self.mav.mav.send(gpi)
+            self.mav.recv_match(type='GLOBAL_POSITION_INT', blocking=True)
+            pos = self.mav.location()
+            delta = self.get_distance(expected_loc, pos)
+            max_delta = 2
+            self.progress("position delta=%f (want <%f)" % (delta, max_delta))
+            if delta < max_delta:
+                break
+        self.do_RTL()
+
     def fly_beacon_position(self):
         self.reboot_sitl()
 
@@ -3475,6 +3550,23 @@ class AutoTestCopter(AutoTest):
         self.wait_current_waypoint(0, timeout=10)
         self.set_rc(7, 1000)
 
+    def test_radio_failsafe(self):
+        self.start_subtest("If you haven't taken off yet RC failure should be instant disarm")
+        self.change_mode("STABILIZE")
+        self.set_parameter("DISARM_DELAY", 0)
+        self.arm_vehicle()
+        self.set_parameter("SIM_RC_FAIL", 1)
+        self.disarm_wait(timeout=1)
+        self.set_parameter("SIM_RC_FAIL", 0)
+        self.set_parameter("DISARM_DELAY", 10)
+
+        self.start_subtest("Default behavour from loiter should be RTL")
+        self.takeoff(10, mode="LOITER")
+        self.set_parameter("SIM_RC_FAIL", 1)
+        self.wait_mode("RTL")
+        self.disarm_wait(timeout=100)
+
+
     def tests(self):
         '''return list of all tests'''
         ret = super(AutoTestCopter, self).tests()
@@ -3586,6 +3678,10 @@ class AutoTestCopter(AutoTest):
              "Test Loiter Mode",
              self.loiter),
 
+            ("RadioFailsafe",
+             "Test radio failsafes",
+             self.test_radio_failsafe),
+
             ("SimpleMode",
              "Fly in SIMPLE mode",
              self.fly_simple),
@@ -3614,7 +3710,10 @@ class AutoTestCopter(AutoTest):
              "Fly copter mission",
              self.fly_auto_test),
 
-            # Gripper test
+            ("SplineLastWaypoint",
+             "Test Spline as last waypoint",
+             self.test_spline_last_waypoint),
+
             ("Gripper",
              "Test gripper",
              self.test_gripper),
@@ -3669,6 +3768,10 @@ class AutoTestCopter(AutoTest):
             ("PosHoldTakeOff",
              "Fly POSHOLD takeoff",
              self.fly_poshold_takeoff),
+
+            ("FOLLOW",
+             "Fly follow mode",
+             self.fly_follow_mode),
 
             ("OnboardCompassCalibration",
              "Test onboard compass calibration",
@@ -3821,7 +3924,7 @@ class AutoTestHeli(AutoTestCopter):
         if ex is not None:
             raise ex
 
-    def fly_spline_waypoint(self):
+    def fly_spline_waypoint(self, timeout=600):
         """ensure basic spline functionality works"""
         self.load_mission("copter_spline_mission.txt")
         self.change_mode("LOITER")
@@ -3834,23 +3937,22 @@ class AutoTestHeli(AutoTestCopter):
         self.set_rc(3, 1500)
         tstart = self.get_sim_time()
         while True:
+            if self.get_sim_time() - tstart > timeout:
+                raise AutoTestTimeoutException("Vehicle did not disarm after mission")
             if not self.armed():
                 break
-            remaining = self.get_sim_time() - tstart
-            if remaining <= 0:
-                raise AutoTestTimeoutException("Vehicle did not disarm after mission")
             self.delay_sim_time(1)
         self.progress("Lowering rotor speed")
         self.set_rc(8, 1000)
 
     def set_rc_default(self):
-        super(AutoTestCopter, self).set_rc_default()
+        super(AutoTestHeli, self).set_rc_default()
         self.progress("Lowering rotor speed")
         self.set_rc(8, 1000)
 
     def tests(self):
         '''return list of all tests'''
-        ret = super(AutoTestCopter, self).tests()
+        ret = AutoTest.tests(self)
         ret.extend([
             ("AVCMission", "Fly AVC mission", self.fly_avc_test),
 
