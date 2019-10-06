@@ -282,34 +282,46 @@ private:
     AP_InertialSensor ins;
 
     RangeFinder rangefinder;
-    struct {
+    struct RangeFinderState {
         bool enabled:1;
         bool alt_healthy:1; // true if we can trust the altitude from the rangefinder
         int16_t alt_cm;     // tilt compensated altitude (in cm) from rangefinder
         uint32_t last_healthy_ms;
         LowPassFilterFloat alt_cm_filt; // altitude filter
-        int8_t glitch_count;
-    } rangefinder_state;
+        int16_t alt_cm_glitch_protected;    // last glitch protected altitude
+        int8_t glitch_count;    // non-zero number indicates rangefinder is glitching
+        uint32_t glitch_cleared_ms; // system time glitch cleared
+    } rangefinder_state, rangefinder_up_state;
 
     class SurfaceTracking {
     public:
+        // get desired climb rate (in cm/s) to achieve surface tracking
         float adjust_climb_rate(float target_rate);
+
+        // get/set target altitude (in cm) above ground
         bool get_target_alt_cm(float &target_alt_cm) const;
         void set_target_alt_cm(float target_alt_cm);
-        float logging_target_alt() const {
-            if (!valid_for_logging) {
-                return AP::logger().quiet_nan();
-            }
-            return target_alt_cm * 0.01f; // cm->m
-        }
-        void invalidate_for_logging() {
-            valid_for_logging = false;
-        }
+
+        // get target and actual distances (in m) for logging purposes
+        bool get_dist_for_logging(float &target_dist, float &actual_dist) const;
+        void invalidate_for_logging() { valid_for_logging = false; }
+
+        // surface tracking states
+        enum class SurfaceTrackingState {
+            SURFACE_TRACKING_DISABLED = 0,
+            SURFACE_TRACKING_GROUND = 1,
+            SURFACE_TRACKING_CEILING = 2
+        };
+        // set direction
+        void set_state(SurfaceTrackingState state);
 
     private:
-        float target_alt_cm;        // desired altitude in cm above the ground
+        SurfaceTrackingState tracking_state = SurfaceTrackingState::SURFACE_TRACKING_GROUND;
+        float target_dist_cm;       // desired distance in cm from ground or ceiling
         uint32_t last_update_ms;    // system time of last update to target_alt_cm
+        uint32_t last_glitch_cleared_ms;    // system time of last handle glitch recovery
         bool valid_for_logging;     // true if target_alt_cm is valid for logging
+        bool reset_target;          // true if target should be reset because of change in tracking_state
     } surface_tracking;
 
 #if RPM_ENABLED == ENABLED
@@ -828,6 +840,7 @@ private:
     void init_rangefinder(void);
     void read_rangefinder(void);
     bool rangefinder_alt_ok();
+    bool rangefinder_up_ok();
     void rpm_update();
     void init_optflow();
     void update_optical_flow(void);
