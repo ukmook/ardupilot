@@ -2128,7 +2128,8 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
                                          mission_type)
         m = mav.recv_match(type='MISSION_ITEM_INT',
                            blocking=True,
-                           timeout=1)
+                           timeout=1,
+                           condition='MISSION_ITEM_INT.mission_type==%u' % mission_type)
         if m is None:
             raise NotAchievedException("Did not receive mission item int")
         if m.mission_type != mission_type:
@@ -2222,6 +2223,7 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
             raise NotAchievedException("Did not get expected file content (want=%s) (got=%s)" % (want, got))
 
     def mavproxy_can_do_mision_item_protocols(self):
+        return False
         mavproxy_version = self.mavproxy_version()
         if not self.mavproxy_version_gt(1, 8, 12):
             self.progress("MAVProxy is too old; skipping tests")
@@ -4345,6 +4347,45 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
         if ex is not None:
             raise ex
 
+    def test_wheelencoders(self):
+        '''make sure wheel encoders are generally working'''
+        ex = None
+        try:
+            self.set_parameter("WENC_TYPE", 10)
+            self.set_parameter("EK3_ENABLE", 1)
+            self.set_parameter("AHRS_EKF_TYPE", 3)
+            self.reboot_sitl()
+            self.change_mode("LOITER")
+            self.wait_ready_to_arm()
+            self.change_mode("MANUAL")
+            self.arm_vehicle()
+            self.set_rc(3, 1600)
+
+            m = self.mav.recv_match(type='WHEEL_DISTANCE', blocking=True, timeout=5)
+            if m is None:
+                raise NotAchievedException("Did not get WHEEL_DISTANCE")
+
+            tstart = self.get_sim_time()
+            while True:
+                if self.get_sim_time_cached() - tstart > 10:
+                    break
+                dist_home = self.distance_to_home(use_cached_home=True)
+                m = self.mav.messages.get("WHEEL_DISTANCE")
+                delta = abs(m.distance[0] - dist_home)
+                self.progress("dist-home=%f wheel-distance=%f delta=%f" %
+                              (dist_home, m.distance[0], delta))
+                if delta > 5:
+                    raise NotAchievedException("wheel distance incorrect")
+            self.disarm_vehicle()
+        except Exception as e:
+            self.progress("Caught exception: %s" %
+                          self.get_exception_stacktrace(e))
+            self.disarm_vehicle()
+            ex = e
+        self.reboot_sitl()
+        if ex is not None:
+            raise ex
+
     def test_poly_fence_object_avoidance_guided_two_squares(self, target_system=1, target_component=1):
         self.start_subtest("Ensure we can steer around obstacles in guided mode")
         here = self.mav.location()
@@ -4705,6 +4746,10 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
             ("MotorTest",
              "Motor Test triggered via mavlink",
              self.test_motor_test),
+
+            ("WheelEncoders",
+             "Ensure SITL wheel encoders work",
+             self.test_wheelencoders),
 
             ("DataFlashOverMAVLink",
              "Test DataFlash over MAVLink",
