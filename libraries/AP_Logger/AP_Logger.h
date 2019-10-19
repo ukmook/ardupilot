@@ -88,6 +88,8 @@ enum Log_Event : uint8_t {
     DATA_ZIGZAG_STORE_A = 71,
     DATA_ZIGZAG_STORE_B = 72,
     DATA_LAND_REPO_ACTIVE = 73,
+    DATA_STAND_BY_ENABLE = 74,
+    DATA_STAND_BY_DISABLE = 75,
 
     DATA_SURFACED = 163,
     DATA_NOT_SURFACED = 164,
@@ -124,6 +126,7 @@ enum class LogErrorSubsystem : uint8_t {
     FAILSAFE_SENSORS = 26,
     FAILSAFE_LEAK = 27,
     PILOT_INPUT = 28,
+    FAILSAFE_VIBE = 29,
 };
 
 // bizarrely this enumeration has lots of duplicate values, offering

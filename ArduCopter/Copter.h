@@ -227,6 +227,7 @@ public:
     friend class ModeSport;
     friend class ModeStabilize;
     friend class ModeStabilize_Heli;
+    friend class ModeSystemId;
     friend class ModeThrow;
     friend class ModeZigZag;
 
@@ -331,6 +332,13 @@ private:
     // system time in milliseconds of last recorded yaw reset from ekf
     uint32_t ekfYawReset_ms;
     int8_t ekf_primary_core;
+
+    // vibration check
+    struct {
+        bool high_vibes;    // true while high vibration are detected
+        uint32_t start_ms;  // system time high vibration were last detected
+        uint32_t clear_ms;  // system time high vibrations stopped
+    } vibration_check;
 
     // GCS selection
     GCS_Copter _gcs; // avoid using this; use gcs()
@@ -581,12 +589,23 @@ private:
         float takeoff_alt_cm;
     } gndeffect_state;
 
+    bool standby_active;
+
     // set when we are upgrading parameters from 3.4
     bool upgrading_frame_params;
 
     static const AP_Scheduler::Task scheduler_tasks[];
     static const AP_Param::Info var_info[];
     static const struct LogStructure log_structure[];
+
+    // enum for ESC CALIBRATION
+    enum ESCCalibrationModes : uint8_t {
+        ESCCAL_NONE = 0,
+        ESCCAL_PASSTHROUGH_IF_THROTTLE_HIGH = 1,
+        ESCCAL_PASSTHROUGH_ALWAYS = 2,
+        ESCCAL_AUTO = 3,
+        ESCCAL_DISABLED = 9,
+    };
 
     enum Failsafe_Action {
         Failsafe_Action_None           = 0,
@@ -681,6 +700,7 @@ private:
     void failsafe_ekf_event();
     void failsafe_ekf_off_event(void);
     void check_ekf_reset();
+    void check_vibration();
 
     // esc_calibration.cpp
     void esc_calibration_startup_check();
@@ -734,6 +754,9 @@ private:
     // landing_gear.cpp
     void landinggear_update();
 
+    // standby.cpp
+    void standby_update();
+
     // Log.cpp
     void Log_Write_Control_Tuning();
     void Log_Write_Performance();
@@ -753,6 +776,8 @@ private:
 #endif
     void Log_Write_Precland();
     void Log_Write_GuidedTarget(uint8_t target_type, const Vector3f& pos_target, const Vector3f& vel_target);
+    void Log_Write_SysID_Setup(uint8_t systemID_axis, float waveform_magnitude, float frequency_start, float frequency_stop, float time_fade_in, float time_const_freq, float time_record, float time_fade_out);
+    void Log_Write_SysID_Data(float waveform_time, float waveform_sample, float waveform_freq, float angle_x, float angle_y, float angle_z, float accel_x, float accel_y, float accel_z);
     void Log_Write_Vehicle_Startup_Messages();
     void log_init(void);
 
@@ -835,6 +860,7 @@ private:
     // system.cpp
     void init_ardupilot();
     void startup_INS_ground();
+    void update_dynamic_notch();
     bool position_ok() const;
     bool ekf_position_ok() const;
     bool optflow_position_ok() const;
@@ -919,6 +945,9 @@ private:
 #endif
 #if MODE_SPORT_ENABLED == ENABLED
     ModeSport mode_sport;
+#endif
+#if MODE_SYSTEMID_ENABLED == ENABLED
+    ModeSystemId mode_systemid;
 #endif
 #if ADSB_ENABLED == ENABLED
     ModeAvoidADSB mode_avoid_adsb;

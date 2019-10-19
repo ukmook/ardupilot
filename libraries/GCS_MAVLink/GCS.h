@@ -210,7 +210,7 @@ public:
     virtual void send_position_target_local_ned() { };
     void send_servo_output_raw();
     void send_accelcal_vehicle_position(uint32_t position);
-    void send_scaled_imu(uint8_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_ms, int16_t xacc, int16_t yacc, int16_t zacc, int16_t xgyro, int16_t ygyro, int16_t zgyro, int16_t xmag, int16_t ymag, int16_t zmag));
+    void send_scaled_imu(uint8_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_ms, int16_t xacc, int16_t yacc, int16_t zacc, int16_t xgyro, int16_t ygyro, int16_t zgyro, int16_t xmag, int16_t ymag, int16_t zmag, int16_t temperature));
     void send_sys_status();
     void send_set_position_target_global_int(uint8_t target_system, uint8_t target_component, const Location& loc);
     void send_rpm() const;
@@ -350,7 +350,7 @@ protected:
     void handle_set_gps_global_origin(const mavlink_message_t &msg);
     void handle_setup_signing(const mavlink_message_t &msg);
     virtual bool should_zero_rc_outputs_on_reboot() const { return false; }
-    MAV_RESULT handle_preflight_reboot(const mavlink_command_long_t &packet);
+    virtual MAV_RESULT handle_preflight_reboot(const mavlink_command_long_t &packet);
 
     // reset a message interval via mavlink:
     MAV_RESULT handle_command_set_message_interval(const mavlink_command_long_t &packet);

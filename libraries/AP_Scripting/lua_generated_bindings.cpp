@@ -472,6 +472,31 @@ const luaL_Reg Location_meta[] = {
     {NULL, NULL}
 };
 
+static int GCS_set_message_interval(lua_State *L) {
+    GCS * ud = GCS::get_singleton();
+    if (ud == nullptr) {
+        return luaL_argerror(L, 1, "gcs not supported on this firmware");
+    }
+
+    binding_argcheck(L, 4);
+    const lua_Integer raw_data_2 = luaL_checkinteger(L, 2);
+    luaL_argcheck(L, ((raw_data_2 >= MAX(0, 0)) && (raw_data_2 <= MIN(MAVLINK_COMM_NUM_BUFFERS, UINT8_MAX))), 2, "argument out of range");
+    const uint8_t data_2 = static_cast<uint8_t>(raw_data_2);
+    const uint32_t raw_data_3 = *check_uint32_t(L, 3);
+    luaL_argcheck(L, ((raw_data_3 >= MAX(0U, 0U)) && (raw_data_3 <= MIN(UINT32_MAX, UINT32_MAX))), 3, "argument out of range");
+    const uint32_t data_3 = static_cast<uint32_t>(raw_data_3);
+    const lua_Integer raw_data_4 = luaL_checkinteger(L, 4);
+    luaL_argcheck(L, ((raw_data_4 >= MAX(-1, INT32_MIN)) && (raw_data_4 <= MIN(INT32_MAX, INT32_MAX))), 4, "argument out of range");
+    const int32_t data_4 = raw_data_4;
+    const MAV_RESULT &data = ud->set_message_interval(
+            data_2,
+            data_3,
+            data_4);
+
+    lua_pushinteger(L, data);
+    return 1;
+}
+
 static int GCS_send_text(lua_State *L) {
     GCS * ud = GCS::get_singleton();
     if (ud == nullptr) {
@@ -489,32 +514,6 @@ static int GCS_send_text(lua_State *L) {
             data_3);
 
     return 0;
-}
-
-static int GCS_set_message_interval(lua_State *L) {
-    GCS * ud = GCS::get_singleton();
-    if (ud == nullptr) {
-        return luaL_argerror(L, 1, "gcs not supported on this firmware");
-    }
-
-    binding_argcheck(L, 4);
-    const lua_Integer raw_data_2 = luaL_checkinteger(L, 2);
-    luaL_argcheck(L, ((raw_data_2 >= MAX(0, 0)) && raw_data_2 <= MIN(MAVLINK_COMM_NUM_BUFFERS, UINT8_MAX)), 2, "argument out of range");
-    const uint32_t data_2 = static_cast<uint32_t>(raw_data_2);
-    const lua_Unsigned raw_data_3 = luaL_checkinteger(L, 3);
-    luaL_argcheck(L, (raw_data_3 <= UINT32_MAX), 3, "argument out of range");
-    const uint32_t data_3 = static_cast<uint32_t>(raw_data_3);
-    const lua_Integer raw_data_4 = luaL_checkinteger(L, 4);
-    luaL_argcheck(L, ((raw_data_4 >= -1) && (raw_data_4 <= INT32_MAX)), 4, "argument out of range");
-    const int32_t data_4 = static_cast<int32_t>(raw_data_4);
-    const MAV_RESULT data = ud->set_message_interval(
-            data_2,
-            data_3,
-            data_4);
-
-    lua_pushinteger(L, data);
-
-    return 1;
 }
 
 static int AP_Relay_toggle(lua_State *L) {
@@ -689,7 +688,7 @@ static int RangeFinder_num_sensors(lua_State *L) {
 static int AP_Notify_play_tune(lua_State *L) {
     AP_Notify * ud = AP_Notify::get_singleton();
     if (ud == nullptr) {
-        return luaL_argerror(L, 1, "AP_Notify not supported on this firmware");
+        return luaL_argerror(L, 1, "notify not supported on this firmware");
     }
 
     binding_argcheck(L, 2);
@@ -1544,8 +1543,8 @@ static int AP_AHRS_get_roll(lua_State *L) {
 }
 
 const luaL_Reg GCS_meta[] = {
-    {"send_text", GCS_send_text},
     {"set_message_interval", GCS_set_message_interval},
+    {"send_text", GCS_send_text},
     {NULL, NULL}
 };
 
@@ -1573,10 +1572,6 @@ const luaL_Reg RangeFinder_meta[] = {
 
 const luaL_Reg AP_Notify_meta[] = {
     {"play_tune", AP_Notify_play_tune},
-    {NULL, NULL}
-};
-
-const luaL_Reg notify_meta[] = {
     {NULL, NULL}
 };
 
@@ -1682,8 +1677,7 @@ const struct userdata_meta singleton_fun[] = {
     {"relay", AP_Relay_meta, NULL},
     {"terrain", AP_Terrain_meta, AP_Terrain_enums},
     {"rangefinder", RangeFinder_meta, NULL},
-    {"AP_Notify", AP_Notify_meta, NULL},
-    {"notify", notify_meta, NULL},
+    {"notify", AP_Notify_meta, NULL},
     {"gps", AP_GPS_meta, AP_GPS_enums},
     {"battery", AP_BattMonitor_meta, NULL},
     {"arming", AP_Arming_meta, NULL},
@@ -1733,7 +1727,6 @@ const char *singletons[] = {
     "relay",
     "terrain",
     "rangefinder",
-    "AP_Notify",
     "notify",
     "gps",
     "battery",
