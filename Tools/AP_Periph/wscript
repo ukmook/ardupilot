@@ -4,7 +4,7 @@
 import fnmatch
 
 def build(bld):
-    targets = ['f103-*', 'CUAV_GPS']
+    targets = ['f103-*', 'CUAV_GPS', 'ZubaxGNSS*']
     valid_target = False
     for t in targets:
         if fnmatch.fnmatch(bld.env.BOARD, t):
@@ -32,6 +32,9 @@ def build(bld):
         'Filter',
         'AP_InternalError',
         'GCS_MAVLink',
+        'AP_Airspeed',
+        'AP_RangeFinder',
+        'AP_ROMFS',
         ],
         exclude_src=[
             'libraries/AP_HAL_ChibiOS/Storage.cpp'
@@ -52,6 +55,6 @@ def build(bld):
 
     bld(
         # build libcanard headers
-        rule="python3 ../../modules/libcanard/dsdl_compiler/libcanard_dsdlc --header_only --outdir ${BUILDROOT}/modules/libcanard/dsdlc_generated ../../modules/uavcan/dsdl/uavcan ../../libraries/AP_UAVCAN/dsdl/ardupilot ../../libraries/AP_UAVCAN/dsdl/com",
+        rule="python3 ${SRCROOT}/modules/libcanard/dsdl_compiler/libcanard_dsdlc --header_only --outdir ${BUILDROOT}/modules/libcanard/dsdlc_generated ${SRCROOT}/modules/uavcan/dsdl/uavcan ${SRCROOT}/libraries/AP_UAVCAN/dsdl/ardupilot ${SRCROOT}/libraries/AP_UAVCAN/dsdl/com",
         group='dynamic_sources',
     )

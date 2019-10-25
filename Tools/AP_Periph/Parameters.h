@@ -19,6 +19,9 @@ public:
         k_param_baro,
         k_param_buzz_volume,
         k_param_led_brightness,
+        k_param_airspeed,
+        k_param_rangefinder,
+        k_param_flash_bootloader,
     };
 
     AP_Int16 format_version;
@@ -27,8 +30,12 @@ public:
 #ifdef HAL_PERIPH_ENABLE_BUZZER
     AP_Int8 buzz_volume;
 #endif
-#ifdef HAL_PERIPH_NEOPIXEL_COUNT
+#ifdef AP_PERIPH_HAVE_LED
     AP_Int8 led_brightness;
+#endif
+
+#if !defined(HAL_NO_FLASH_SUPPORT) && !defined(HAL_NO_ROMFS_SUPPORT)
+    AP_Int8 flash_bootloader;
 #endif
 
     Parameters() {}

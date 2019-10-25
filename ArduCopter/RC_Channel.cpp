@@ -20,7 +20,7 @@ void RC_Channel_Copter::mode_switch_changed(modeswitch_pos_t new_pos)
         return;
     }
 
-    if (!copter.set_mode((Mode::Number)copter.flight_modes[new_pos].get(), MODE_REASON_TX_COMMAND)) {
+    if (!copter.set_mode((Mode::Number)copter.flight_modes[new_pos].get(), ModeReason::RC_COMMAND)) {
         // alert user to mode change failure
         if (copter.ap.initialised) {
             AP_Notify::events.user_mode_change_failed = 1;
@@ -77,7 +77,7 @@ void RC_Channel_Copter::init_aux_function(const aux_func_t ch_option, const aux_
     case AUX_FUNC::PRECISION_LOITER:
     case AUX_FUNC::INVERTED:
     case AUX_FUNC::WINCH_ENABLE:
-    case AUX_FUNC::STAND_BY:
+    case AUX_FUNC::STANDBY:
     case AUX_FUNC::SURFACE_TRACKING:
         do_aux_function(ch_option, ch_flag);
         break;
@@ -125,7 +125,7 @@ void RC_Channel_Copter::do_aux_function_change_mode(const Mode::Number mode,
     switch(ch_flag) {
     case HIGH: {
         // engage mode (if not possible we remain in current flight mode)
-        const bool success = copter.set_mode(mode, MODE_REASON_TX_COMMAND);
+        const bool success = copter.set_mode(mode, ModeReason::RC_COMMAND);
         if (copter.ap.initialised) {
             if (success) {
                 AP_Notify::events.user_mode_change = 1;
@@ -151,7 +151,7 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
         case AUX_FUNC::FLIP:
             // flip if switch is on, positive throttle and we're actually flying
             if (ch_flag == aux_switch_pos_t::HIGH) {
-                copter.set_mode(Mode::Number::FLIP, MODE_REASON_TX_COMMAND);
+                copter.set_mode(Mode::Number::FLIP, ModeReason::RC_COMMAND);
             }
             break;
 
@@ -543,16 +543,16 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
 #endif
             break;
 
-        case AUX_FUNC::STAND_BY: {
+        case AUX_FUNC::STANDBY: {
             switch (ch_flag) {
                 case HIGH:
                     copter.standby_active = true;
-                    copter.Log_Write_Event(DATA_STAND_BY_ENABLE);
+                    copter.Log_Write_Event(DATA_STANDBY_ENABLE);
                     gcs().send_text(MAV_SEVERITY_INFO, "Stand By Enabled");
                     break;
                 default:
                     copter.standby_active = false;
-                    copter.Log_Write_Event(DATA_STAND_BY_DISABLE);
+                    copter.Log_Write_Event(DATA_STANDBY_DISABLE);
                     gcs().send_text(MAV_SEVERITY_INFO, "Stand By Disabled");
                     break;
                 }

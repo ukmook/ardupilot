@@ -596,6 +596,14 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @RebootRequired: False
     AP_GROUPINFO("HRT_FILT", 55, NavEKF3, _hrt_filt_freq, 2.0f),
 
+    // @Param: MAG_EF_LIM
+    // @DisplayName: EarthField error limit
+    // @Description: This limits the difference between the learned earth magnetic field and the earth field from the world magnetic model tables. A value of zero means to disable the use of the WMM tables.
+    // @User: Advanced
+    // @Range: 0 500
+    // @Units: mGauss
+    AP_GROUPINFO("MAG_EF_LIM", 56, NavEKF3, _mag_ef_limit, 50),
+
     AP_GROUPEND
 };
 
@@ -1119,14 +1127,14 @@ bool NavEKF3::getOriginLLH(int8_t instance, struct Location &loc) const
 // Returns false if the filter has rejected the attempt to set the origin
 bool NavEKF3::setOriginLLH(const Location &loc)
 {
+    if (!core) {
+        return false;
+    }
     if (_fusionModeGPS != 3) {
         // we don't allow setting of the EKF origin unless we are
         // flying in non-GPS mode. This is to prevent accidental set
         // of EKF origin with invalid position or height
         gcs().send_text(MAV_SEVERITY_WARNING, "EKF3 refusing set origin");
-        return false;
-    }
-    if (!core) {
         return false;
     }
     bool ret = false;

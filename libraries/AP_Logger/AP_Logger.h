@@ -18,6 +18,7 @@
 #include <AP_Beacon/AP_Beacon.h>
 #include <AP_Proximity/AP_Proximity.h>
 #include <AP_InertialSensor/AP_InertialSensor_Backend.h>
+#include <AP_Vehicle/ModeReason.h>
 
 #include <stdint.h>
 
@@ -88,8 +89,8 @@ enum Log_Event : uint8_t {
     DATA_ZIGZAG_STORE_A = 71,
     DATA_ZIGZAG_STORE_B = 72,
     DATA_LAND_REPO_ACTIVE = 73,
-    DATA_STAND_BY_ENABLE = 74,
-    DATA_STAND_BY_DISABLE = 75,
+    DATA_STANDBY_ENABLE = 74,
+    DATA_STANDBY_DISABLE = 75,
 
     DATA_SURFACED = 163,
     DATA_NOT_SURFACED = 164,
@@ -245,8 +246,8 @@ public:
     void Write_Rally();
     void Write_Baro(uint64_t time_us=0);
     void Write_Power(void);
-    void Write_AHRS2(AP_AHRS &ahrs);
-    void Write_POS(AP_AHRS &ahrs);
+    void Write_AHRS2();
+    void Write_POS();
     void Write_Radio(const mavlink_radio_t &packet);
     void Write_Message(const char *message);
     void Write_MessageF(const char *fmt, ...);
@@ -254,11 +255,11 @@ public:
     void Write_Camera(const Location &current_loc, uint64_t timestamp_us=0);
     void Write_Trigger(const Location &current_loc);
     void Write_ESC(uint8_t id, uint64_t time_us, int32_t rpm, uint16_t voltage, uint16_t current, int16_t temperature, uint16_t current_tot);
-    void Write_Attitude(AP_AHRS &ahrs, const Vector3f &targets);
+    void Write_Attitude(const Vector3f &targets);
     void Write_AttitudeView(AP_AHRS_View &ahrs, const Vector3f &targets);
     void Write_Current();
     void Write_Compass(uint64_t time_us=0);
-    void Write_Mode(uint8_t mode, uint8_t reason);
+    void Write_Mode(uint8_t mode, const ModeReason reason);
 
     void Write_EntireMission();
     void Write_Command(const mavlink_command_int_t &packet, MAV_RESULT result, bool was_command_long=false);
