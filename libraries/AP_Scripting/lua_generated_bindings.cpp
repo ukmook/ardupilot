@@ -832,6 +832,34 @@ static int RangeFinder_num_sensors(lua_State *L) {
     return 1;
 }
 
+static int AP_Notify_handle_rgb(lua_State *L) {
+    AP_Notify * ud = AP_Notify::get_singleton();
+    if (ud == nullptr) {
+        return luaL_argerror(L, 1, "notify not supported on this firmware");
+    }
+
+    binding_argcheck(L, 5);
+    const lua_Integer raw_data_2 = luaL_checkinteger(L, 2);
+    luaL_argcheck(L, ((raw_data_2 >= MAX(0, 0)) && (raw_data_2 <= MIN(UINT8_MAX, UINT8_MAX))), 2, "argument out of range");
+    const uint8_t data_2 = static_cast<uint8_t>(raw_data_2);
+    const lua_Integer raw_data_3 = luaL_checkinteger(L, 3);
+    luaL_argcheck(L, ((raw_data_3 >= MAX(0, 0)) && (raw_data_3 <= MIN(UINT8_MAX, UINT8_MAX))), 3, "argument out of range");
+    const uint8_t data_3 = static_cast<uint8_t>(raw_data_3);
+    const lua_Integer raw_data_4 = luaL_checkinteger(L, 4);
+    luaL_argcheck(L, ((raw_data_4 >= MAX(0, 0)) && (raw_data_4 <= MIN(UINT8_MAX, UINT8_MAX))), 4, "argument out of range");
+    const uint8_t data_4 = static_cast<uint8_t>(raw_data_4);
+    const lua_Integer raw_data_5 = luaL_checkinteger(L, 5);
+    luaL_argcheck(L, ((raw_data_5 >= MAX(0, 0)) && (raw_data_5 <= MIN(UINT8_MAX, UINT8_MAX))), 5, "argument out of range");
+    const uint8_t data_5 = static_cast<uint8_t>(raw_data_5);
+    ud->handle_rgb(
+            data_2,
+            data_3,
+            data_4,
+            data_5);
+
+    return 0;
+}
+
 static int AP_Notify_play_tune(lua_State *L) {
     AP_Notify * ud = AP_Notify::get_singleton();
     if (ud == nullptr) {
@@ -1201,6 +1229,29 @@ static int AP_GPS_num_sensors(lua_State *L) {
     const uint8_t data = ud->num_sensors();
 
     lua_pushinteger(L, data);
+    return 1;
+}
+
+static int AP_BattMonitor_get_cycle_count(lua_State *L) {
+    AP_BattMonitor * ud = AP_BattMonitor::get_singleton();
+    if (ud == nullptr) {
+        return luaL_argerror(L, 1, "battery not supported on this firmware");
+    }
+
+    binding_argcheck(L, 2);
+    const lua_Integer raw_data_2 = luaL_checkinteger(L, 2);
+    luaL_argcheck(L, ((raw_data_2 >= MAX(0, 0)) && (raw_data_2 <= MIN(ud->num_instances(), UINT8_MAX))), 2, "argument out of range");
+    const uint8_t data_2 = static_cast<uint8_t>(raw_data_2);
+    uint16_t data_5003 = {};
+    const bool data = ud->get_cycle_count(
+            data_2,
+            data_5003);
+
+    if (data) {
+        lua_pushinteger(L, data_5003);
+    } else {
+        lua_pushnil(L);
+    }
     return 1;
 }
 
@@ -1735,6 +1786,7 @@ const luaL_Reg RangeFinder_meta[] = {
 };
 
 const luaL_Reg AP_Notify_meta[] = {
+    {"handle_rgb", AP_Notify_handle_rgb},
     {"play_tune", AP_Notify_play_tune},
     {NULL, NULL}
 };
@@ -1764,6 +1816,7 @@ const luaL_Reg AP_GPS_meta[] = {
 };
 
 const luaL_Reg AP_BattMonitor_meta[] = {
+    {"get_cycle_count", AP_BattMonitor_get_cycle_count},
     {"get_temperature", AP_BattMonitor_get_temperature},
     {"overpower_detected", AP_BattMonitor_overpower_detected},
     {"has_failsafed", AP_BattMonitor_has_failsafed},

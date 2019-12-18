@@ -7,6 +7,7 @@ import math
 import os
 import shutil
 import time
+import numpy
 
 from pymavlink import mavutil
 from pymavlink import mavextra
@@ -1846,6 +1847,73 @@ class AutoTestCopter(AutoTest):
             raise e
 
         self.do_RTL()
+
+    def fly_motor_vibration(self):
+        """Test flight with motor vibration"""
+        self.context_push()
+
+        ex = None
+        try:
+            self.set_rc_default()
+            self.set_parameter("INS_LOG_BAT_MASK", 3)
+            self.set_parameter("INS_LOG_BAT_OPT", 2)
+            self.set_parameter("LOG_BITMASK", 958)
+            self.set_parameter("LOG_DISARMED", 0)
+            self.set_parameter("SIM_VIB_MOT_MAX", 350)
+            self.set_parameter("SIM_GYR_RND", 100)
+            self.set_parameter("SIM_DRIFT_SPEED", 0)
+            self.set_parameter("SIM_DRIFT_TIME", 0)
+            self.reboot_sitl()
+
+            self.takeoff(10, mode="LOITER")
+            self.change_alt(alt_min=15)
+
+            hover_time = 5
+            tstart = self.get_sim_time()
+            self.progress("Hovering for %u seconds" % hover_time)
+            while self.get_sim_time_cached() < tstart + hover_time:
+                attitude = self.mav.recv_match(type='ATTITUDE', blocking=True)
+            tend = self.get_sim_time()
+
+            self.do_RTL()
+            psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
+            # ignore the first 20Hz
+            ignore_bins = 20
+            freq = psd["F"][numpy.argmax(psd["X"][ignore_bins:]) + ignore_bins]
+            if numpy.amax(psd["X"][ignore_bins:]) < -22 or freq < 200 or freq > 300:
+                raise NotAchievedException("Did not detect a motor peak, found %f at %f dB" % (freq, numpy.amax(psd["X"][ignore_bins:])))
+            else:
+                self.progress("Detected motor peak at %fHz" % freq)
+
+            # now add a notch and check that the peak is squashed
+            self.set_parameter("INS_NOTCH_ENABLE", 1)
+            self.set_parameter("INS_NOTCH_FREQ", freq)
+            self.set_parameter("INS_NOTCH_ATT", 50)
+            self.set_parameter("INS_NOTCH_BW", freq/2)
+            self.reboot_sitl()
+
+            self.takeoff(10, mode="LOITER")
+            self.change_alt(alt_min=15)
+
+            tstart = self.get_sim_time()
+            self.progress("Hovering for %u seconds" % hover_time)
+            while self.get_sim_time_cached() < tstart + hover_time:
+                attitude = self.mav.recv_match(type='ATTITUDE', blocking=True)
+            tend = self.get_sim_time()
+            self.do_RTL()
+            psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
+            freq = psd["F"][numpy.argmax(psd["X"][ignore_bins:]) + ignore_bins]
+            if numpy.amax(psd["X"][ignore_bins:]) < -22:
+                self.progress("Did not detect a motor peak, found %f at %f dB" % (freq, numpy.amax(psd["X"][ignore_bins:])))
+            else:
+                raise NotAchievedException("Detected motor peak at %f Hz" % (freq))
+        except Exception as e:
+            ex = e
+
+        self.context_pop()
+
+        if ex is not None:
+            raise ex
 
     def fly_vision_position(self):
         """Disable GPS navigation, enable Vicon input."""
@@ -4111,6 +4179,80 @@ class AutoTestCopter(AutoTest):
         self.wait_current_waypoint(0, timeout=10)
         self.set_rc(7, 1000)
 
+    def fly_rangefinder_drivers_fly(self, rangefinders):
+        '''ensure rangefinder gives height-above-ground'''
+        self.change_mode('GUIDED')
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        expected_alt = 5
+        self.user_takeoff(alt_min=expected_alt)
+        rf = self.mav.recv_match(type="RANGEFINDER", timeout=1, blocking=True)
+        if rf is None:
+            raise NotAchievedException("Did not receive rangefinder message")
+        gpi = self.mav.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
+        if gpi is None:
+            raise NotAchievedException("Did not receive GLOBAL_POSITION_INT message")
+        if abs(rf.distance - gpi.relative_alt/1000.0) > 1:
+            raise NotAchievedException("rangefinder alt (%s) disagrees with global-position-int.relative_alt (%s)" % (rf.distance, gpi.relative_alt/1000.0))
+
+        for i in range(0, len(rangefinders)):
+            name = rangefinders[i]
+            self.progress("i=%u (%s)" % (i, name))
+            ds = self.mav.recv_match(
+                type="DISTANCE_SENSOR",
+                timeout=2,
+                blocking=True,
+                condition="DISTANCE_SENSOR.id==%u" % i
+            )
+            if ds is None:
+                raise NotAchievedException("Did not receive DISTANCE_SENSOR message for id==%u (%s)" % (i, name))
+            self.progress("Got: %s" % str(ds))
+            if abs(ds.current_distance/100.0 - gpi.relative_alt/1000.0) > 1:
+                raise NotAchievedException(
+                    "distance sensor.current_distance (%f) (%s) disagrees with global-position-int.relative_alt (%s)" %
+                    (ds.current_distance/100.0, name, gpi.relative_alt/1000.0))
+
+        self.land_and_disarm()
+
+        self.progress("Ensure RFND messages in log")
+        if not self.current_onboard_log_contains_message("RFND"):
+            raise NotAchievedException("No RFND messages in log")
+
+
+    def fly_rangefinder_drivers(self):
+        self.set_parameter("RTL_ALT", 500)
+        self.set_parameter("RTL_ALT_TYPE", 1)
+        drivers = [
+            ("lightwareserial",8),
+            ("ulanding_v0", 11),
+            ("ulanding_v1", 11),
+            ("leddarone", 12),
+            ("maxsonarseriallv", 13),
+            ("nmea", 17),
+            ("wasp", 18),
+            ("benewake_tf02", 19),
+            ("blping", 23),
+            ("benewake_tfmini", 20),
+            ("lanbao", 26),
+            ("benewake_tf03", 27),
+        ]
+        while len(drivers):
+            do_drivers = drivers[0:3]
+            drivers = drivers[3:]
+            command_line_args = []
+            for (offs, cmdline_argument, serial_num) in [(0, '--uartE', 4),
+                                                         (1, '--uartF', 5),
+                                                         (2, '--uartG', 6)]:
+                if len(do_drivers) > offs:
+                    (sim_name, rngfnd_param_value) = do_drivers[offs]
+                    command_line_args.append("%s=sim:%s" %
+                                             (cmdline_argument,sim_name))
+                    serial_param_name = "SERIAL%u_PROTOCOL" % serial_num
+                    self.set_parameter(serial_param_name, 9) # rangefinder
+                    self.set_parameter("RNGFND%u_TYPE" % (offs+1), rngfnd_param_value)
+            self.customise_SITL_commandline(command_line_args)
+            self.fly_rangefinder_drivers_fly([x[0] for x in do_drivers])
+
     def tests(self):
         '''return list of all tests'''
         ret = super(AutoTestCopter, self).tests()
@@ -4282,6 +4424,10 @@ class AutoTestCopter(AutoTest):
              "Test Camera/Antenna Mount",
              self.test_mount),
 
+            ("Button",
+             "Test Buttons",
+             self.test_button),
+
             ("RangeFinder",
              "Test RangeFinder Basic Functionality",
              self.test_rangefinder),
@@ -4325,12 +4471,19 @@ class AutoTestCopter(AutoTest):
              "Fly Dynamic Notches",
              self.fly_dynamic_notches),
 
+            ("RangeFinderDrivers",
+             "Test rangefinder drivers",
+             self.fly_rangefinder_drivers),
+
+            ("MotorVibration",
+             "Fly motor vibration test",
+             self.fly_motor_vibration),
+
             ("LogDownLoad",
              "Log download",
              lambda: self.log_download(
                  self.buildlogs_path("ArduCopter-log.bin"),
                  upload_logs=len(self.fail_list) > 0))
-
         ])
         return ret
 
@@ -4339,6 +4492,7 @@ class AutoTestCopter(AutoTest):
             "Parachute": "See https://github.com/ArduPilot/ardupilot/issues/4702",
             "HorizontalAvoidFence": "See https://github.com/ArduPilot/ardupilot/issues/11525",
             "BeaconPosition": "See https://github.com/ArduPilot/ardupilot/issues/11689",
+            "MotorVibration": "See https://github.com/ArduPilot/ardupilot/issues/13072",
         }
 
 class AutoTestHeli(AutoTestCopter):

@@ -38,6 +38,7 @@
 #include <AP_VisualOdom/AP_VisualOdom.h>
 #include <AP_OpticalFlow/OpticalFlow.h>
 #include <AP_Baro/AP_Baro.h>
+#include <AP_EFI/AP_EFI.h>
 
 #include <stdio.h>
 
@@ -783,6 +784,7 @@ ap_message GCS_MAVLINK::mavlink_id_to_ap_message_id(const uint32_t mavlink_id) c
         { MAVLINK_MSG_ID_DEEPSTALL,             MSG_LANDING},
         { MAVLINK_MSG_ID_EXTENDED_SYS_STATE,    MSG_EXTENDED_SYS_STATE},
         { MAVLINK_MSG_ID_AUTOPILOT_VERSION,     MSG_AUTOPILOT_VERSION},
+        { MAVLINK_MSG_ID_EFI_STATUS,            MSG_EFI_STATUS},
             };
 
     for (uint8_t i=0; i<ARRAY_SIZE(map); i++) {
@@ -1781,7 +1783,15 @@ void GCS::send_statustext(MAV_SEVERITY severity, uint8_t dest_bitmask, const cha
 
     // filter destination ports to only allow active ports.
     statustext_t statustext{};
-    statustext.bitmask = (GCS_MAVLINK::active_channel_mask()  | GCS_MAVLINK::streaming_channel_mask() ) & dest_bitmask;
+    if (update_send_has_been_called) {
+        statustext.bitmask = (GCS_MAVLINK::active_channel_mask()  | GCS_MAVLINK::streaming_channel_mask() );
+    } else {
+        // we have not yet initialised the streaming-channel-mask,
+        // which is done as part of the update() call.  So just send
+        // it to all channels:
+        statustext.bitmask = (1<<_num_gcs)-1;
+    }
+    statustext.bitmask &= dest_bitmask;
     if (!statustext.bitmask) {
         // nowhere to send
         return;
@@ -1858,6 +1868,7 @@ void GCS::send_message(enum ap_message id)
 
 void GCS::update_send()
 {
+    update_send_has_been_called = true;
     if (!initialised_missionitemprotocol_objects) {
         initialised_missionitemprotocol_objects = true;
         // once-only initialisation of MissionItemProtocol objects:
@@ -1969,6 +1980,7 @@ void GCS::setup_uarts()
     }
 
 #if !HAL_MINIMIZE_FEATURES
+    ltm_telemetry.init();
     devo_telemetry.init();
 #endif
 }
@@ -2221,6 +2233,22 @@ void GCS_MAVLINK::send_gps_global_origin() const
         ekf_origin.lng,
         ekf_origin.alt * 10,
         AP_HAL::micros64());
+}
+
+MAV_STATE GCS_MAVLINK::system_status() const
+{
+    MAV_STATE _system_status = vehicle_system_status();
+    if (_system_status < MAV_STATE_CRITICAL) {
+        // note that POWEROFF and FLIGHT_TERMINATION are both >
+        // CRITICAL, so we will not overwrite POWEROFF and
+        // FLIGHT_TERMINATION even if we have internal errors.  If new
+        // enum entries are added then this may also not overwrite
+        // those.
+        if (AP::internalerror().errors()) {
+            _system_status = MAV_STATE_CRITICAL;
+        }
+    }
+    return _system_status;
 }
 
 /*
@@ -3002,6 +3030,19 @@ void GCS_MAVLINK::handle_optical_flow(const mavlink_message_t &msg)
     optflow->handle_msg(msg);
 }
 
+
+/*
+  handle MAV_CMD_FIXED_MAG_CAL_YAW
+ */
+MAV_RESULT GCS_MAVLINK::handle_fixed_mag_cal_yaw(const mavlink_command_long_t &packet)
+{
+    Compass &compass = AP::compass();
+    return compass.mag_cal_fixed_yaw(packet.param1,
+                                     uint8_t(packet.param2),
+                                     packet.param3,
+                                     packet.param4);
+}
+
 /*
   handle messages which don't require vehicle specific data
  */
@@ -3339,6 +3380,7 @@ MAV_RESULT GCS_MAVLINK::_handle_command_preflight_calibration_baro()
 
 MAV_RESULT GCS_MAVLINK::_handle_command_preflight_calibration(const mavlink_command_long_t &packet)
 {
+    EXPECT_DELAY_MS(30000);
     if (is_equal(packet.param1,1.0f)) {
         if (!calibrate_gyros()) {
             return MAV_RESULT_FAILED;
@@ -3723,6 +3765,10 @@ MAV_RESULT GCS_MAVLINK::handle_command_long_packet(const mavlink_command_long_t 
 
         return MAV_RESULT_UNSUPPORTED;
 
+    case MAV_CMD_FIXED_MAG_CAL_YAW:
+        result = handle_fixed_mag_cal_yaw(packet);
+        break;
+        
     default:
         result = MAV_RESULT_UNSUPPORTED;
         break;
@@ -4472,6 +4518,17 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
                 default:
                     break;
             }
+        }
+#endif
+        break;
+    }
+
+    case MSG_EFI_STATUS: {
+#if EFI_ENABLED
+        CHECK_PAYLOAD_SIZE(EFI_STATUS);
+        AP_EFI *efi = AP::EFI();
+        if (efi) {
+            efi->send_mavlink_status(chan);
         }
 #endif
         break;

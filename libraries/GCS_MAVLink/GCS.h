@@ -13,9 +13,11 @@
 #include <AP_AdvancedFailsafe/AP_AdvancedFailsafe.h>
 #include <AP_RTC/JitterCorrection.h>
 #include <AP_Common/Bitmask.h>
+#include <AP_LTM_Telem/AP_LTM_Telem.h>
 #include <AP_Devo_Telem/AP_Devo_Telem.h>
 #include <RC_Channel/RC_Channel.h>
 #include <AP_Filesystem/AP_Filesystem_Available.h>
+#include <AP_GPS/AP_GPS.h>
 
 #include "MissionItemProtocol_Waypoints.h"
 #include "MissionItemProtocol_Rally.h"
@@ -259,8 +261,8 @@ public:
       send a MAVLink message to all components with this vehicle's system id
       This is a no-op if no routes to components have been learned
     */
-    static void send_to_components(const mavlink_message_t &msg) { routing.send_to_components(msg); }
-    
+    static void send_to_components(uint32_t msgid, const char *pkt, uint8_t pkt_len) { routing.send_to_components(msgid, pkt, pkt_len); }
+
     /*
       allow forwarding of packets / heartbeats to be blocked as required by some components to reduce traffic
     */
@@ -307,7 +309,8 @@ protected:
     void set_ekf_origin(const Location& loc);
 
     virtual MAV_MODE base_mode() const = 0;
-    virtual MAV_STATE system_status() const = 0;
+    MAV_STATE system_status() const;
+    virtual MAV_STATE vehicle_system_status() const = 0;
 
     virtual MAV_VTOL_STATE vtol_state() const { return MAV_VTOL_STATE_UNDEFINED; }
     virtual MAV_LANDED_STATE landed_state() const { return MAV_LANDED_STATE_UNDEFINED; }
@@ -436,6 +439,8 @@ protected:
     MAV_RESULT handle_command_do_fence_enable(const mavlink_command_long_t &packet);
 
     void handle_optical_flow(const mavlink_message_t &msg);
+
+    MAV_RESULT handle_fixed_mag_cal_yaw(const mavlink_command_long_t &packet);
 
     // vehicle-overridable message send function
     virtual bool try_send_message(enum ap_message id);
@@ -870,6 +875,8 @@ public:
     AP_Frsky_Telem *frsky;
 
 #if !HAL_MINIMIZE_FEATURES
+    // LTM backend
+    AP_LTM_Telem ltm_telemetry;
     // Devo backend
     AP_DEVO_Telem devo_telemetry;
 #endif
@@ -921,6 +928,11 @@ private:
         mavlink_statustext_t    msg;
     };
 
+    virtual AP_GPS::GPS_Status min_status_for_gps_healthy() const {
+        // NO_FIX simply excludes NO_GPS
+        return AP_GPS::GPS_Status::NO_FIX;
+    }
+
     void update_sensor_status_flags();
 
 #if HAL_MEM_CLASS <= HAL_MEM_CLASS_192 || CONFIG_HAL_BOARD == HAL_BOARD_SITL
@@ -938,6 +950,9 @@ private:
 
     // true if we have already allocated protocol objects:
     bool initialised_missionitemprotocol_objects;
+
+    // true if update_send has ever been called:
+    bool update_send_has_been_called;
 
     // handle passthru between two UARTs
     struct {

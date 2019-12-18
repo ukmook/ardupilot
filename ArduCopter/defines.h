@@ -106,16 +106,6 @@ enum GuidedMode {
     Guided_Angle,
 };
 
-// RTL states
-enum RTLState {
-    RTL_Starting,
-    RTL_InitialClimb,
-    RTL_ReturnHome,
-    RTL_LoiterAtHome,
-    RTL_FinalDescent,
-    RTL_Land
-};
-
 // Safe RTL states
 enum SmartRTLState {
     SmartRTL_WaitForPathCleanup,
@@ -123,11 +113,6 @@ enum SmartRTLState {
     SmartRTL_PreLandPosition,
     SmartRTL_Descend,
     SmartRTL_Land
-};
-
-enum LandStateType {
-    LandStateType_FlyToLocation = 0,
-    LandStateType_Descending = 1
 };
 
 enum PayloadPlaceStateType {
@@ -165,14 +150,6 @@ enum LoggingParameters {
      LOG_GUIDEDTARGET_MSG,
      LOG_SYSIDD_MSG,
      LOG_SYSIDS_MSG,
-};
-
-// Harmonic notch update mode
-enum HarmonicNotchDynamicMode {
-    HarmonicNotch_Fixed,
-    HarmonicNotch_UpdateThrottle,
-    HarmonicNotch_UpdateRPM,
-    HarmonicNotch_UpdateBLHeli,
 };
 
 #define MASK_LOG_ATTITUDE_FAST          (1<<0)
