@@ -24,6 +24,8 @@ public:
         k_param_flash_bootloader,
         k_param_rangefinder_baud,
         k_param_adsb_baudrate,
+        k_param_hardpoint_id,
+        k_param_hardpoint_rate,
     };
 
     AP_Int16 format_version;
@@ -48,6 +50,11 @@ public:
     AP_Int32 adsb_baudrate;
 #endif
 
+#ifdef HAL_PERIPH_ENABLE_PWM_HARDPOINT
+    AP_Int16 hardpoint_id;
+    AP_Int8 hardpoint_rate;
+#endif
+    
     Parameters() {}
 };
 
