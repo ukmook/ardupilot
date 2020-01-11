@@ -91,11 +91,11 @@ static uavcan_protocol_NodeStatus node_status;
 
 
 /**
- * Returns a pseudo random float in the range [0, 1].
+ * Returns a pseudo random integer in a given range
  */
-static float getRandomFloat(void)
+static uint16_t get_random_range(uint16_t range)
 {
-    return float(get_random16()) / 0xFFFF;
+    return get_random16() % range;
 }
 
 
@@ -370,7 +370,7 @@ static void handle_allocation_response(CanardInstance* ins, CanardRxTransfer* tr
     // Rule C - updating the randomized time interval
     send_next_node_id_allocation_request_at_ms =
         AP_HAL::millis() + UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_MIN_REQUEST_PERIOD_MS +
-        (uint32_t)(getRandomFloat() * UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_MAX_FOLLOWUP_DELAY_MS);
+        get_random_range(UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_MAX_FOLLOWUP_DELAY_MS);
 
     if (transfer->source_node_id == CANARD_BROADCAST_NODE_ID)
     {
@@ -813,7 +813,14 @@ static void can_rxfull_cb(CANDriver *canp, uint32_t flags)
 static void processRx(void)
 {
     CANRxFrame rxmsg;
-    while (rxbuffer.pop(rxmsg)) {
+    while (true) {
+        bool have_msg;
+        chSysLock();
+        have_msg = rxbuffer.pop(rxmsg);
+        chSysUnlock();
+        if (!have_msg) {
+            break;
+        }
         CanardCANFrame rx_frame {};
 
         //palToggleLine(HAL_GPIO_PIN_LED);
@@ -936,7 +943,7 @@ static void can_wait_node_id(void)
 
         send_next_node_id_allocation_request_at_ms =
             AP_HAL::millis() + UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_MIN_REQUEST_PERIOD_MS +
-            (uint32_t)(getRandomFloat() * UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_MAX_FOLLOWUP_DELAY_MS);
+            get_random_range(UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_MAX_FOLLOWUP_DELAY_MS);
 
         while ((AP_HAL::millis() < send_next_node_id_allocation_request_at_ms) &&
                (canardGetLocalNodeID(&canard) == CANARD_BROADCAST_NODE_ID))
