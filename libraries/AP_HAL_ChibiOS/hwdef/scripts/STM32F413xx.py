@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-these tables are generated from the STM32 datasheet RM0402 in en.DM00180369.pdf for the
+these tables are generated from the STM32 datasheet RM0402 in en.DM00305666.pdf for the
 STM32F413
 '''
 
@@ -20,12 +20,13 @@ mcu = {
     # flags of 2 means faster memory for CPU intensive work
     'RAM_MAP' : [
         (0x20000000, 256, 1), # main memory, DMA safe
+        #(0x10000000,  64, 2), # CCM memory, faster, but not DMA safe
     ]
 }
 
 DMA_Map = {
 	# format is (DMA_TABLE, StreamNum, Channel)
-	# extracted from tabula-stm32f412-ref-manual-196.csv
+	# extracted from tabula-stm32f413-ref-manual-218.csv
 	"ADC1"    	:	[(2,0,0),(2,4,0)],
 	"DFSDM1_FLT0"	:	[(2,6,3),(2,0,7)],
 	"DFSDM1_FLT1"	:	[(2,1,3),(2,4,3)],
@@ -811,7 +812,7 @@ AltFunction_map = {
     }
 ADC1_map = {
 	# format is PIN : ADC1_CHAN
-	# extracted from tabula-addfunc-F412RG.csv
+	# extracted from tabula-addfunc-F413xx.csv
 	"PA0"	:	0,
 	"PA1"	:	1,
 	"PA2"	:	2,
