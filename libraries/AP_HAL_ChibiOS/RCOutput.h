@@ -48,7 +48,8 @@ public:
         max_pwm = _esc_pwm_max;
         return true;
     }
-    void set_output_mode(uint16_t mask, enum output_mode mode) override;
+    void set_output_mode(uint16_t mask, const enum output_mode mode) override;
+    bool get_output_mode_banner(char banner_msg[], uint8_t banner_msg_len) const override;
 
     float scale_esc_to_unity(uint16_t pwm) override {
         return 2.0 * ((float) pwm - _esc_pwm_min) / (_esc_pwm_max - _esc_pwm_min) - 1.0;
@@ -163,9 +164,9 @@ public:
 
     /*
       setup neopixel (WS2812B) output data for a given output channel
-      and mask of LEDs on the channel
+      and LEDs number. LED -1 is all LEDs
      */
-    void set_neopixel_rgb_data(const uint16_t chan, uint32_t ledmask, uint8_t red, uint8_t green, uint8_t blue) override;
+    void set_neopixel_rgb_data(const uint16_t chan, int8_t led, uint8_t red, uint8_t green, uint8_t blue) override;
 
     /*
       trigger send of neopixel data
@@ -294,8 +295,8 @@ private:
     // widest pulse for oneshot triggering
     uint16_t trigger_widest_pulse;
 
-    // are we using oneshot125 for the iomcu?
-    bool iomcu_oneshot125;
+    // iomcu output mode (pwm, oneshot or oneshot125)
+    enum output_mode iomcu_mode = MODE_PWM_NORMAL;
 
     // find a channel group given a channel number
     struct pwm_group *find_chan(uint8_t chan, uint8_t &group_idx);
@@ -336,8 +337,9 @@ private:
 
     /*
       NeoPixel handling. Max of 32 LEDs uses max 12k of memory per group
+      return true if send was successful
     */
-    void neopixel_send(pwm_group &group);
+    bool neopixel_send(pwm_group &group);
     bool neopixel_pending;
 
     void dma_allocate(Shared_DMA *ctx);
@@ -353,6 +355,12 @@ private:
     void set_group_mode(pwm_group &group);
     bool is_dshot_protocol(const enum output_mode mode) const;
     uint32_t protocol_bitrate(const enum output_mode mode) const;
+
+    /*
+      setup neopixel (WS2812B) output data for a given output channel
+      and LEDs number. LED -1 is all LEDs
+     */
+    void _set_neopixel_rgb_data(pwm_group *grp, uint8_t idx, uint8_t led, uint8_t red, uint8_t green, uint8_t blue);
 
     // serial output support
     static const eventmask_t serial_event_mask = EVENT_MASK(1);

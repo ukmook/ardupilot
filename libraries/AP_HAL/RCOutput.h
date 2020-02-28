@@ -183,6 +183,11 @@ public:
     virtual void    set_output_mode(uint16_t mask, enum output_mode mode) {}
 
     /*
+     * get output mode banner to inform user of how outputs are configured
+     */
+    virtual bool get_output_mode_banner(char banner_msg[], uint8_t banner_msg_len) const { return false; }
+
+    /*
       set default update rate
      */
     virtual void    set_default_rate(uint16_t rate_hz) {}
@@ -201,12 +206,18 @@ public:
 
     /*
       setup neopixel (WS2812B) output data for a given output channel
-      and mask of which LEDs in the chain
+      and led number. A led number of -1 means all LEDs. LED 0 is the first LED
      */
-    virtual void set_neopixel_rgb_data(const uint16_t chan, uint32_t ledmask, uint8_t red, uint8_t green, uint8_t blue) {}
-
+    virtual void set_neopixel_rgb_data(const uint16_t chan, int8_t led, uint8_t red, uint8_t green, uint8_t blue) {}
+    
     /*
       trigger send of neopixel data
      */
     virtual void neopixel_send(void) {}
+
+protected:
+
+    // helper functions for implementation of get_output_mode_banner
+    void append_to_banner(char banner_msg[], uint8_t banner_msg_len, output_mode out_mode, uint8_t low_ch, uint8_t high_ch) const;
+    const char* get_output_mode_string(enum output_mode out_mode) const;
 };
