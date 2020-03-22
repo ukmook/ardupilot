@@ -15,7 +15,7 @@
 	url = git://github.com/ArduPilot/googletest
 [submodule "modules/ChibiOS"]
 	path = modules/ChibiOS
-	url = git://github.com/ArduPilot/ChibiOS.git
+	url = git://github.com/ukmook/ChibiOS
 [submodule "modules/libcanard"]
 	path = modules/libcanard
 	url = git://github.com/ArduPilot/libcanard.git
