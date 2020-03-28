@@ -90,11 +90,10 @@ static const uint32_t flash_memmap[STM32_FLASH_NPAGES] = { KB(16), KB(16), KB(16
                                                            KB(128), KB(128), KB(128), KB(128), KB(128), KB(128), KB(128) };
 
 #elif BOARD_FLASH_SIZE == 1536
-#define STM32_FLASH_NPAGES  20
+#define STM32_FLASH_NPAGES  16
 static const uint32_t flash_memmap[STM32_FLASH_NPAGES] = { KB(16), KB(16), KB(16), KB(16), KB(64),
                                                            KB(128), KB(128), KB(128), KB(128), KB(128), KB(128), KB(128),
-                                                           KB(16), KB(16), KB(16), KB(16), KB(64),
-                                                           KB(128), KB(128), KB(128)};
+                                                           KB(128), KB(128), KB(128), KB(128)};
 
 #elif BOARD_FLASH_SIZE == 2048
 #define STM32_FLASH_NPAGES  24
