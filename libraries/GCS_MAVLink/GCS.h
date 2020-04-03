@@ -292,7 +292,7 @@ public:
     static const struct stream_entries all_stream_entries[];
 
     virtual uint64_t capabilities() const;
-    uint8_t get_stream_slowdown_ms() const { return stream_slowdown_ms; }
+    uint16_t get_stream_slowdown_ms() const { return stream_slowdown_ms; }
 
     MAV_RESULT set_message_interval(uint32_t msg_id, int32_t interval_us);
 
@@ -756,11 +756,11 @@ private:
       since boot in milliseconds
      */
     uint32_t correct_offboard_timestamp_usec_to_ms(uint64_t offboard_usec, uint16_t payload_size);
-    
+
     mavlink_signing_t signing;
     static mavlink_signing_streams_t signing_streams;
     static uint32_t last_signing_save_ms;
-    
+
     static StorageAccess _signing_storage;
     static bool signing_key_save(const struct SigningKey &key);
     static bool signing_key_load(struct SigningKey &key);

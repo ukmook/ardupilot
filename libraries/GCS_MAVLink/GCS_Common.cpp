@@ -1249,7 +1249,6 @@ bool GCS_MAVLINK::set_ap_message_interval(enum ap_message id, uint16_t interval_
         deferred_message_bucket[empty_bucket_id].interval_ms = interval_ms;
         deferred_message_bucket[empty_bucket_id].last_sent_ms = AP_HAL::millis16();
         closest_bucket = empty_bucket_id;
-        closest_bucket_interval_delta = 0;
     }
 
     deferred_message_bucket[closest_bucket].ap_message_ids.set(id);
@@ -1521,6 +1520,7 @@ void GCS_MAVLINK::log_mavlink_stats()
     packet_rx_success_count: status->packet_rx_success_count,
     packet_rx_drop_count   : status->packet_rx_drop_count,
     flags                  : flags,
+    stream_slowdown_ms     : stream_slowdown_ms
     };
 
     AP::logger().WriteBlock(&pkt, sizeof(pkt));
@@ -3592,10 +3592,10 @@ MAV_RESULT GCS_MAVLINK::handle_command_preflight_can(const mavlink_command_long_
                     can_exists = true;
                     result = ap_kdecan->run_enumeration(start_stop) && result;
                 }
-                break;
 #else
                 UNUSED_RESULT(start_stop); // prevent unused variable error
 #endif
+                break;
             }
             case AP_BoardConfig_CAN::Protocol_Type_PiccoloCAN:
                 // TODO - Run PiccoloCAN pre-flight checks here

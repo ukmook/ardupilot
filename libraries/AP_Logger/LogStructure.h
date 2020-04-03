@@ -369,6 +369,7 @@ struct PACKED log_MAV {
     uint16_t packet_rx_success_count;
     uint16_t packet_rx_drop_count;
     uint8_t flags;
+    uint16_t stream_slowdown_ms;
 };
 
 struct PACKED log_RSSI {
@@ -487,7 +488,7 @@ struct PACKED log_NKF2 {
     uint8_t index;
 };
 
-struct PACKED log_NKF2a {
+struct PACKED log_XKF2 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
     uint8_t core;
@@ -1401,6 +1402,16 @@ struct PACKED log_Arm_Disarm {
 // @Field: Health: true if the compass is considered healthy
 // @Field: S: time measurement was taken
 
+// @LoggerMessage: MAV
+// @Description: GCS MAVLink link statistics
+// @Field: TimeUS: microseconds since system startup
+// @Field: chan: mavlink channel number
+// @Field: txp: transmitted packet count
+// @Field: rxp: received packet count
+// @Field: rxdp: perceived number of packets we never received
+// @Field: flags: compact representation of some stage of the channel
+// @Field: ss: stream slowdown is the number of ms being added to each message to fit within bandwidth
+
 // @LoggerMessage: MODE
 // @Description: vehicle control mode information
 // @Field: TimeUS: microseconds since system startup
@@ -1414,6 +1425,15 @@ struct PACKED log_Arm_Disarm {
 // @Field: Id: character referenced by FMTU
 // @Field: Mult: numeric multiplier
 
+<<<<<<< HEAD
+=======
+// @LoggerMessage: PARM
+// @Description: parameter value
+// @Field: TimeUS: microseconds since system startup
+// @Field: Name: parameter name
+// @Field: Value: parameter vlaue
+
+>>>>>>> d966f5718d0b26bc9c489feaeb6fa0cd88556ac7
 // @LoggerMessage: PIDR,PIDP,PIDY,PIDA,PIDS
 // @Description: Proportional/Integral/Derivative gain values for Roll/Pitch/Yaw/Z/Steering
 // @Field: TimeUS: microseconds since system startup
@@ -1626,7 +1646,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_NKQ_MSG, sizeof(log_Quaternion), "NKQ", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
     { LOG_XKF1_MSG, sizeof(log_EKF1), \
       "XKF1","QBccCfffffffccce","TimeUS,C,Roll,Pitch,Yaw,VN,VE,VD,dPD,PN,PE,PD,GX,GY,GZ,OH", "s#ddhnnnnmmmkkkm", "F-BBB0000000BBBB" }, \
-    { LOG_XKF2_MSG, sizeof(log_NKF2a), \
+    { LOG_XKF2_MSG, sizeof(log_XKF2), \
       "XKF2","QBccccchhhhhhB","TimeUS,C,AX,AY,AZ,VWN,VWE,MN,ME,MD,MX,MY,MZ,MI", "s#---nnGGGGGG-", "F----BBCCCCCC-" }, \
     { LOG_XKF3_MSG, sizeof(log_NKF3), \
       "XKF3","QBcccccchhhcc","TimeUS,C,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IYAW,IVT", "s#nnnmmmGGG??", "F-BBBBBBCCCBB" }, \
@@ -1742,7 +1762,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_RALLY_MSG, sizeof(log_Rally), \
       "RALY", "QBBLLh", "TimeUS,Tot,Seq,Lat,Lng,Alt", "s--DUm", "F--GGB" },  \
     { LOG_MAV_MSG, sizeof(log_MAV),   \
-      "MAV", "QBHHHB",   "TimeUS,chan,txp,rxp,rxdp,flags", "s#----", "F-000-" },   \
+      "MAV", "QBHHHBH",   "TimeUS,chan,txp,rxp,rxdp,flags,ss", "s#----s", "F-000-C" },   \
     { LOG_VISUALODOM_MSG, sizeof(log_VisualOdom), \
       "VISO", "Qffffffff", "TimeUS,dt,AngDX,AngDY,AngDZ,PosDX,PosDY,PosDZ,conf", "ssrrrmmm-", "FF000000-" }, \
     { LOG_OPTFLOW_MSG, sizeof(log_Optflow), \

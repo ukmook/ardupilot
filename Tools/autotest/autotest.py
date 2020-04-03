@@ -107,7 +107,7 @@ def build_binaries():
         orig = util.reltopdir('Tools/scripts/%s' % thing)
         copy = util.reltopdir('./%s' % thing)
         shutil.copy2(orig, copy)
-    
+
     if util.run_cmd("./build_binaries.py", directory=util.reltopdir('.')) != 0:
         print("Failed build_binaries.py")
         return False
@@ -302,6 +302,7 @@ tester_class_map = {
     "test.Rover": apmrover2.AutoTestRover,
     "test.BalanceBot": balancebot.AutoTestBalanceBot,
     "test.Helicopter,": arducopter.AutoTestHeli,
+    "test.Helicopter": arducopter.AutoTestHeli,
     "test.Sub": ardusub.AutoTestSub,
     "test.Tracker": antennatracker.AutoTestTracker,
 }
@@ -550,11 +551,7 @@ def write_fullresults():
 def check_logs(step):
     """Check for log files from a step."""
     print("check step: ", step)
-    if step.startswith('fly.'):
-        vehicle = step[4:]
-    elif step.startswith('drive.'):
-        vehicle = step[6:]
-    elif step.startswith('dive.'):
+    if step.startswith('test.'):
         vehicle = step[5:]
     else:
         return
@@ -598,7 +595,6 @@ def run_tests(steps):
                 results.add(step, '<span class="passed-text">PASSED</span>',
                             time.time() - t1)
                 print(">>>> PASSED STEP: %s at %s" % (step, time.asctime()))
-                check_logs(step)
             else:
                 print(">>>> FAILED STEP: %s at %s" % (step, time.asctime()))
                 passed = False
@@ -609,6 +605,7 @@ def run_tests(steps):
                     failed_testinstances[step].append(testinstance)
                 results.add(step, '<span class="failed-text">FAILED</span>',
                             time.time() - t1)
+                check_logs(step)
         except Exception as msg:
             passed = False
             failed.append(step)
@@ -638,6 +635,16 @@ def run_tests(steps):
 
     return passed
 
+def list_subtests(*args, **kwargs):
+    for vehicle in sorted(['Sub', 'Copter', 'Plane', 'Tracker', 'Rover']):
+        tester_class = tester_class_map["test.%s" % vehicle]
+        tester = tester_class("/bin/true", None)
+        subtests = tester.tests()
+        print("%s:" % vehicle)
+        for subtest in sorted(subtests, key=lambda x : x[0]):
+            (name, description, function) = subtest
+            print("    %s: %s" % (name, description))
+        print("")
 
 if __name__ == "__main__":
     ''' main program '''
@@ -645,7 +652,18 @@ if __name__ == "__main__":
 
     os.putenv('TMPDIR', util.reltopdir('tmp'))
 
-    parser = optparse.OptionParser("autotest")
+    class MyOptionParser(optparse.OptionParser):
+        def format_epilog(self, formatter):
+            return self.epilog
+
+    parser = MyOptionParser(
+        "autotest", epilog=""
+        "e.g. autotest.py build.Rover test.Rover # test Rover\n"
+        "e.g. autotest.py build.Rover test.Rover build.Plane test.Plane # test Rover and Plane\n"
+        "e.g. autotest.py --debug --valgrind build.Rover test.Rover # test Rover under Valgrind\n"
+        "e.g. autotest.py --debug --gdb build.Tracker test.Tracker # run Tracker under gdb\n"
+        "e.g. autotest.py --debug --gdb build.Sub test.Sub.DiveManual # do specific Sub test\n"
+    )
     parser.add_option("--skip",
                       type='string',
                       default='',
@@ -654,6 +672,10 @@ if __name__ == "__main__":
                       action='store_true',
                       default=False,
                       help='list the available steps')
+    parser.add_option("--list-subtests",
+                      action='store_true',
+                      default=False,
+                      help='list available subtests e.g. test.Copter')
     parser.add_option("--viewerip",
                       default=None,
                       help='IP address to send MAVLink and fg packets to')
@@ -830,6 +852,10 @@ if __name__ == "__main__":
     if opts.list:
         for step in steps:
             print(step)
+        sys.exit(0)
+
+    if opts.list_subtests:
+        list_subtests()
         sys.exit(0)
 
     util.mkdir_p(buildlogs_dirpath())

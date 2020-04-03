@@ -156,7 +156,7 @@ class AutoTestCopter(AutoTest):
 
     def hover(self, hover_throttle=1500):
         self.set_rc(3, hover_throttle)
-    
+
     #Climb/descend to a given altitude
     def setAlt(self, desiredAlt=50):
         pos = self.mav.location(relative_alt=True)
@@ -167,7 +167,7 @@ class AutoTestCopter(AutoTest):
             self.set_rc(3, 1800)
             self.wait_altitude((desiredAlt-5), desiredAlt, relative=True)
         self.hover()
-    
+
     # Takeoff, climb to given altitude, and fly east for 10 seconds
     def takeoffAndMoveAway(self, dAlt=50, dDist=50):
         self.progress("Centering sticks")
@@ -286,7 +286,7 @@ class AutoTestCopter(AutoTest):
             self.set_parameter("SIM_SPEEDUP",4)
             self.set_parameter("FS_GCS_ENABLE",paramValue)
 
-        
+
 
 
     #################################################
@@ -504,7 +504,7 @@ class AutoTestCopter(AutoTest):
         self.wait_mode("CIRCLE")
         self.set_rc(5, 1950)
         self.wait_mode("STABILIZE")
-        self.end_subtest("Completed Radio failsafe recovery test")      
+        self.end_subtest("Completed Radio failsafe recovery test")
 
         # Trigger and RC failure, verify failsafe triggers and RTL completes
         self.start_subtest("Radio failsafe RTL with no options test: FS_THR_ENABLE=1 & FS_OPTIONS=0")
@@ -666,7 +666,7 @@ class AutoTestCopter(AutoTest):
         self.progress("All radio failsafe tests complete")
         self.set_parameter('FS_THR_ENABLE', 0)
         self.reboot_sitl()
-        
+
     # Tests all actions and logic behind the GCS failsafe
     def fly_gcs_failsafe(self, side=60, timeout=360):
         # Trigger telemety loss with failsafe disabled. Verify no action taken.
@@ -2588,6 +2588,7 @@ class AutoTestCopter(AutoTest):
 
         ZIGZAG = 24
         j = 0
+        slowdown_speed = 0.3 # because Copter takes a long time to actually stop
         self.start_subtest("Conduct ZigZag test for all 4 directions")
         while j < 4:
             self.progress("## Align heading with the run-way (j=%d)##" % j)
@@ -2602,6 +2603,7 @@ class AutoTestCopter(AutoTest):
             self.wait_distance(20)
             self.set_rc(1, 1500)
             self.wait_groundspeed(0, 0.20)   # wait until the copter slows down
+            self.wait_groundspeed(0, slowdown_speed)   # wait until the copter slows down
             self.progress("## Record Point A ##")
             self.set_rc(8, 1500)    # pilot always have to cross mid position when changing for low to high position
             self.set_rc(8, 1900)    # record point B
@@ -2614,22 +2616,26 @@ class AutoTestCopter(AutoTest):
                 self.wait_distance(10)
                 self.set_rc(2, 1500)    # re-centre pitch rc control
                 self.wait_groundspeed(0, 0.2)   # wait until the copter slows down
+                self.wait_groundspeed(0, slowdown_speed)   # wait until the copter slows down
                 self.set_rc(8, 1500)    # switch to mid position
                 self.progress("## auto execute vector BA ##")
                 self.set_rc(8, 1100)
                 self.wait_distance(17)  # wait for it to finish
                 self.wait_groundspeed(0, 0.2)   # wait until the copter slows down
+                self.wait_groundspeed(0, slowdown_speed)   # wait until the copter slows down
 
                 self.progress("## fly forward for 10 meter ##")
                 self.set_rc(2, 1300)    # fly forward for 10 meter
                 self.wait_distance(10)
                 self.set_rc(2, 1500)    # re-centre pitch rc control
                 self.wait_groundspeed(0, 0.2)   # wait until the copter slows down
+                self.wait_groundspeed(0, slowdown_speed)   # wait until the copter slows down
                 self.set_rc(8, 1500)    # switch to mid position
                 self.progress("## auto execute vector AB ##")
                 self.set_rc(8, 1900)
                 self.wait_distance(17)  # wait for it to finish
                 self.wait_groundspeed(0, 0.2)   # wait until the copter slows down
+                self.wait_groundspeed(0, slowdown_speed)   # wait until the copter slows down
                 i=i+1
             # test the case when pilot switch to manual control during the auto flight
             self.start_subtest("test the case when pilot switch to manual control during the auto flight")
@@ -2644,20 +2650,22 @@ class AutoTestCopter(AutoTest):
             self.wait_distance(8)   # purposely switch to manual halfway
             self.set_rc(8, 1500)
             self.wait_groundspeed(0, 0.2)   # copter should slow down here
+            self.wait_groundspeed(0, slowdown_speed)   # copter should slow down here
             self.progress("## Manual control to fly forward ##")
             self.set_rc(2, 1300)    # manual control to fly forward
             self.wait_distance(8)
             self.set_rc(2, 1500)    # re-centre pitch rc control
             self.wait_groundspeed(0, 0.2)   # wait until the copter slows down
+            self.wait_groundspeed(0, slowdown_speed)   # wait until the copter slows down
             self.progress("## continue vector BA ##")
             self.set_rc(8, 1100)    # copter should continue mission here
             self.wait_distance(8)   # wait for it to finish rest of BA
-            self.wait_groundspeed(0, 0.2)   #wait until the copter slows down
+            self.wait_groundspeed(0, slowdown_speed)   #wait until the copter slows down
             self.set_rc(8, 1500)    # switch to mid position
             self.progress("## auto execute vector AB ##")
             self.set_rc(8, 1900)    # switch to execute AB again
             self.wait_distance(17)  # wait for it to finish
-            self.wait_groundspeed(0, 0.2)   # wait until the copter slows down
+            self.wait_groundspeed(0, slowdown_speed)   # wait until the copter slows down
             self.change_mode('LOITER')
             j=j+1
 
@@ -2886,7 +2894,7 @@ class AutoTestCopter(AutoTest):
             )
         m = self.mav.recv_match(type='POSITION_TARGET_LOCAL_NED', blocking=True, timeout=2)
         self.progress("Received local target: %s" % str(m))
-        
+
         if not (m.type_mask == 0xFFF8 or m.type_mask == 0x0FF8):
             raise NotAchievedException("Did not receive proper mask: expected=65528 or 4088, got=%u" % m.type_mask)
 
@@ -2972,7 +2980,7 @@ class AutoTestCopter(AutoTest):
 #        print('r=%f p=%f y=%f' % (m.roll, m.pitch, m.yaw))
         return vector - x
 
-    def loiter_to_ne(self, x, y, z, timeout=30):
+    def loiter_to_ne(self, x, y, z, timeout=40):
         dest = rotmat.Vector3(x, y, z)
         tstart = self.get_sim_time()
         while True:
