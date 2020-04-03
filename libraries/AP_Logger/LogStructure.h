@@ -927,8 +927,8 @@ struct PACKED log_GPS_RAWS {
     uint8_t trkStat;
 };
 
-struct PACKED log_GPS_SBF_EVENT {  
-	LOG_PACKET_HEADER; 
+struct PACKED log_GPS_SBF_EVENT {
+	LOG_PACKET_HEADER;
 	uint64_t time_us;
 	uint32_t TOW;
 	uint16_t WNc;
@@ -946,7 +946,7 @@ struct PACKED log_GPS_SBF_EVENT {
 
 struct PACKED log_Esc {
     LOG_PACKET_HEADER;
-    uint64_t time_us;     
+    uint64_t time_us;
     int32_t rpm;
     uint16_t voltage;
     uint16_t current;
@@ -957,7 +957,7 @@ struct PACKED log_Esc {
 
 struct PACKED log_CSRV {
     LOG_PACKET_HEADER;
-    uint64_t time_us;     
+    uint64_t time_us;
     uint8_t id;
     float position;
     float force;
@@ -967,7 +967,7 @@ struct PACKED log_CSRV {
 
 struct PACKED log_CESC {
     LOG_PACKET_HEADER;
-    uint64_t time_us;     
+    uint64_t time_us;
     uint8_t id;
     uint32_t error_count;
     float voltage;
@@ -1425,15 +1425,12 @@ struct PACKED log_Arm_Disarm {
 // @Field: Id: character referenced by FMTU
 // @Field: Mult: numeric multiplier
 
-<<<<<<< HEAD
-=======
 // @LoggerMessage: PARM
 // @Description: parameter value
 // @Field: TimeUS: microseconds since system startup
 // @Field: Name: parameter name
 // @Field: Value: parameter vlaue
 
->>>>>>> d966f5718d0b26bc9c489feaeb6fa0cd88556ac7
 // @LoggerMessage: PIDR,PIDP,PIDY,PIDA,PIDS
 // @Description: Proportional/Integral/Derivative gain values for Roll/Pitch/Yaw/Z/Steering
 // @Field: TimeUS: microseconds since system startup
