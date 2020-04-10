@@ -873,7 +873,7 @@ class AutoTest(ABC):
 
     def load_fence_using_mavproxy(self, filename):
         self.set_parameter("FENCE_TOTAL", 0)
-        filepath = os.path.join(self.mission_directory(), filename)
+        filepath = os.path.join(testdir, self.current_test_name_directory, filename)
         count = self.count_expected_fence_lines_in_filepath(filepath)
         self.mavproxy.send('fence load %s\n' % filepath)
 #        self.mavproxy.expect("Loaded %u (geo-)?fence" % count)
@@ -1011,7 +1011,7 @@ class AutoTest(ABC):
         vehicle = self.log_name()
         if vehicle == "HeliCopter":
             vehicle = "ArduCopter"
-        if vehicle == "QuadPlane":
+        if vehicle == "QuadPlane" or vehicle =="Soaring":
             vehicle = "ArduPlane"
         cmd = [param_parse_filepath, '--vehicle', vehicle]
 #        cmd.append("--verbose")
@@ -1074,6 +1074,8 @@ class AutoTest(ABC):
             dirname = "ArduPlane"
         elif dirname == "HeliCopter":
             dirname = "ArduCopter"
+        elif dirname == "Soaring":
+            dirname = "ArduPlane"
         return os.path.join(self.rootdir(), dirname)
 
     def all_log_format_ids(self):
@@ -1296,6 +1298,7 @@ class AutoTest(ABC):
             "HeliCopter": "Copter",
             "ArduPlane": "Plane",
             "QuadPlane": "Plane",
+            "Soaring": "Plane",
             "APMrover2": "Rover",
             "AntennaTracker": "Tracker",
             "ArduSub": "Sub",
@@ -1341,7 +1344,12 @@ class AutoTest(ABC):
             if name not in docco_ids:
                 self.progress("Undocumented message: %s" % name)
                 continue
+            seen_labels = {}
             for label in code_ids[name]["labels"].split(","):
+                if label in seen_labels:
+                    raise NotAchievedException("%s.%s is duplicate label" %
+                                               (name, label))
+                seen_labels[label] = True
                 if label not in docco_ids[name]["labels"]:
                     raise NotAchievedException("%s.%s not in documented fields" %
                                                (name, label))
@@ -1602,9 +1610,6 @@ class AutoTest(ABC):
         this_dir = os.path.dirname(__file__)
         return os.path.realpath(os.path.join(this_dir, "../.."))
 
-    def mission_directory(self):
-        return testdir
-
     def assert_mission_files_same(self, file1, file2):
         self.progress("Comparing (%s) and (%s)" % (file1, file2, ))
         f1 = open(file1)
@@ -1773,7 +1778,7 @@ class AutoTest(ABC):
     def load_rally(self, filename):
         """Load rally points from a file to flight controller."""
         self.progress("Loading rally points (%s)" % filename)
-        path = os.path.join(self.mission_directory(), filename)
+        path = os.path.join(testdir, self.current_test_name_directory, filename)
         self.mavproxy.send('rally load %s\n' % path)
         self.mavproxy.expect("Loaded")
 
@@ -1781,9 +1786,12 @@ class AutoTest(ABC):
         self.load_mission(self.sample_mission_filename())
 
     def load_mission(self, filename):
+        return self.load_mission_from_filepath(self.current_test_name_directory, filename)
+
+    def load_mission_from_filepath(self, filepath, filename):
         """Load a mission from a file to flight controller."""
         self.progress("Loading mission (%s)" % filename)
-        path = os.path.join(self.mission_directory(), filename)
+        path = os.path.join(testdir, filepath, filename)
         tstart = self.get_sim_time_cached()
         while True:
             t2 = self.get_sim_time_cached()
@@ -1990,7 +1998,10 @@ class AutoTest(ABC):
         """Load arming test mission.
         This mission is used to allow to change mode to AUTO. For each vehicle
         it get an unlimited wait waypoint and the starting takeoff if needed."""
-        return None
+        if self.is_rover() or self.is_plane() or self.is_sub():
+            return os.path.join(testdir, self.current_test_name_directory + "test_arming.txt")
+        else:
+            return None
 
     def armed(self):
         """Return true if vehicle is armed and safetyoff"""
@@ -3266,7 +3277,7 @@ class AutoTest(ABC):
         prettyname = "%s (%s)" % (name, desc)
         self.send_statustext(prettyname)
         self.start_test(prettyname)
-
+        self.set_current_test_name(name)
         self.context_push()
 
         start_time = time.time()
