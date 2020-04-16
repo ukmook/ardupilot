@@ -448,11 +448,10 @@ bool AP_Logger_Backend::Write_Mission_Cmd(const AP_Mission &mission,
     return WriteBlock(&pkt, sizeof(pkt));
 }
 
-void AP_Logger_Backend::Write_EntireMission()
+bool AP_Logger_Backend::Write_EntireMission()
 {
-    LoggerMessageWriter_WriteEntireMission writer{};
-    writer.set_logger_backend(this);
-    writer.process();
+    // kick off asynchronous write:
+    return _startup_messagewriter->writeentiremission();
 }
 
 // Write a text message to the log
@@ -915,7 +914,7 @@ void AP_Logger::Write_VisualOdom(float time_delta, const Vector3f &angle_delta, 
 }
 
 // Write visual position sensor data.  x,y,z are in meters, angles are in degrees
-void AP_Logger::Write_VisualPosition(uint64_t remote_time_us, uint32_t time_ms, float x, float y, float z, float roll, float pitch, float yaw)
+void AP_Logger::Write_VisualPosition(uint64_t remote_time_us, uint32_t time_ms, float x, float y, float z, float roll, float pitch, float yaw, uint8_t reset_counter)
 {
     const struct log_VisualPosition pkt_visualpos {
         LOG_PACKET_HEADER_INIT(LOG_VISUALPOS_MSG),
@@ -927,7 +926,8 @@ void AP_Logger::Write_VisualPosition(uint64_t remote_time_us, uint32_t time_ms, 
         pos_z           : z,
         roll            : roll,
         pitch           : pitch,
-        yaw             : yaw
+        yaw             : yaw,
+        reset_counter   : reset_counter
     };
     WriteBlock(&pkt_visualpos, sizeof(log_VisualPosition));
 }

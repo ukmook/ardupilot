@@ -17,7 +17,7 @@ import sys
 import time
 import traceback
 
-import apmrover2
+import rover
 import arducopter
 import arduplane
 import ardusub
@@ -167,7 +167,7 @@ def param_parse_filepath():
 def all_vehicles():
     return ('ArduPlane',
             'ArduCopter',
-            'APMrover2',
+            'Rover',
             'AntennaTracker',
             'ArduSub')
 
@@ -300,7 +300,7 @@ tester_class_map = {
     "test.CopterTests2": arducopter.AutoTestCopterTests2,
     "test.Plane": arduplane.AutoTestPlane,
     "test.QuadPlane": quadplane.AutoTestQuadPlane,
-    "test.Rover": apmrover2.AutoTestRover,
+    "test.Rover": rover.AutoTestRover,
     "test.BalanceBot": balancebot.AutoTestBalanceBot,
     "test.Helicopter,": arducopter.AutoTestHeli,
     "test.Helicopter": arducopter.AutoTestHeli,
@@ -543,7 +543,7 @@ def write_fullresults():
     results.addglob('APM:Libraries documentation', 'docs/libraries/index.html')
     results.addglob('APM:Plane documentation', 'docs/ArduPlane/index.html')
     results.addglob('APM:Copter documentation', 'docs/ArduCopter/index.html')
-    results.addglob('APM:Rover documentation', 'docs/APMrover2/index.html')
+    results.addglob('APM:Rover documentation', 'docs/Rover/index.html')
     results.addglob('APM:Sub documentation', 'docs/ArduSub/index.html')
     results.addglobimage("Flight Track", '*.png')
 

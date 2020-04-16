@@ -287,7 +287,7 @@ struct PACKED log_Vibe {
 
 struct PACKED log_Gimbal1 {
     LOG_PACKET_HEADER;
-    uint32_t time_ms;
+    uint64_t time_us;
     float delta_time;
     float delta_angles_x;
     float delta_angles_y;
@@ -302,7 +302,7 @@ struct PACKED log_Gimbal1 {
 
 struct PACKED log_Gimbal2 {
     LOG_PACKET_HEADER;
-    uint32_t time_ms;
+    uint64_t time_us;
     uint8_t  est_sta;
     float est_x;
     float est_y;
@@ -313,14 +313,6 @@ struct PACKED log_Gimbal2 {
     float target_x;
     float target_y;
     float target_z;
-};
-
-struct PACKED log_Gimbal3 {
-    LOG_PACKET_HEADER;
-    uint32_t time_ms;
-    int16_t rl_torque_cmd;
-    int16_t el_torque_cmd;
-    int16_t az_torque_cmd;
 };
 
 struct PACKED log_RCIN {
@@ -662,6 +654,7 @@ struct PACKED log_VisualPosition {
     float roll;     // degrees
     float pitch;    // degrees
     float yaw;      // degrees
+    uint8_t reset_counter;
 };
 
 struct PACKED log_ekfBodyOdomDebug {
@@ -1340,6 +1333,18 @@ struct PACKED log_Arm_Disarm {
 // @Field: AccY: acceleration along Y axis
 // @Field: AccZ: acceleration along Z axis
 
+// @LoggerMessage: ADSB
+// @Description: Automatic Dependant Serveillance - Broadcast detected vehicle information
+// @Field: TimeUS: Time since system startup
+// @Field: ICAO_address: Transponder address
+// @Field: Lat: Vehicle latitude
+// @Field: Lng: Vehicle longitude
+// @Field: Alt: Vehicle altitude
+// @Field: Heading: Vehicle heading
+// @Field: Hor_vel: Vehicle horizontal velocity
+// @Field: Ver_vel: Vehicle vertical velocity
+// @Field: Squark: Transponder squawk code
+
 // @LoggerMessage: AHR2
 // @Description: Backup AHRS data
 // @Field: TimeUS: Time since system startup
@@ -1411,6 +1416,35 @@ struct PACKED log_Arm_Disarm {
 // @Field: Temp: measured temperature
 // @Field: Res: estimated temperature resistance
 
+// @LoggerMessage: BCL
+// @Description: Battery cell voltage information
+// @Field: TimeUS: Time since system startup
+// @Field: Instance: battery instance number
+// @Field: Volt: battery voltage
+// @Field: V1: first cell voltage
+// @Field: V2: second cell voltage
+// @Field: V3: third cell voltage
+// @Field: V4: fourth cell voltage
+// @Field: V5: fifth cell voltage
+// @Field: V6: sixth cell voltage
+// @Field: V7: seventh cell voltage
+// @Field: V8: eighth cell voltage
+// @Field: V9: ninth cell voltage
+// @Field: V10: tenth cell voltage
+
+// @LoggerMessage: BCN
+// @Description: Beacon informtaion
+// @Field: TimeUS: Time since system startup
+// @Field: Health: True if beacon sensor is healthy
+// @Field: Cnt: Number of beacons being used
+// @Field: D0: Distance to first beacon
+// @Field: D1: Distance to second beacon
+// @Field: D2: Distance to third beacon
+// @Field: D3: Distance to fouth beacon
+// @Field: PosX: Calculated beacon position, x-axis
+// @Field: PosY: Calculated beacon position, y-axis
+// @Field: PosZ: Calculated beacon position, z-axis
+
 // @LoggerMessage: CAM,TRIG
 // @Description: Camera shutter information
 // @Field: TimeUS: Time since system startup
@@ -1424,6 +1458,17 @@ struct PACKED log_Arm_Disarm {
 // @Field: Roll: current vehicle roll
 // @Field: Pitch: current vehicle pitch
 // @Field: Yaw: current vehicle yaw
+
+// @LoggerMessage: CESC
+// @Description: CAN ESC data
+// @Field: TimeUS: Time since system startup
+// @Field: Id: ESC identifier
+// @Field: ECnt: Error count
+// @Field: Voltage: Battery voltage measurement
+// @Field: Curr: Battery current measurement
+// @Field: Temp: Temperature
+// @Field: RPM: Measured RPM
+// @Field: Pow: Rated power output
 
 // @LoggerMessage: CMD
 // @Description: Executed mission command information
@@ -1475,6 +1520,23 @@ struct PACKED log_Arm_Disarm {
 // @Field: FMn: Minimum free space in write buffer in last time period
 // @Field: FMx: Maximum free space in write buffer in last time period
 // @Field: FAv: Average free space in write buffer in last time period
+
+// @LoggerMessage: DSTL
+// @Description: Deepstall Landing data
+// @Field: TimeUS: Time since system startup
+// @Field: Stg: Deepstall landing stage
+// @Field: THdg: Target heading
+// @Field: Lat: Landing point latitude
+// @Field: Lng: Landing point longitude
+// @Field: Alt: Landing point altitude
+// @Field: XT: Crosstrack error
+// @Field: Travel: Expected travel distance vehicle will travel from this point
+// @Field: L1I: L1 controller crosstrack integrator value
+// @Field: Loiter: wind estimate loiter angle flown
+// @Field: Des: Deepstall steering PID desired value
+// @Field: P: Deepstall steering PID Proportional response component
+// @Field: I: Deepstall steering PID Integral response component
+// @Field: D: Deepstall steering PID Derivative response component
 
 // @LoggerMessage: ERR
 // @Description: Specifically coded error messages
@@ -1651,6 +1713,30 @@ struct PACKED log_Arm_Disarm {
 // @Field: Id: character referenced by FMTU
 // @Field: Mult: numeric multiplier
 
+// @LoggerMessage: OABR
+// @Description: Object avoidance (Bendy Ruler) diagnostics
+// @Field: TimeUS: Time since system startup
+// @Field: Active: True if Bendy Ruler avoidance is being used
+// @Field: DesYaw: Best yaw chosen to avoid obstacle
+// @Field: Yaw: Current vehicle yaw
+// @Field: Mar: Margin from path to obstacle on best yaw chosen
+// @Field: DLat: Destination latitude
+// @Field: DLng: Destination longitude
+// @Field: OALat: Intermediate location chosen for avoidance
+// @Field: OALng: Intermediate location chosen for avoidance
+
+// @LoggerMessage: OADJ
+// @Description: Object avoidance (Dijkstra) diagnostics
+// @Field: TimeUS: Time since system startup
+// @Field: State: Dijkstra avoidance library state
+// @Field: Err: Dijkstra library error condition
+// @Field: CurrPoint: Destination point in calculated path to destination
+// @Field: TotPoints: Number of points in path to destination
+// @Field: DLat: Destination latitude
+// @Field: DLng: Destination longitude
+// @Field: OALat: Object Avoidance chosen destination point latitude
+// @Field: OALng: Object Avoidance chosen destination point longitude
+
 // @LoggerMessage: OF
 // @Description: Optical flow sensor data
 // @Field: TimeUS: Time since system startup
@@ -1716,6 +1802,22 @@ struct PACKED log_Arm_Disarm {
 // @Field: VServo: Servo rail voltage
 // @Field: Flags: System power flags
 // @Field: Safety: Hardware Safety Switch status
+
+// @LoggerMessage: PRX
+// @Description: Proximity sensor data
+// @Field: TimeUS: Time since system startup
+// @Field: Health: True if proximity sensor is healthy
+// @Field: D0: Nearest object in sector surrounding 0-degrees
+// @Field: D45: Nearest object in sector surrounding 45-degrees
+// @Field: D90: Nearest object in sector surrounding 90-degrees
+// @Field: D135: Nearest object in sector surrounding 135-degrees
+// @Field: D180: Nearest object in sector surrounding 180-degrees
+// @Field: D225: Nearest object in sector surrounding 225-degrees
+// @Field: D270: Nearest object in sector surrounding 270-degrees
+// @Field: D315: Nearest object in sector surrounding 315-degrees
+// @Field: DUp: Nearest object in upwards direction
+// @Field: CAn: Angle to closest object
+// @Field: CDis: Distance to closest object
 
 // @LoggerMessage: RAD
 // @Description: Telemetry radio statistics
@@ -1911,6 +2013,15 @@ struct PACKED log_Arm_Disarm {
 // @Field: Roll: Roll lean angle
 // @Field: Pitch: Pitch lean angle
 // @Field: Yaw: Yaw angle
+// @Field: ResetCnt: Position reset counter
+
+// @LoggerMessage: WENC
+// @Description: Wheel encoder measurements
+// @Field: TimeUS: Time since system startup
+// @Field: Dist0: First wheel distance travelled
+// @Field: Qual0: Quality measurement of Dist0
+// @Field: Dist1: Second wheel distance travelled
+// @Field: Qual1: Quality measurement of Dist1
 
 // messages for all boards
 #define LOG_BASE_STRUCTURES \
@@ -2119,11 +2230,9 @@ struct PACKED log_Arm_Disarm {
     { LOG_RPM_MSG, sizeof(log_RPM), \
       "RPM",  "Qff", "TimeUS,rpm1,rpm2", "sqq", "F00" }, \
     { LOG_GIMBAL1_MSG, sizeof(log_Gimbal1), \
-      "GMB1", "Iffffffffff", "TimeMS,dt,dax,day,daz,dvx,dvy,dvz,jx,jy,jz", "ssrrrEEELLL", "CC000000000" }, \
+      "GMB1", "Qffffffffff", "TimeUS,dt,dax,day,daz,dvx,dvy,dvz,jx,jy,jz", "ssrrrEEELLL", "FC000000000" }, \
     { LOG_GIMBAL2_MSG, sizeof(log_Gimbal2), \
-      "GMB2", "IBfffffffff", "TimeMS,es,ex,ey,ez,rx,ry,rz,tx,ty,tz", "s-rrrEEELLL", "C-000000000" }, \
-    { LOG_GIMBAL3_MSG, sizeof(log_Gimbal3), \
-      "GMB3", "Ihhh", "TimeMS,rl_torque_cmd,el_torque_cmd,az_torque_cmd", "s???", "C???" }, \
+      "GMB2", "QBfffffffff", "TimeUS,es,ex,ey,ez,rx,ry,rz,tx,ty,tz", "s-rrrEEELLL", "F-000000000" }, \
     { LOG_RATE_MSG, sizeof(log_Rate), \
       "RATE", "Qffffffffffff",  "TimeUS,RDes,R,ROut,PDes,P,POut,YDes,Y,YOut,ADes,A,AOut", "skk-kk-kk-oo-", "F?????????BB-" }, \
     { LOG_RALLY_MSG, sizeof(log_Rally), \
@@ -2133,7 +2242,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_VISUALODOM_MSG, sizeof(log_VisualOdom), \
       "VISO", "Qffffffff", "TimeUS,dt,AngDX,AngDY,AngDZ,PosDX,PosDY,PosDZ,conf", "ssrrrmmm-", "FF000000-" }, \
     { LOG_VISUALPOS_MSG, sizeof(log_VisualPosition), \
-      "VISP", "QQIffffff", "TimeUS,RemTimeUS,CTimeMS,PX,PY,PZ,Roll,Pitch,Yaw", "sssmmmddh", "FFC000000" }, \
+      "VISP", "QQIffffffb", "TimeUS,RemTimeUS,CTimeMS,PX,PY,PZ,Roll,Pitch,Yaw,ResetCnt", "sssmmmddh-", "FFC000000-" }, \
     { LOG_OPTFLOW_MSG, sizeof(log_Optflow), \
       "OF",   "QBffff",   "TimeUS,Qual,flowX,flowY,bodyX,bodyY", "s-EEnn", "F-0000" }, \
     { LOG_WHEELENCODER_MSG, sizeof(log_WheelEncoder), \
@@ -2275,7 +2384,6 @@ enum LogMessages : uint8_t {
 
     LOG_GIMBAL1_MSG,
     LOG_GIMBAL2_MSG,
-    LOG_GIMBAL3_MSG,
     LOG_RATE_MSG,
     LOG_RALLY_MSG,
     LOG_VISUALODOM_MSG,

@@ -55,6 +55,9 @@ public:
     // Constructor
     AP_AHRS_NavEKF(uint8_t flags = FLAG_NONE);
 
+    // initialise
+    void init(void) override;
+
     /* Do not allow copies */
     AP_AHRS_NavEKF(const AP_AHRS_NavEKF &other) = delete;
     AP_AHRS_NavEKF &operator=(const AP_AHRS_NavEKF&) = delete;
@@ -177,7 +180,7 @@ public:
     void writeBodyFrameOdom(float quality, const Vector3f &delPos, const Vector3f &delAng, float delTime, uint32_t timeStamp_ms, const Vector3f &posOffset);
 
     // Write position and quaternion data from an external navigation system
-    void writeExtNavData(const Vector3f &sensOffset, const Vector3f &pos, const Quaternion &quat, float posErr, float angErr, uint32_t timeStamp_ms, uint32_t resetTime_ms) override;
+    void writeExtNavData(const Vector3f &pos, const Quaternion &quat, float posErr, float angErr, uint32_t timeStamp_ms, uint32_t resetTime_ms) override;
 
     // inhibit GPS usage
     uint8_t setInhibitGPS(void);
@@ -296,12 +299,12 @@ public:
 
 private:
     enum class EKFType {
-        NONE = 0,
+        NONE = 0
 #if HAL_NAVEKF3_AVAILABLE
-        THREE = 3,
+        ,THREE = 3
 #endif
 #if HAL_NAVEKF2_AVAILABLE
-        TWO = 2
+        ,TWO = 2
 #endif
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
         ,SITL = 10
