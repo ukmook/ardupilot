@@ -1,4 +1,5 @@
 # hw definition file for processing by chibios_pins.py
+# based on qUark F405 UC4H Board
 
 # MCU class and specific type
 MCU STM32F4xx STM32F405xx
@@ -9,9 +10,6 @@ MCU STM32F4xx STM32F405xx
 FLASH_RESERVE_START_KB 64
 
 --------------------------------------
-# store parameters in pages 11 and 12
-# define STORAGE_FLASH_PAGE 11
-# define HAL_STORAGE_SIZE 800
 
 define HAL_STORAGE_SIZE 16384
 define STORAGE_FLASH_PAGE 2
@@ -73,8 +71,10 @@ PC7 USART6_RX USART6 SPEED_HIGH NODMA
 ----------------------------------------
 
 # only one I2C bus in normal config USART1
-PB6 I2C1_SCL I2C1 PULLUP
-PB7 I2C1_SDA I2C1 PULLUP
+PB6 I2C1_SCL I2C1
+PB7 I2C1_SDA I2C1
+
+I2C_ORDER I2C1
 
 define HAL_USE_I2C TRUE
 define STM32_I2C_USE_I2C1 TRUE
@@ -82,6 +82,8 @@ define STM32_I2C_USE_I2C1 TRUE
 define HAL_I2C_CLEAR_ON_TIMEOUT 0
 
 define HAL_I2C_INTERNAL_MASK 0
+
+define HAL_PROBE_EXTERNAL_I2C_COMPASSES
 
 
 # --------SPI------------
@@ -127,10 +129,6 @@ PB3 TIM2_CH2 TIM2 PWM(1)
 
 define HAL_BARO_ALLOW_INIT_NO_BARO
 
-define HAL_USE_ADC FALSE
-define STM32_ADC_USE_ADC1 FALSE
-define HAL_DISABLE_ADC_DRIVER TRUE
-
 define HAL_NO_GPIO_IRQ
 
 # avoid RCIN thread to save memory
@@ -149,7 +147,6 @@ define HAL_DISABLE_LOOP_DELAY
 # enable CAN support
 PB8 CAN1_RX CAN1
 PB9 CAN1_TX CAN1
-# PB5 GPIO_CAN1_SILENT OUTPUT PUSHPULL SPEED_LOW LOW
 define HAL_USE_CAN TRUE
 define STM32_CAN_USE_CAN1 TRUE
 
