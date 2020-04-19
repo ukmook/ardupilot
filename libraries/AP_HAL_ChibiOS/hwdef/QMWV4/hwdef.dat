@@ -1,11 +1,12 @@
 # hw definition file for processing by chibios_pins.py
-# for qUarkMini_Wing_V1 hardware
+# for qUarkMini_Wing_V4 hardware
 
 MCU STM32F4xx STM32F405xx
 
 # board ID for firmware load
 APJ_BOARD_ID 1004
 
+# ------Frequency-------------
 # crystal frequency
 OSCILLATOR_HZ 16000000
 define STM32_PLLM_VALUE 16
@@ -16,11 +17,19 @@ define STM32_PLLQ_VALUE 7
 # board voltage
 STM32_VDD 330U
 
+# ---------Board timer---------
 define STM32_ST_USE_TIMER 5
 define CH_CFG_ST_RESOLUTION 32
 
+#----------Flash setup---------
 # flash size
 FLASH_SIZE_KB 1024
+FLASH_RESERVE_START_KB 64
+
+define HAL_STORAGE_SIZE 16384
+define STORAGE_FLASH_PAGE 1
+
+# reserve 16k for bootloader, 16k for OSD and 32k for flash storage
 FLASH_RESERVE_START_KB 64
 
 # ---------I2C---------------
@@ -99,11 +108,14 @@ PC9 TIM8_CH4 TIM8 GPIO(80) ALARM
 
 # --------PWMS-----------
 PA10 TIM1_CH3 TIM1 PWM(1) GPIO(50)
-PC8 TIM8_CH3 TIM8 PWM(2) GPIO(51)
+PC8 TIM3_CH3 TIM3 PWM(2) GPIO(51)
+# PC8 TIM8_CH3 TIM8 PWM(2) GPIO(51)
 PB4 TIM3_CH1 TIM3 PWM(3) GPIO(52)
 PB5 TIM3_CH2 TIM3 PWM(4) GPIO(53)
 
-# --------LEDs-----------
+define BOARD_PWM_COUNT_DEFAULT 4
+
+# --------LED-----------
 define HAL_HAVE_PIXRACER_LED
 
 define HAL_GPIO_LED_ON  0
@@ -118,14 +130,7 @@ define HAL_GPIO_A_LED_PIN 0
 define HAL_GPIO_B_LED_PIN 1
 define HAL_GPIO_C_LED_PIN 2
 
-define HAL_STORAGE_SIZE 16384
-define STORAGE_FLASH_PAGE 1
-
-# reserve 16k for bootloader, 16k for OSD and 32k for flash storage
-FLASH_RESERVE_START_KB 64
-
-
-# SPI devices
+# ----------SPI devices------------
 SPIDEV osd         SPI1 DEVID6  OSD_CS              MODE0 10*MHZ 10*MHZ
 SPIDEV bmp280      SPI2 DEVID1  BARO_CS             MODE3 1*MHZ 8*MHZ
 SPIDEV bmi088_g    SPI2 DEVID3  BMI088_GYRO_CS      MODE3 10*MHZ 10*MHZ
@@ -133,7 +138,7 @@ SPIDEV bmi088_a    SPI2 DEVID4  BMI088_ACCEL_CS     MODE3 10*MHZ 10*MHZ
 SPIDEV lis3mdl     SPI2 DEVID5  MAG_CS              MODE3 500*KHZ 500*KHZ
 SPIDEV sdcard      SPI3 DEVID2  SDCARD_CS           MODE0 400*KHZ 25*MHZ
 
-
+# --------Sensors-------------------
 # One IMU BMI088
 IMU BMI088 SPI:bmi088_a SPI:bmi088_g ROTATION_PITCH_180
 
@@ -148,16 +153,17 @@ define HAL_PROBE_EXTERNAL_I2C_COMPASSES
 define HAL_I2C_INTERNAL_MASK 0
 define HAL_COMPASS_AUTO_ROT_DEFAULT 2
 
+#------------SD card-----------------
 define HAL_OS_FATFS_IO 1
 define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
 define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
+# -----------OSD--------------------
 # define OSD_ENABLED ENABLED
 #font for the osd
 ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
 
-define BOARD_PWM_COUNT_DEFAULT 4
-
+# ----------Memoery save-----------------
 define HAL_MINIMIZE_FEATURES 1
 
 # disable SMBUS and fuel battery monitors to save flash
