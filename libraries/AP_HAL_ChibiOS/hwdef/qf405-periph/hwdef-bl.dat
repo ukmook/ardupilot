@@ -1,4 +1,5 @@
 # hw definition file for processing by chibios_pins.py
+# based on qUark F405 UC4H Board
 
 # MCU class and specific type
 MCU STM32F4xx STM32F405xx
@@ -73,7 +74,6 @@ define HAL_STORAGE_SIZE 16384
 # enable CAN support
 PB8 CAN1_RX CAN1
 PB9 CAN1_TX CAN1
-# PB5 GPIO_CAN1_SILENT OUTPUT PUSHPULL SPEED_LOW LOW
 define HAL_USE_CAN TRUE
 define STM32_CAN_USE_CAN1 TRUE
 
