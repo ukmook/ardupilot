@@ -30,11 +30,8 @@ define HAL_LED_ON 1
 # the location where the bootloader will put the firmware
 FLASH_BOOTLOADER_LOAD_KB 64
 
-# board voltage
-STM32_VDD 330U
-
 # order of UARTs
-UART_ORDER OTG1
+SERIAL_ORDER OTG1
 
 PA11 OTG_FS_DM OTG1
 PA12 OTG_FS_DP OTG1
