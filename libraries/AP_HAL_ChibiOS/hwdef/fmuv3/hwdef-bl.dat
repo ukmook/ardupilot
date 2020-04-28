@@ -10,8 +10,6 @@ APJ_BOARD_ID 9
 # crystal frequency
 OSCILLATOR_HZ 24000000
 
-# board voltage
-STM32_VDD 330U
 
 # ChibiOS system timer
 STM32_ST_USE_TIMER 5
@@ -33,7 +31,7 @@ USB_STRING_SERIAL  "%SERIAL%"
 define BOOTLOADER_BAUDRATE 115200
 
 # uarts and USB to run bootloader protocol on
-UART_ORDER OTG1 USART2 USART3 UART7
+SERIAL_ORDER OTG1 USART2 USART3 UART7
 
 # this is the pin that senses USB being connected. It is an input pin
 # setup as OPENDRAIN
