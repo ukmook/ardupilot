@@ -153,11 +153,10 @@ define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
 # -----------OSD--------------------
 # define OSD_ENABLED ENABLED
-#font for the osd
-ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
+# font for the osd
+# ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
 
 # ----------Memoery save-----------------
-define HAL_MINIMIZE_FEATURES 1
 
 # disable SMBUS and fuel battery monitors to save flash
 define HAL_BATTMON_SMBUS_ENABLE 0
