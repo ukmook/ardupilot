@@ -63,6 +63,7 @@ void AP_Periph_FW::init()
 
     hal.uartA->begin(AP_SERIALMANAGER_CONSOLE_BAUD, 32, 32);
     hal.uartB->begin(115200, 128, 256);
+    hal.uartF->begin(115200, 128, 256);
 
     load_parameters();
 
@@ -126,8 +127,8 @@ void AP_Periph_FW::init()
 
 #ifdef HAL_PERIPH_ENABLE_RANGEFINDER
     if (rangefinder.get_type(0) != RangeFinder::Type::NONE) {
-        const uint8_t sernum = 3; // uartB
-        hal.uartB->begin(g.rangefinder_baud);
+        const uint8_t sernum = 5; // uartF
+        hal.uartF->begin(g.rangefinder_baud);
         serial_manager.set_protocol_and_baud(sernum, AP_SerialManager::SerialProtocol_Rangefinder, g.rangefinder_baud);
         rangefinder.init(ROTATION_NONE);
     }
@@ -140,7 +141,7 @@ void AP_Periph_FW::init()
 #ifdef HAL_PERIPH_ENABLE_HWESC
     hwesc_telem.init(hal.uartB);
 #endif
-    
+
     start_ms = AP_HAL::millis();
 }
 
