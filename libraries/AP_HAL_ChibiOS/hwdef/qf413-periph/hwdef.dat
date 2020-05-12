@@ -37,7 +37,7 @@ FLASH_SIZE_KB 1536
 
 # order of UARTs
 #            ---------------------------------------
-#            |     |     |     | GPS  |     | RNGF1|
+#            |sr0  |sr1  |sr2  | GPS |sr4  | RNGF1 |
 #            ---------------------------------------
 SERIAL_ORDER EMPTY EMPTY EMPTY USART1 EMPTY USART2
 
