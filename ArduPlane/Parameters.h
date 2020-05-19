@@ -575,6 +575,11 @@ public:
     // EFI Engine Monitor
     AP_EFI efi;
 #endif
+
+    AP_Float        fs_ekf_thresh;
+
+    // min initial climb in RTL
+    AP_Int16        rtl_climb_min;
 };
 
 extern const AP_Param::Info var_info[];

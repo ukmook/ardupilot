@@ -62,7 +62,9 @@ _depends_on_vehicle_cache = {}
 def _depends_on_vehicle(bld, source_node):
     path = source_node.srcpath()
 
-    if path.startswith('build/'):
+    if not bld.env.BUILDROOT:
+        bld.env.BUILDROOT = bld.bldnode.make_node('').abspath()
+    if path.startswith(bld.env.BUILDROOT) or path.startswith("build/"):
         _depends_on_vehicle_cache[path] = False
 
     if path not in _depends_on_vehicle_cache:

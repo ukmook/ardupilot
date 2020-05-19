@@ -1271,6 +1271,22 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("FWD_BAT_IDX", 25, ParametersG2, fwd_thr_batt_idx, 0),
 
+    // @Param: FS_EKF_THRESH
+    // @DisplayName: EKF failsafe variance threshold
+    // @Description: Allows setting the maximum acceptable compass and velocity variance used to check navigation health in VTOL modes
+    // @Values: 0.6:Strict, 0.8:Default, 1.0:Relaxed
+    // @User: Advanced
+    AP_GROUPINFO("FS_EKF_THRESH", 26, ParametersG2, fs_ekf_thresh, FS_EKF_THRESHOLD_DEFAULT),
+
+    // @Param: RTL_CLIMB_MIN
+    // @DisplayName: RTL minimum climb
+    // @Description: The vehicle will climb this many m during the initial climb portion of the RTL. During this time the roll will be limited to LEVEL_ROLL_LIMIT degrees.
+    // @Units: m
+    // @Range: 0 30
+    // @Increment: 1
+    // @User: Standard
+    AP_GROUPINFO("RTL_CLIMB_MIN", 27, ParametersG2, rtl_climb_min, 0),
+
     AP_GROUPEND
 };
 

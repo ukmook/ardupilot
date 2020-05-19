@@ -726,6 +726,10 @@ private:
         uint32_t last_trim_save;
     } auto_trim;
 
+    struct {
+        bool done_climb;
+    } rtl;
+
     // last time home was updated while disarmed
     uint32_t last_home_update_ms;
 
@@ -1035,6 +1039,13 @@ private:
                                                      };
     static_assert(_failsafe_priorities[ARRAY_SIZE(_failsafe_priorities) - 1] == -1,
                   "_failsafe_priorities is missing the sentinel");
+
+    // EKF checks for loss of navigation performed in ekf_check.cpp
+    // These are specific to VTOL operation
+    void ekf_check();
+    bool ekf_over_threshold();
+    void failsafe_ekf_event();
+    void failsafe_ekf_off_event(void);
 
 public:
     void failsafe_check(void);
