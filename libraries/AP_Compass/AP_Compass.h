@@ -436,8 +436,12 @@ private:
 
     // board orientation from AHRS
     enum Rotation _board_orientation = ROTATION_NONE;
-    // custom rotation matrix
+
+    // custom board rotation matrix
     Matrix3f* _custom_rotation;
+
+    // custom external compass rotation matrix
+    Matrix3f* _custom_external_rotation;
 
     // declination in radians
     AP_Float    _declination;

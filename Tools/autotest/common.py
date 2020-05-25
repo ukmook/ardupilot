@@ -2303,7 +2303,8 @@ class AutoTest(ABC):
         while True:
             delta = self.get_sim_time_cached() - tstart
             if delta > timeout:
-                raise AutoTestTimeoutException("Failed to DISARM")
+                raise AutoTestTimeoutException("Failed to DISARM within %fs" %
+                                               (timeout,))
             self.wait_heartbeat()
             self.progress("Got heartbeat")
             if not self.mav.motors_armed():
@@ -5491,7 +5492,7 @@ switch value'''
         m = self.mav.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
         if m is None:
             raise NotAchievedException("Did not receive GLOBAL_POSITION_INT")
-        gpi_abs_alt = int(m.alt / 1000) # mm -> m
+        gpi_abs_alt = int((m.alt+500) / 1000) # mm -> m
         tstart = self.get_sim_time_cached()
         while True:
             t2 = self.get_sim_time_cached()
