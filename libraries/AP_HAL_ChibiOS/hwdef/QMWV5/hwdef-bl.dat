@@ -1,5 +1,5 @@
 # hw definition file for processing by chibios_pins.py
-# for minimal F405 bootloader
+# for QMWV5 F413 bootloader
 
 # MCU class and specific type
 MCU STM32F4xx STM32F413xx
@@ -8,17 +8,14 @@ MCU STM32F4xx STM32F413xx
 APJ_BOARD_ID 1413
 
 # crystal frequency
-OSCILLATOR_HZ 8000000
+OSCILLATOR_HZ 16000000
 define HAL_CUSTOM_CLOCK_TREE
-define STM32_PLLM_VALUE 4
+define STM32_PLLM_VALUE 8
 define STM32_PLLN_VALUE 96
 define STM32_PLLP_VALUE 2
 define STM32_PLLQ_VALUE 4
 
 FLASH_SIZE_KB 1536
-
-# don't allow bootloader to use more than 16k
-FLASH_USE_MAX_KB 16
 
 # bootloader is installed at zero offset
 FLASH_RESERVE_START_KB 0
