@@ -28,9 +28,6 @@ FLASH_RESERVE_START_KB 64
 define HAL_STORAGE_SIZE 16384
 define STORAGE_FLASH_PAGE 1
 
-# reserve 16k for bootloader, 16k for OSD and 32k for flash storage
-FLASH_RESERVE_START_KB 64
-
 # ---------I2C---------------
 I2C_ORDER I2C2
 
@@ -58,7 +55,7 @@ PA10 TIM1_CH3 TIM1 RCININT PULLDOWN LOW
 # order of UARTs (and USB)
 # Order    USB   sr3    sr1    sr2    sr4     sr5
 # AP Name  USB   GPS1  TELM1  TELM2  GPS2   DEBUG
-SERIAL_ORDER OTG1 USART2 USART1 USART6
+UART_ORDER OTG1 USART2 USART1 USART6
 
 PA11 OTG_FS_DM OTG1 # 0) USB
 PA12 OTG_FS_DP OTG1
@@ -170,3 +167,5 @@ define HAL_BATTMON_FUEL_ENABLE 0
 # disable parachute and sprayer to save flash
 define HAL_PARACHUTE_ENABLED 0
 define HAL_SPRAYER_ENABLED 0
+
+define HAL_MINIMIZE_FEATURES 1
