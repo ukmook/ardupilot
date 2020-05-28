@@ -2354,7 +2354,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_ARSP_MSG, sizeof(log_AIRSPEED), "ARSP",  ARSP_FMT, ARSP_LABELS, ARSP_UNITS, ARSP_MULTS }, \
     { LOG_ASP2_MSG, sizeof(log_AIRSPEED), "ASP2",  ARSP_FMT, ARSP_LABELS, ARSP_UNITS, ARSP_MULTS }, \
     { LOG_CURRENT_MSG, sizeof(log_Current),                     \
-      "BAT", "QBfffffcf", "TimeUS,Instance,Volt,VoltR,Curr,CurrTot,EnrgTot,Temp,Res", "s#vvA?JOw", "F-000?/?0" },  \
+      "BAT", "QBfffffcf", "TimeUS,Instance,Volt,VoltR,Curr,CurrTot,EnrgTot,Temp,Res", "s#vvAiJOw", "F-000!/?0" },  \
     { LOG_CURRENT_CELLS_MSG, sizeof(log_Current_Cells), \
       "BCL", "QBfHHHHHHHHHH", "TimeUS,Instance,Volt,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10", "s#vvvvvvvvvvv", "F-00000000000" }, \
 	{ LOG_ATTITUDE_MSG, sizeof(log_Attitude),\
@@ -2512,6 +2512,24 @@ struct PACKED log_Arm_Disarm {
     { LOG_ERROR_MSG, sizeof(log_Error), \
       "ERR",   "QBB",         "TimeUS,Subsys,ECode", "s--", "F--" }
 
+
+// @LoggerMessage: SBPH
+// @Description: Swift Health Data
+// @Field: TimeUS: Time since system startup
+// @Field: CrcError: Number of packet CRC errors on serial connection
+// @Field: LastInject: Timestamp of last raw data injection to GPS
+// @Field: IARhyp: Current number of integer ambiguity hypotheses
+
+// @LoggerMessage: SBRH
+// @Description: Swift Raw Message Data
+// @Field: TimeUS: Time since system startup
+// @Field: msg_flag: Swift message type
+// @Field: 1: Sender ID
+// @Field: 2: index; always 1
+// @Field: 3: pages; number of pages received
+// @Field: 4: msg length; number of bytes received
+// @Field: 5: unused; always zero
+// @Field: 6: data received from device
 
 #define LOG_SBP_STRUCTURES \
     { LOG_MSG_SBPHEALTH, sizeof(log_SbpHealth), \

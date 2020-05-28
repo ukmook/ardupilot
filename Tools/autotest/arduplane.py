@@ -1851,12 +1851,9 @@ class AutoTestPlane(AutoTest):
             "Test Soaring feature",
             self.fly_soaring),
 
-            ("LogDownLoad",
-             "Log download",
-             lambda: self.log_download(
-                 self.buildlogs_path("ArduPlane-log.bin"),
-                 timeout=450,
-                 upload_logs=True))
+            ("LogUpload",
+             "Log upload",
+             self.log_upload),
         ])
         return ret
 

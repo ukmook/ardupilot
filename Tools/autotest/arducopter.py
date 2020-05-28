@@ -5099,11 +5099,9 @@ class AutoTestCopter(AutoTest):
              "Test Different Altitude Types",
              self.test_altitude_types),
 
-            ("LogDownLoad",
-             "Log download",
-             lambda: self.log_download(
-                 self.buildlogs_path("ArduCopter-log.bin"),
-                 upload_logs=len(self.fail_list) > 0))
+            ("LogUpload",
+             "Log upload",
+             self.log_upload),
         ])
         return ret
 
@@ -5130,11 +5128,9 @@ class AutoTestCopter(AutoTest):
              "Fly Gyro FFT Harmonic Matching",
              self.fly_gyro_fft_harmonic),
 
-            ("LogDownLoad",
-             "Log download",
-             lambda: self.log_download(
-                 self.buildlogs_path("ArduCopter-log.bin"),
-                 upload_logs=len(self.fail_list) > 0))
+            ("LogUpload",
+             "Log upload",
+             self.log_upload),
         ])
         return ret
 
@@ -5356,11 +5352,9 @@ class AutoTestHeli(AutoTestCopter):
              "Fly AutoRotation",
              self.fly_autorotation),
 
-            ("LogDownLoad",
-             "Log download",
-             lambda: self.log_download(
-                 self.buildlogs_path("ArduCopter-log.bin"),
-                 upload_logs=len(self.fail_list) > 0))
+            ("LogUpload",
+             "Log upload",
+             self.log_upload),
         ])
         return ret
 
