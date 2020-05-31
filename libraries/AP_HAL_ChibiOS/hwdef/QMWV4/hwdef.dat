@@ -22,7 +22,6 @@ define CH_CFG_ST_RESOLUTION 32
 #----------Flash setup---------
 # flash size
 FLASH_SIZE_KB 1024
-FLASH_RESERVE_START_KB 64
 
 define HAL_STORAGE_SIZE 16384
 define STORAGE_FLASH_PAGE 1
