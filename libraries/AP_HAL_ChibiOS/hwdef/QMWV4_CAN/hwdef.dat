@@ -1,0 +1,14 @@
+# hw definition file for processing by chibios_pins.py
+# for qUarkMini_Wing_V4 hardware
+
+include ../QMWV4/hwdef.dat
+
+# we don't have a flash page spare to write parameters to:
+undef STORAGE_FLASH_PAGE
+
+undef AP_PARAM_MAX_EMBEDDED_PARAM 1024
+undef HAL_STORAGE_SIZE 15360
+
+define HAL_STORAGE_SIZE 16384
+
+STM32_VDD 330U
