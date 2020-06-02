@@ -27,7 +27,7 @@ PC15 LED_ACTIVITY  OUTPUT
 define HAL_LED_ON 1
 
 # the location where the bootloader will put the firmware
-FLASH_BOOTLOADER_LOAD_KB 64
+FLASH_BOOTLOADER_LOAD_KB 16
 
 # order of UARTs
 SERIAL_ORDER OTG1
@@ -35,7 +35,6 @@ SERIAL_ORDER OTG1
 PA11 OTG_FS_DM OTG1
 PA12 OTG_FS_DP OTG1
 
-define HAL_USE_EMPTY_STORAGE 1
 define HAL_STORAGE_SIZE 16384
 
 Add CS pins to ensure they are high in bootloader
