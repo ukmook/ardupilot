@@ -21,6 +21,11 @@ define CH_CFG_ST_RESOLUTION 32
 
 # flash size
 FLASH_SIZE_KB 1024
+
+define HAL_STORAGE_SIZE 15360
+define STORAGE_FLASH_PAGE 1
+
+# reserve 16k for bootloader, 16k for OSD and 32k for flash storage
 FLASH_RESERVE_START_KB 64
 
 # ---------I2C---------------
@@ -117,13 +122,6 @@ PC15  LED_BLUE  OUTPUT GPIO(2)
 define HAL_GPIO_A_LED_PIN 0
 define HAL_GPIO_B_LED_PIN 1
 define HAL_GPIO_C_LED_PIN 2
-
-define HAL_STORAGE_SIZE 15360
-define STORAGE_FLASH_PAGE 1
-
-# reserve 16k for bootloader, 16k for OSD and 32k for flash storage
-FLASH_RESERVE_START_KB 64
-
 
 # SPI devices
 SPIDEV osd         SPI1 DEVID6  OSD_CS              MODE0 10*MHZ 10*MHZ
