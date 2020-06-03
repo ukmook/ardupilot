@@ -8,7 +8,6 @@ MCU STM32F4xx STM32F405xx
 APJ_BOARD_ID 1004
 
 # crystal frequency
-# crystal frequency
 OSCILLATOR_HZ 16000000
 define HAL_CUSTOM_CLOCK_TREE
 define STM32_PLLM_VALUE 8
