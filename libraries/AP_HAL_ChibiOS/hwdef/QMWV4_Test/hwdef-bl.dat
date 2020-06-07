@@ -5,7 +5,7 @@
 MCU STM32F4xx STM32F405xx
 
 # board ID for firmware load
-APJ_BOARD_ID 1004
+APJ_BOARD_ID 4004
 
 # crystal frequency
 OSCILLATOR_HZ 16000000
@@ -26,7 +26,7 @@ PC15 LED_ACTIVITY  OUTPUT
 define HAL_LED_ON 1
 
 # the location where the bootloader will put the firmware
-FLASH_BOOTLOADER_LOAD_KB 16
+FLASH_BOOTLOADER_LOAD_KB 64
 
 # order of UARTs
 SERIAL_ORDER OTG1

@@ -3,10 +3,8 @@
 
 MCU STM32F4xx STM32F405xx
 
-# define CONFIG_HAL_BOARD_SUBTYPE HAL_BOARD_SUBTYPE_CHIBIOS_QRKMINIWING
-
 # board ID for firmware load
-APJ_BOARD_ID 101
+APJ_BOARD_ID 4001
 
 # crystal frequency
 OSCILLATOR_HZ 16000000
@@ -21,6 +19,7 @@ define CH_CFG_ST_RESOLUTION 32
 
 # flash size
 FLASH_SIZE_KB 1024
+# reserve 16k for bootloader, 16k for OSD and 32k for flash storage
 FLASH_RESERVE_START_KB 64
 
 # ---------I2C---------------
@@ -114,9 +113,6 @@ define HAL_GPIO_LED_OFF 1
 
 define HAL_STORAGE_SIZE 15360
 define STORAGE_FLASH_PAGE 1
-
-# reserve 16k for bootloader, 16k for OSD and 32k for flash storage
-FLASH_RESERVE_START_KB 64
 
 
 # SPI devices

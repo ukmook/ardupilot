@@ -5,11 +5,7 @@ include ../QMWV4/hwdef.dat
 
 # we don't have a flash page spare to write parameters to:
 undef STORAGE_FLASH_PAGE
-
-undef AP_PARAM_MAX_EMBEDDED_PARAM 1024
-undef FLASH_RESERVE_START_KB 64
 undef HAL_STORAGE_SIZE 15360
 
-FLASH_RESERVE_START_KB 16
-
+# Increase param storage size for CANDNA
 define HAL_STORAGE_SIZE 16384

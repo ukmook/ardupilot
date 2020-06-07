@@ -4,7 +4,7 @@
 MCU STM32F4xx STM32F405xx
 
 # board ID for firmware load
-APJ_BOARD_ID 1004
+APJ_BOARD_ID 4004
 
 # ------Frequency-------------
 # crystal frequency
@@ -157,11 +157,12 @@ define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
 define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
 # -----------OSD--------------------
-# define OSD_ENABLED ENABLED
 # font for the osd
 ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
+define OSD_ENABLED 1
+define HAL_OSD_TYPE_DEFAULT 1
 
-# ----------Memoery save-----------------
+# ----------Memory save-----------------
 
 # disable SMBUS and fuel battery monitors to save flash
 define HAL_BATTMON_SMBUS_ENABLE 0
@@ -173,8 +174,9 @@ define HAL_SPRAYER_ENABLED 0
 
 # reduce max size of embedded params for apj_tool.py
 define AP_PARAM_MAX_EMBEDDED_PARAM 1024
+define HAL_WITH_DSP FALSE
 
 define HAL_MINIMIZE_FEATURES 1
 
-STDOUT_SERIAL SD2
-STDOUT_BAUDRATE 57600
+# STDOUT_SERIAL SD2
+# STDOUT_BAUDRATE 57600
