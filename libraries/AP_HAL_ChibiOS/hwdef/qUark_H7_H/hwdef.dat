@@ -6,9 +6,6 @@
 # MCU class and specific type
 MCU STM32H7xx STM32H743xx
 
-# board voltage
-STM32_VDD 330U
-
 # ------------ Clocks ----------
 
 # crystal frequency
@@ -73,7 +70,7 @@ define HAL_BATT_CURR_SCALE 10.0
 # order of UARTs (and USB)
 # Order    USB   sr3    sr1    sr2    sr4     sr5
 # AP Name  USB   GPS1  TELM1  TELM2  GPS2   DEBUG
-UART_ORDER OTG1 USART3 USART6 UART7 USART2
+SERIAL_ORDER OTG1 USART3 USART6 UART7 USART2
 
 # USB
 PA11 OTG_FS_DM OTG1
