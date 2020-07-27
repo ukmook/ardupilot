@@ -74,7 +74,8 @@ define HAL_I2C_INTERNAL_MASK 0
 I2C_ORDER I2C1
 
 # compass
-COMPASS LIS3MDL I2C:0:0x1C false ROTATION_ROLL_180_YAW_90
+COMPASS LIS3MDL I2C:0:0x1C false ROTATION_ROLL_180
+
 # 0x1C Slave Address when SA1 is to GND
 # 0x1E Slave Address when SA1 is to VCC
 
