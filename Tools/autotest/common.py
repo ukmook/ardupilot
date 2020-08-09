@@ -541,9 +541,11 @@ class FRSkySPort(FRSky):
         self.state = self.state_WANT_FRAME_TYPE
 
         self.data_by_id = {}
+        self.dataid_counts = {}
         self.bad_chars = 0
 
         self.poll_sent = 0
+        self.sensor_id_poll_counts = {}
 
         self.id_descriptions = {
             0x5000: "status text (dynamic)",
@@ -588,6 +590,17 @@ class FRSkySPort(FRSky):
     def handle_data(self, dataid, value):
         self.progress("%s (0x%x)=%u" % (self.id_descriptions[dataid], dataid, value))
         self.data_by_id[dataid] = value
+        if dataid not in self.dataid_counts:
+            self.dataid_counts[dataid] = 0
+        self.dataid_counts[dataid] += 1
+
+    def dump_dataid_counts_as_progress_messages(self):
+        for dataid in self.dataid_counts:
+            self.progress("0x%x: %u  (%s)" % (dataid, self.dataid_counts[dataid], self.id_descriptions[dataid]))
+
+    def dump_sensor_id_poll_counts_as_progress_messages(self):
+        for sensor_id in self.sensor_id_poll_counts:
+            self.progress("(0x%x): %u" % (sensor_id, self.sensor_id_poll_counts[sensor_id]))
 
     def read_bytestuffed_byte(self):
         if sys.version_info.major >= 3:
@@ -634,6 +647,9 @@ class FRSkySPort(FRSky):
         if self.state == self.state_SEND_POLL:
             sensor_id = self.next_sensor()
             self.progress("Sending poll for 0x%02x" % sensor_id)
+            if sensor_id not in self.sensor_id_poll_counts:
+                self.sensor_id_poll_counts[sensor_id] = 0
+            self.sensor_id_poll_counts[sensor_id] += 1
             buf = struct.pack('<BB', self.START_STOP_SPORT, sensor_id)
             self.port.sendall(buf)
             self.state = self.state_WANT_FRAME_TYPE
@@ -789,6 +805,7 @@ class AutoTest(ABC):
         if self.force_ahrs_type is not None:
             self.force_ahrs_type = int(self.force_ahrs_type)
         self.logs_dir = logs_dir
+        self.timesync_number = 137
 
     @staticmethod
     def progress(text):
@@ -1588,6 +1605,38 @@ class AutoTest(ABC):
             rate = "%f/s" % (count/float(tdelta),)
 
         self.progress("Drained %u messages from mav (%s)" % (count, rate))
+
+    def do_timesync_roundtrip(self):
+        self.progress("Doing timesync roundtrip")
+        tstart = self.get_sim_time()
+        self.mav.mav.timesync_send(0, self.timesync_number * 1000 + self.mav.source_system)
+        while True:
+            now = self.get_sim_time_cached()
+            if now - tstart > 1:
+                raise AutoTestTimeoutException("Did not get timesync response")
+            m = self.mav.recv_match(type='TIMESYNC', blocking=True, timeout=1)
+            self.progress("Received: %s" % str(m))
+            if m is None:
+                continue
+            if m.tc1 == 0:
+                self.progress("this is a timesync request, which we don't answer")
+                continue
+            if m.ts1 % 1000 != self.mav.source_system:
+                self.progress("this isn't a response to our timesync (%s)" % (m.ts1 % 1000))
+                continue
+            if int(m.ts1 / 1000) != self.timesync_number:
+                self.progress("this isn't the one we just sent")
+                continue
+            if m.get_srcSystem() != self.mav.target_system:
+                self.progress("response from system other than our target")
+                continue
+            # no component check ATM because we send broadcast...
+#            if m.get_srcComponent() != self.mav.target_component:
+#                self.progress("response from component other than our target (got=%u want=%u)" % (m.get_srcComponent(), self.mav.target_component))
+#                continue
+            self.progress("Received TIMESYNC response after %fs" % (now - tstart))
+            self.timesync_number += 1
+            break
 
     def log_filepath(self, lognum):
         '''return filepath to lognum (where lognum comes from LOG_ENTRY'''
@@ -2834,7 +2883,7 @@ class AutoTest(ABC):
     def set_parameter(self, name, value, add_to_context=True, epsilon=0.0002, retries=10):
         """Set parameters from vehicle."""
         self.progress("Setting %s to %f" % (name, value))
-        old_value = self.get_parameter(name, retry=2)
+        old_value = self.get_parameter(name, attempts=2)
         for i in range(1, retries+2):
             self.mavproxy.send("param set %s %s\n" % (name, str(value)))
             returned_value = self.get_parameter(name)
@@ -2849,9 +2898,9 @@ class AutoTest(ABC):
         raise ValueError("Param fetch returned incorrect value (%s) vs (%s)"
                          % (returned_value, value))
 
-    def get_parameter(self, name, retry=1, timeout=60):
+    def get_parameter(self, name, attempts=1, timeout=60):
         """Get parameters from vehicle."""
-        for i in range(0, retry):
+        for i in range(0, attempts):
             # we call get_parameter while the vehicle is rebooting.
             # We need to read out the SITL binary's STDOUT or the
             # process blocks writing to it.
@@ -2859,7 +2908,7 @@ class AutoTest(ABC):
                 util.pexpect_drain(self.sitl)
             self.mavproxy.send("param fetch %s\n" % name)
             try:
-                self.mavproxy.expect("%s = ([-0-9.]*)\r\n" % (name,), timeout=timeout/retry)
+                self.mavproxy.expect("%s = ([-0-9.]*)\r\n" % (name,), timeout=timeout/attempts)
                 try:
                     # sometimes race conditions garble the MAVProxy output
                     ret = float(self.mavproxy.match.group(1))
@@ -3259,7 +3308,7 @@ class AutoTest(ABC):
 
     def reach_heading_manual(self, heading, turn_right=True):
         """Manually direct the vehicle to the target heading."""
-        if self.is_copter():
+        if self.is_copter() or self.is_sub():
             self.mavproxy.send('rc 4 1580\n')
             self.wait_heading(heading)
             self.set_rc(4, 1500)
@@ -3486,7 +3535,7 @@ class AutoTest(ABC):
             return self.get_distance(start, self.mav.location())
 
         def validator(value2, target2):
-            return (value2 - target2) >= accuracy
+            return math.fabs(value2 - target2) <= accuracy
 
         self.wait_and_maintain(value_name="Distance", target=distance, current_value_getter=lambda: get_distance(), validator=lambda value2, target2: validator(value2, target2), accuracy=accuracy, timeout=timeout, **kwargs)
 
@@ -3664,14 +3713,18 @@ class AutoTest(ABC):
         self.progress("Waiting for GPS health")
         tstart = self.get_sim_time_cached()
         while True:
-            if self.get_sim_time_cached() - tstart > timeout:
+            now = self.get_sim_time_cached()
+            if now - tstart > timeout:
                 raise AutoTestTimeoutException("GPS status bits did not become good")
             m = self.mav.recv_match(type='SYS_STATUS', blocking=True, timeout=1)
             if m is None:
                 continue
             if (not (m.onboard_control_sensors_present & mavutil.mavlink.MAV_SYS_STATUS_SENSOR_GPS)):
                 self.progress("GPS not present")
-                return
+                if now > 5:
+                    # it's had long enough to be detected....
+                    return
+                continue
             if (not (m.onboard_control_sensors_enabled & mavutil.mavlink.MAV_SYS_STATUS_SENSOR_GPS)):
                 self.progress("GPS not enabled")
                 continue
@@ -4674,6 +4727,7 @@ Also, ignores heartbeats not from our target system'''
             self.start_subtest("Try magcal and wait success")
             self.progress("Compass mask is %s" % "{0:b}".format(target_mask))
             reset_pos_and_start_magcal(target_mask)
+            progress_count = [0] * compass_tnumber
             reached_pct = [0] * compass_tnumber
             report_get = [0] * compass_tnumber
             tstart = self.get_sim_time()
@@ -4689,16 +4743,19 @@ Also, ignores heartbeats not from our target system'''
                                 raise NotAchievedException("Mag calibration report SUCCESS without 100%% completion")
                             report_get[m.compass_id] = 1
                         else:
-                            raise NotAchievedException("Mag calibration didn't SUCCESS")
+                            raise NotAchievedException(
+                                "Mag calibration didn't SUCCEED (cal_status=%u) (progress_count=%s)" %
+                                (m.cal_status, progress_count[m.compass_id],))
                     if all(ele >= 1 for ele in report_get):
                         self.progress("All Mag report SUCCESS")
                         break
                 if m is not None and m.get_type() == "MAG_CAL_PROGRESS":
                     cid = m.compass_id
                     new_pct = int(m.completion_pct)
+                    progress_count[cid] += 1
                     if new_pct != reached_pct[cid]:
                         reached_pct[cid] = new_pct
-                        self.progress("Calibration progress compass ID %d: %s" % (cid, str(reached_pct[cid])))
+                        self.progress("Calibration progress compass ID %d: %s%%" % (cid, str(reached_pct[cid])))
             self.mavproxy.send("sitl_stop\n")
             self.mavproxy.send("sitl_attitude 0 0 0\n")
             self.progress("Checking that value aren't changed without acceptation")
@@ -5668,7 +5725,7 @@ switch value'''
             loaded_module = True
         self.mavproxy.send("log list\n")
         self.mavproxy.expect(["lastLog ([0-9]+)", "No logs"])
-        if self.mavproxy.match.group(1) == "No logs":
+        if self.mavproxy.match.group(0) == "No logs":
             num_log = None
         else:
             num_log = int(self.mavproxy.match.group(1))
@@ -5861,8 +5918,8 @@ switch value'''
             # uses CMD_TOTAL not MIS_TOTAL, and it's in a scalr not a
             # group and it's generally all bad.
             return
-        self.start_subtest("Ensure GCS is not be able to set MIS_TOTAL")
-        old_mt = self.get_parameter("MIS_TOTAL")
+        self.start_subtest("Ensure GCS is not able to set MIS_TOTAL")
+        old_mt = self.get_parameter("MIS_TOTAL", attempts=20) # retries to avoid seeming race condition with MAVProxy
         ex = None
         try:
             self.set_parameter("MIS_TOTAL", 17, retries=0)
@@ -6247,9 +6304,9 @@ switch value'''
         )
         if gpi is None:
             raise NotAchievedException("Did not get GLOBAL_POSITION_INT message")
-        gpi_relative_alt = gpi.relative_alt
-        self.progress("GLOBAL_POSITION_INT rel_alt==%f frsky==%f" % (gpi_relative_alt, home_alt_m))
-        if abs(gpi_relative_alt - home_alt_m) < 1:
+        gpi_relative_alt_m = gpi.relative_alt/1000.0
+        self.progress("GLOBAL_POSITION_INT rel_alt==%fm frsky_home_alt==%fm" % (gpi_relative_alt_m, home_alt_m))
+        if abs(gpi_relative_alt_m - home_alt_m) < 1:
             return True
             # FIXME: need to check other values as well
         return False
@@ -6315,11 +6372,10 @@ switch value'''
         # FIXME: need to check other values as well
         return True
     def tfp_validate_params(self, value):
-        self.progress("validating params (0x%02x)" % value)
         param_id = self.bit_extract(value,24,4)
         param_value = self.bit_extract(value,0,24)
-        if param_id != 1:
-            return False
+        self.progress("received param (0x%02x) (id=%u value=%u)" %
+                      (value, param_id, param_value))
         frame_type = param_value
         hb = self.mav.recv_match(
             type='HEARTBEAT',
@@ -6329,7 +6385,9 @@ switch value'''
         if hb is None:
             raise NotAchievedException("Did not get HEARTBEAT message")
         hb_type = hb.type
-        self.progress("HEARTBEAT type==%f frsky==%f" % (hb_type, frame_type))
+        self.progress("validate_params: HEARTBEAT type==%f frsky==%f param_id=%u" % (hb_type, frame_type, param_id))
+        if param_id != 1:
+            return False
         if hb_type == frame_type:
             return True
             # FIXME: need to check other values as well
@@ -6425,17 +6483,26 @@ switch value'''
             self.progress("Still wanting (%s)" % ",".join([ ("0x%02x" % x) for x in wants.keys()]))
             wants_copy = copy.copy(wants)
             t2 = self.get_sim_time_cached()
-            if t2 - tstart > 60:
+            if t2 - tstart > 300:
+                self.progress("Failed to get frsky data")
+                self.progress("Counts of sensor_id polls sent:")
+                frsky.dump_sensor_id_poll_counts_as_progress_messages()
+                self.progress("Counts of dataids received:")
+                frsky.dump_dataid_counts_as_progress_messages()
                 raise AutoTestTimeoutException("Failed to get frsky data")
             frsky.update()
             for want in wants_copy:
                 data = frsky.get_data(want)
                 if data is None:
                     continue
-                self.progress("Checking %s" % str(want))
+                self.progress("Checking 0x%x" % (want,))
                 if wants[want](data):
                     self.progress("  Fulfilled")
                     del wants[want]
+        self.progress("Counts of sensor_id polls sent:")
+        frsky.dump_sensor_id_poll_counts_as_progress_messages()
+        self.progress("Counts of dataids received:")
+        frsky.dump_dataid_counts_as_progress_messages()
 
     def tfs_validate_gps_alt(self, value):
         self.progress("validating gps altitude integer part (0x%02x)" % value)
@@ -6633,7 +6700,7 @@ switch value'''
                 data = frsky.get_data(want)
                 if data is None:
                     continue
-                self.progress("Checking %s" % str(want))
+                self.progress("Checking 0x%x" % (want,))
                 if wants[want](data):
                     self.progress("  Fulfilled")
                     del wants[want]
@@ -6768,7 +6835,7 @@ switch value'''
 
             wants_copy = copy.copy(wants)
             for want in wants_copy:
-                self.progress("Checking %s" % str(want))
+                self.progress("Checking %s" % (want,))
                 if wants[want](ltm):
                     self.progress("  Fulfilled")
                     del wants[want]
@@ -6851,10 +6918,10 @@ switch value'''
                 avg = None
             else:
                 avg = self.total_waiting_to_arm_time/self.waiting_to_arm_count
-            self.progress("Spent %f seconds waiting to arm. count=%u avg=%f" %
+            self.progress("Spent %f seconds waiting to arm. count=%u avg=%s" %
                           (self.total_waiting_to_arm_time,
-                          self.waiting_to_arm_count,
-                          avg))
+                           self.waiting_to_arm_count,
+                           str(avg)))
             self.show_test_timings()
         if self.forced_post_test_sitl_reboots != 0:
             print("Had to force-reset SITL %u times" %

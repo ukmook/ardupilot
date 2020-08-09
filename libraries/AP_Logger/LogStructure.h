@@ -392,6 +392,7 @@ struct PACKED log_POWR {
     float Vcc;
     float Vservo;
     uint16_t flags;
+    uint16_t accumulated_flags;
     uint8_t safety_and_arm;
 };
 
@@ -1210,6 +1211,17 @@ struct PACKED log_OADijkstra {
     int32_t oa_lng;
 };
 
+struct PACKED log_SimpleAvoid {
+  LOG_PACKET_HEADER;
+  uint64_t time_us;
+  uint8_t state;
+  float desired_vel_x;
+  float desired_vel_y;
+  float modified_vel_x;
+  float modified_vel_y;
+  uint8_t backing_up;
+};
+
 struct PACKED log_DSTL {
     LOG_PACKET_HEADER;
     uint64_t time_us;
@@ -1235,6 +1247,22 @@ struct PACKED log_Arm_Disarm {
     uint32_t arm_checks;
     uint8_t forced;
     uint8_t method;
+};
+
+struct PACKED log_Winch {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    uint8_t healthy;
+    uint8_t thread_end;
+    uint8_t moving;
+    uint8_t clutch;
+    uint8_t mode;
+    float desired_length;
+    float length;
+    float desired_rate;
+    uint16_t tension;
+    float voltage;
+    int8_t temp;
 };
 
 // FMT messages define all message formats other than FMT
@@ -1623,6 +1651,45 @@ struct PACKED log_Arm_Disarm {
 // @Field: Yaw: vehicle yaw
 // @Field: U: boolean value indicating whether this GPS is in use
 
+// @LoggerMessage: GRAW
+// @Description: Raw uBlox data
+// @Field: TimeUS: Time since system startup
+// @Field: WkMS: receiver TimeOfWeek measurement
+// @Field: Week: GPS week
+// @Field: numSV: number of space vehicles seen
+// @Field: sv: space vehicle number of first vehicle
+// @Field: cpMes: carrier phase measurement
+// @Field: prMes: pseudorange measurement
+// @Field: doMes: Doppler measurement
+// @Field: mesQI: measurement quality index
+// @Field: cno: carrier-to-noise density ratio
+// @Field: lli: loss of lock indicator
+
+// @LoggerMessage: GRXH
+// @Description: Raw uBlox data - header
+// @Field: TimeUS: Time since system startup
+// @Field: rcvTime: receiver TimeOfWeek measurement
+// @Field: week: GPS week
+// @Field: leapS: GPS leap seconds
+// @Field: numMeas: number of space-vehicle measurements to follow
+// @Field: recStat: receiver tracking status bitfield
+
+// @LoggerMessage: GRXS
+// @Description: Raw uBlox data - space-vehicle data
+// @Field: TimeUS: Time since system startup
+// @Field: prMes: Pseudorange measurement
+// @Field: cpMes: Carrier phase measurement
+// @Field: doMes: Doppler measurement
+// @Field: gnss: GNSS identifier
+// @Field: sv: Satellite identifier
+// @Field: freq: GLONASS frequency slot
+// @Field: lock: carrier phase locktime counter
+// @Field: cno: carrier-to-noise density ratio
+// @Field: prD: estimated pseudorange measurement standard deviation
+// @Field: cpD: estimated carrier phase measurement standard deviation
+// @Field: doD: estimated Doppler measurement standard deviation
+// @Field: trk: tracking status bitfield
+
 // @LoggerMessage: GYR1,GYR2,GYR3
 // @Description: IMU gyroscope data
 // @Field: TimeUS: Time since system startup
@@ -1906,7 +1973,7 @@ struct PACKED log_Arm_Disarm {
 // @Field: Value: parameter vlaue
 
 // @LoggerMessage: PIDR,PIDP,PIDY,PIDA,PIDS
-// @Description: Proportional/Integral/Derivative gain values for Roll/Pitch/Yaw/Z/Steering
+// @Description: Proportional/Integral/Derivative gain values for Roll/Pitch/Yaw/Altitude/Steering
 // @Field: TimeUS: Time since system startup
 // @Field: Tar: desired value
 // @Field: Act: achieved value
@@ -1947,6 +2014,7 @@ struct PACKED log_Arm_Disarm {
 // @Field: Vcc: Flight board voltage
 // @Field: VServo: Servo rail voltage
 // @Field: Flags: System power flags
+// @Field: AccFlags: Accumulated System power flags; all flags which have ever been set
 // @Field: Safety: Hardware Safety Switch status
 
 // @LoggerMessage: PRX
@@ -2082,6 +2150,16 @@ struct PACKED log_Arm_Disarm {
 // @Field: N: point associated with most recent action (North component)
 // @Field: E: point associated with most recent action (East component)
 // @Field: D: point associated with most recent action (Down component)
+
+// @LoggerMessage: SA
+// @Description: Simple Avoidance messages
+// @Field: TimeUS: Time since system startup
+// @Field: State: True if Simple Avoidance is active
+// @Field: DVelX: Desired velocity, X-Axis (Velocity before Avoidance)
+// @Field: DVelY: Desired velocity, Y-Axis (Velocity before Avoidance)
+// @Field: MVelX: Modified velocity, X-Axis (Velocity after Avoidance)
+// @Field: MVelY: Modified velocity, Y-Axis (Velocity after Avoidance)
+// @Field: Back: True if vehicle is backing away 
 
 // @LoggerMessage: TERR
 // @Description: Terrain database infomration
@@ -2336,6 +2414,21 @@ struct PACKED log_Arm_Disarm {
 // @Field: V22: Variance for state 22
 // @Field: V23: Variance for state 23
 
+// @LoggerMessage: WINC
+// @Description: Winch
+// @Field: TimeUS: Time since system startup
+// @Field: Heal: Healthy
+// @Field: ThEnd: Reached end of thread
+// @Field: Mov: Motor is moving
+// @Field: Clut: Clutch is engaged (motor can move freely)
+// @Field: Mode: 0 is Relaxed, 1 is Position Control, 2 is Rate Control
+// @Field: DLen: Desired Length
+// @Field: Len: Estimated Length
+// @Field: DRate: Desired Rate
+// @Field: Tens: Tension on line
+// @Field: Vcc: Voltage to Motor
+// @Field: Temp: Motor temperature
+
 // messages for all boards
 #define LOG_BASE_STRUCTURES \
     { LOG_FORMAT_MSG, sizeof(log_Format), \
@@ -2373,7 +2466,7 @@ struct PACKED log_Arm_Disarm {
     { LOG_BARO_MSG, sizeof(log_BARO), \
       "BARO",  BARO_FMT, BARO_LABELS, BARO_UNITS, BARO_MULTS }, \
     { LOG_POWR_MSG, sizeof(log_POWR), \
-      "POWR","QffHB","TimeUS,Vcc,VServo,Flags,Safety", "svv--", "F00--" },  \
+      "POWR","QffHHB","TimeUS,Vcc,VServo,Flags,AccFlags,Safety", "svv---", "F00---" },  \
     { LOG_CMD_MSG, sizeof(log_Cmd), \
       "CMD", "QHHHffffLLfB","TimeUS,CTot,CNum,CId,Prm1,Prm2,Prm3,Prm4,Lat,Lng,Alt,Frame", "s-------DUm-", "F-------GG0-" }, \
     { LOG_MAVLINK_COMMAND_MSG, sizeof(log_MAVLink_Command), \
@@ -2412,6 +2505,8 @@ struct PACKED log_Arm_Disarm {
       "OABR","QBHHBfLLLL","TimeUS,Active,DesYaw,Yaw,ResChg,Mar,DLat,DLng,OALat,OALng", "sbdd-mDUDU", "F-----GGGG" }, \
     { LOG_OA_DIJKSTRA_MSG, sizeof(log_OADijkstra), \
       "OADJ","QBBBBLLLL","TimeUS,State,Err,CurrPoint,TotPoints,DLat,DLng,OALat,OALng", "sbbbbDUDU", "F----GGGG" }, \
+    { LOG_SIMPLE_AVOID_MSG, sizeof(log_SimpleAvoid), \
+      "SA",  "QBffffB","TimeUS,State,DVelX,DVelY,MVelX,MVelY,Back", "sbnnnnb", "F------"}, \
     { LOG_IMU2_MSG, sizeof(log_IMU), \
       "IMU2",  IMU_FMT,     IMU_LABELS, IMU_UNITS, IMU_MULTS }, \
     { LOG_IMU3_MSG, sizeof(log_IMU), \
@@ -2545,8 +2640,9 @@ struct PACKED log_Arm_Disarm {
     { LOG_ARM_DISARM_MSG, sizeof(log_Arm_Disarm), \
       "ARM", "QBIBB", "TimeUS,ArmState,ArmChecks,Forced,Method", "s----", "F----" }, \
     { LOG_ERROR_MSG, sizeof(log_Error), \
-      "ERR",   "QBB",         "TimeUS,Subsys,ECode", "s--", "F--" }
-
+      "ERR",   "QBB",         "TimeUS,Subsys,ECode", "s--", "F--" }, \
+    { LOG_WINCH_MSG, sizeof(log_Winch), \
+      "WINC", "QBBBBBfffHfb", "TimeUS,Heal,ThEnd,Mov,Clut,Mode,DLen,Len,DRate,Tens,Vcc,Temp", "s-----mmn?vO", "F-----000000" }
 
 // @LoggerMessage: SBPH
 // @Description: Swift Health Data
@@ -2704,6 +2800,8 @@ enum LogMessages : uint8_t {
     LOG_OA_BENDYRULER_MSG,
     LOG_OA_DIJKSTRA_MSG,
     LOG_VISUALVEL_MSG,
+    LOG_SIMPLE_AVOID_MSG,
+    LOG_WINCH_MSG,
 
     _LOG_LAST_MSG_
 };

@@ -166,6 +166,9 @@ public:
         return AP_HAL::millis() - _last_flying_ms;
     }
 
+    // returns true if the vehicle has crashed
+    virtual bool is_crashed() const;
+
     /*
       methods to control vehicle for use by scripting
     */
@@ -250,12 +253,12 @@ protected:
 
     AP_ESC_Telem esc_telem;
 
-    static const struct AP_Param::GroupInfo var_info[];
-    static const struct AP_Scheduler::Task scheduler_tasks[];
-
 #if GENERATOR_ENABLED
     AP_Generator_RichenPower generator;
 #endif
+
+    static const struct AP_Param::GroupInfo var_info[];
+    static const struct AP_Scheduler::Task scheduler_tasks[];
 
 private:
 

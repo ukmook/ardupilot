@@ -1716,6 +1716,24 @@ class AutoTestCopter(AutoTest):
     def fly_autotune_switch(self):
         """Test autotune on a switch with gains being saved"""
 
+        self.context_push()
+
+        ex = None
+
+        try:
+            self.fly_autotune_switch_body()
+        except Exception as e:
+            self.progress("Exception caught: %s" % (
+                self.get_exception_stacktrace(e)))
+            ex = e
+
+        self.context_pop()
+        self.reboot_sitl()
+
+        if ex is not None:
+            raise ex
+
+    def fly_autotune_switch_body(self):
         self.set_parameter("RC8_OPTION", 17)
         self.set_parameter("ATC_RAT_RLL_FLTT", 20)
         rlld = self.get_parameter("ATC_RAT_RLL_D")
@@ -4580,7 +4598,7 @@ class AutoTestCopter(AutoTest):
                                         0)
             self.wait_location(east_loc, accuracy=6)
             self.reach_heading_manual(225);
-            self.wait_location(west_loc, accuracy=6)
+            self.wait_location(west_loc, accuracy=6, timeout =200)
             self.set_rc(2, 1500)
             self.do_RTL()
 
@@ -4781,6 +4799,29 @@ class AutoTestCopter(AutoTest):
         if ex is not None:
             raise ex
 
+    def wait_generator_speed_and_state(self, rpm_min, rpm_max, want_state, timeout=240):
+        self.drain_mav()
+        tstart = self.get_sim_time()
+        while True:
+            if self.get_sim_time_cached() - tstart > timeout:
+                raise NotAchievedException("Did not move to state/speed")
+
+            m = self.mav.recv_match(type="GENERATOR_STATUS", blocking=True, timeout=10)
+            if m is None:
+                raise NotAchievedException("Did not get GENERATOR_STATUS")
+
+            if m.generator_speed < rpm_min:
+                self.progress("Too slow (%u<%u)" % (m.generator_speed, rpm_min))
+                continue
+            if m.generator_speed > rpm_max:
+                self.progress("Too fast (%u>%u)" % (m.generator_speed, rpm_max))
+                continue
+            if m.status != want_state:
+                self.progress("Wrong state (got=%u want=%u)" % (m.status, want_state))
+            break
+        self.progress("Got generator speed and state")
+
+
     def test_richenpower(self):
         self.set_parameter("SERIAL5_PROTOCOL", 30)
         self.set_parameter("SIM_RICH_ENABLE", 1)
@@ -4788,9 +4829,16 @@ class AutoTestCopter(AutoTest):
         self.set_parameter("SIM_RICH_CTRL", 8)
         self.set_parameter("RC9_OPTION", 85)
         self.set_parameter("LOG_DISARMED", 1)
-        self.customise_SITL_commandline(["--uartF=sim:richenpower"])
+        self.set_parameter("BATT2_MONITOR", 17)
         self.set_rc(9, 1000) # remember this is a switch position - stop
+        self.customise_SITL_commandline(["--uartF=sim:richenpower"])
         self.mavproxy.expect("requested state is not RUN")
+
+        self.set_message_rate_hz("GENERATOR_STATUS", 10)
+        self.drain_mav_unparsed()
+
+        self.wait_generator_speed_and_state(0, 0, mavutil.mavlink.MAV_GENERATOR_STATUS_FLAG_OFF)
+
         messages = []
         def my_message_hook(mav, m):
             if m.get_type() != 'STATUSTEXT':
@@ -4805,11 +4853,36 @@ class AutoTestCopter(AutoTest):
             self.mavproxy.expect("Generator HIGH")
         self.set_rc(9, 1000) # remember this is a switch position - stop
         self.mavproxy.expect("requested state is not RUN", timeout=200)
-        self.set_message_rate_hz("GENERATOR_STATUS", 1)
-        self.drain_mav_unparsed()
-        m = self.assert_receive_message("GENERATOR_STATUS",timeout=10)
-        if m.generator_speed == 0:
-            raise NotAchievedException("Zero GENERATOR_STATUS.generator_speed")
+
+        self.set_rc(9, 1500) # remember this is a switch position - idle
+        self.wait_generator_speed_and_state(3000, 8000, mavutil.mavlink.MAV_GENERATOR_STATUS_FLAG_IDLE)
+
+        self.set_rc(9, 2000) # remember this is a switch position - run
+#        self.wait_generator_speed_and_state(3000, 30000, mavutil.mavlink.MAV_GENERATOR_STATUS_FLAG_WARMING_UP)
+
+        self.wait_generator_speed_and_state(8000, 30000, mavutil.mavlink.MAV_GENERATOR_STATUS_FLAG_GENERATING)
+
+        bs = self.mav.recv_match(
+            type="BATTERY_STATUS",
+            condition="BATTERY_STATUS.id==1",  # id is zero-indexed
+            timeout=1,
+            blocking=True
+        )
+        if bs is None:
+            raise NotAchievedException("Did not receive BATTERY_STATUS")
+        self.progress("Received battery status: %s" % str(bs))
+        want_bs_volt = 50000
+        if bs.voltages[0] != want_bs_volt:
+            raise NotAchievedException("Battery voltage not as expected (want=%f) got=(%f)" % (want_bs_volt, bs.voltages[0],))
+
+        self.progress("Moving *back* to idle")
+        self.set_rc(9, 1500) # remember this is a switch position - idle
+        self.wait_generator_speed_and_state(3000, 10000, mavutil.mavlink.MAV_GENERATOR_STATUS_FLAG_IDLE)
+
+        self.progress("Moving *back* to run")
+        self.set_rc(9, 2000) # remember this is a switch position - run
+        self.wait_generator_speed_and_state(8000, 30000, mavutil.mavlink.MAV_GENERATOR_STATUS_FLAG_GENERATING)
+
         self.set_message_rate_hz("GENERATOR_STATUS", -1)
         self.set_parameter("LOG_DISARMED", 0)
         if not self.current_onboard_log_contains_message("GEN"):
@@ -4970,6 +5043,21 @@ class AutoTestCopter(AutoTest):
 
         self.fly_rangefinder_mavlink()
 
+        i2c_drivers = [
+            ("maxbotixi2cxl", 2),
+            ]
+        while len(i2c_drivers):
+            do_drivers = i2c_drivers[0:9]
+            i2c_drivers = i2c_drivers[9:]
+            count = 1
+            for d in do_drivers:
+                (sim_name, rngfnd_param_value) = d
+                self.set_parameter("RNGFND%u_TYPE" % count, rngfnd_param_value)
+                count += 1
+
+            self.reboot_sitl()
+            self.fly_rangefinder_drivers_fly([x[0] for x in do_drivers])
+
     def fly_ship_takeoff(self):
         # test ship takeoff
         self.wait_groundspeed(0, 2)
@@ -5059,8 +5147,6 @@ class AutoTestCopter(AutoTest):
 
             ("AutoTune", "Fly AUTOTUNE mode", self.fly_autotune),
 
-            ("AutoTuneSwitch", "Fly AUTOTUNE on a switch", self.fly_autotune_switch),
-
             ("ThrowMode", "Fly Throw Mode", self.fly_throw_mode),
 
             ("BrakeMode", "Fly Brake Mode", self.fly_brake_mode),
@@ -5108,6 +5194,8 @@ class AutoTestCopter(AutoTest):
             ("MaxAltFence",
              "Test Max Alt Fence",
              self.fly_alt_max_fence_test),
+
+            ("AutoTuneSwitch", "Fly AUTOTUNE on a switch", self.fly_autotune_switch),
 
             ("GPSGlitchLoiter",
              "GPS Glitch Loiter Test",

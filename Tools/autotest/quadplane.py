@@ -166,6 +166,7 @@ class AutoTestQuadPlane(AutoTest):
         self.wait_disarmed()
 
     def takeoff(self, height, mode):
+        """climb to specified height and set throttle to 1500"""
         self.change_mode(mode)
         self.wait_ready_to_arm()
         self.arm_vehicle()
@@ -180,6 +181,7 @@ class AutoTestQuadPlane(AutoTest):
         self.change_mode("QRTL")
         self.wait_altitude(-5, 1, relative=True, timeout=60)
         self.wait_disarmed()
+        self.zero_throttle()
 
     def fly_home_land_and_disarm(self, timeout=30):
         self.set_parameter("LAND_TYPE", 0)
@@ -396,6 +398,11 @@ class AutoTestQuadPlane(AutoTest):
     def test_parameter_checks(self):
         self.test_parameter_checks_poscontrol("Q_P")
 
+    def rc_defaults(self):
+        ret = super(AutoTestQuadPlane, self).rc_defaults()
+        ret[3] = 1000
+        return ret
+
     def default_mode(self):
         return "MANUAL"
 
@@ -498,6 +505,10 @@ class AutoTestQuadPlane(AutoTest):
              self.test_qassist),
 
             ("GyroFFT", "Fly Gyro FFT",
-             self.fly_gyro_fft)
+             self.fly_gyro_fft),
+
+            ("LogUpload",
+             "Log upload",
+             self.log_upload),
         ])
         return ret

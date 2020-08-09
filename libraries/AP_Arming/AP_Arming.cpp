@@ -545,7 +545,7 @@ bool AP_Arming::rc_arm_checks(AP_Arming::Method method)
         return true;
     }
 
-    // only check if we've recieved some form of input within the last second
+    // only check if we've received some form of input within the last second
     // this is a protection against a vehicle having never enabled an input
     uint32_t last_input_ms = rc().last_input_ms();
     if ((last_input_ms == 0) || ((AP_HAL::millis() - last_input_ms) > 1000)) {
@@ -577,6 +577,7 @@ bool AP_Arming::rc_arm_checks(AP_Arming::Method method)
             }
         }
 
+        // if throttle check is enabled, require zero input
         if (rc().arming_check_throttle()) {
             RC_Channel *c = rc().channel(rcmap->throttle() - 1);
             if (c != nullptr) {
@@ -1170,6 +1171,7 @@ bool AP_Arming::disarm(const AP_Arming::Method method)
         return false;
     }
     armed = false;
+    _last_disarm_method = method;
 
     Log_Write_Disarm(method); // should be able to pass through force here?
 
@@ -1254,7 +1256,7 @@ bool AP_Arming::visodom_checks(bool display_failure) const
     if (visual_odom != nullptr) {
         char fail_msg[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1];
         if (!visual_odom->pre_arm_check(fail_msg, ARRAY_SIZE(fail_msg))) {
-            check_failed(ARMING_CHECK_VISION, display_failure, "VisualOdom: %s", fail_msg);
+            check_failed(ARMING_CHECK_VISION, display_failure, "VisOdom: %s", fail_msg);
             return false;
         }
     }
