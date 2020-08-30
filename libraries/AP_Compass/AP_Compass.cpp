@@ -20,7 +20,7 @@
 #include "AP_Compass_LIS3MDL.h"
 #include "AP_Compass_AK09916.h"
 #include "AP_Compass_QMC5883L.h"
-#if HAL_WITH_UAVCAN
+#if HAL_ENABLE_LIBUAVCAN_DRIVERS
 #include "AP_Compass_UAVCAN.h"
 #endif
 #include "AP_Compass_MMC3416.h"
@@ -732,7 +732,9 @@ void Compass::init()
     }
 #endif
 
+#if COMPASS_MAX_INSTANCES > 1
     _reorder_compass_params();
+#endif
 
     if (_compass_count == 0) {
         // detect available backends. Only called once
@@ -801,6 +803,7 @@ Compass::Priority Compass::_update_priority_list(int32_t dev_id)
 #endif
 
 
+#if COMPASS_MAX_INSTANCES > 1
 // This method reorganises devid list to match
 // priority list, only call before detection at boot
 void Compass::_reorder_compass_params()
@@ -808,7 +811,16 @@ void Compass::_reorder_compass_params()
     mag_state swap_state;
     StateIndex curr_state_id;
     for (Priority i(0); i<COMPASS_MAX_INSTANCES; i++) {
-        curr_state_id = _get_state_id(i);
+        if (_priority_did_list[i] == 0) {
+            continue;
+        }
+        curr_state_id = COMPASS_MAX_INSTANCES;
+        for (StateIndex j(0); j<COMPASS_MAX_INSTANCES; j++) {
+            if (_priority_did_list[i] == _state[j].dev_id) {
+                curr_state_id = j;
+                break;
+            }
+        }
         if (curr_state_id != COMPASS_MAX_INSTANCES && uint8_t(curr_state_id) != uint8_t(i)) {
             //let's swap
             swap_state.copy_from(_state[curr_state_id]);
@@ -817,6 +829,7 @@ void Compass::_reorder_compass_params()
         }
     }
 }
+#endif
 
 void Compass::mag_state::copy_from(const Compass::mag_state& state)
 {
@@ -1272,7 +1285,7 @@ void Compass::_detect_backends(void)
 #endif
 
 
-#if HAL_WITH_UAVCAN
+#if HAL_ENABLE_LIBUAVCAN_DRIVERS
     if (_driver_enabled(DRIVER_UAVCAN)) {
         for (uint8_t i=0; i<COMPASS_MAX_BACKEND; i++) {
             AP_Compass_Backend* _uavcan_backend = AP_Compass_UAVCAN::probe(i);
@@ -1427,7 +1440,7 @@ void Compass::_reset_compass_id()
 void
 Compass::_detect_runtime(void)
 {
-#if HAL_WITH_UAVCAN
+#if HAL_ENABLE_LIBUAVCAN_DRIVERS
     //Don't try to add device while armed
     if (hal.util->get_soft_armed()) {
         return;
