@@ -2105,13 +2105,13 @@ class AutoTestPlane(AutoTest):
              "Test deadreckoning support",
              self.deadreckoning),
 
-            ("LogUpload",
-             "Log upload",
-             self.log_upload),
-
             ("EKFlaneswitch",
              "Test EKF3 Affinity and Lane Switching",
              self.ekf_lane_switch),
+
+            ("LogUpload",
+             "Log upload",
+             self.log_upload),
         ])
         return ret
 
