@@ -103,7 +103,7 @@ void Storage::_storage_open(void)
             }
             // pre-fill to full size
             if (AP::FS().lseek(log_fd, ret, SEEK_SET) != ret ||
-                AP::FS().write(log_fd, &_buffer[ret], CH_STORAGE_SIZE-ret) != CH_STORAGE_SIZE-ret) {
+                (CH_STORAGE_SIZE-ret > 0 && AP::FS().write(log_fd, &_buffer[ret], CH_STORAGE_SIZE-ret) != CH_STORAGE_SIZE-ret)) {
                 ::printf("setup failed for " HAL_STORAGE_FILE "\n");
                 AP::FS().close(log_fd);
                 log_fd = -1;
@@ -146,7 +146,7 @@ void Storage::_save_backup(void)
     // So we keep trying this for a second
     uint32_t start_millis = AP_HAL::millis();
     while(!sdcard_retry() && (AP_HAL::millis() - start_millis) < 1000) {
-        hal.scheduler->delay(1);        
+        hal.scheduler->delay(1);
     }
 
     ret = AP::FS().mkdir(_storage_bak_directory);
