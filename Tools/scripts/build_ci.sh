@@ -143,7 +143,7 @@ for t in $CI_BUILD_TARGET; do
         $waf AP_Periph
         continue
     fi
-    
+
     if [ "$t" == "CubeOrange-bootloader" ]; then
         echo "Building CubeOrange bootloader"
         $waf configure --board CubeOrange --bootloader
@@ -175,12 +175,19 @@ for t in $CI_BUILD_TARGET; do
         $waf plane
         continue
     fi
-    
+
     if [ "$t" == "iofirmware" ]; then
         echo "Building iofirmware"
         $waf configure --board iomcu
         $waf clean
         $waf iofirmware
+        continue
+    fi
+
+    if [ "$t" == "navigator" ]; then
+        echo "Building navigator"
+        $waf configure --board navigator --toolchain=arm-linux-musleabihf
+        $waf sub --static
         continue
     fi
 

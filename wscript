@@ -328,6 +328,8 @@ def configure(cfg):
         cfg.end_msg('enabled')
         cfg.recurse('libraries/AP_Scripting')
 
+    cfg.recurse('libraries/AP_GPS')
+
     cfg.start_msg('Scripting runtime checks')
     if cfg.options.scripting_checks:
         cfg.end_msg('enabled')
@@ -361,6 +363,9 @@ def configure(cfg):
     cfg.define('_GNU_SOURCE', 1)
 
     cfg.write_config_header(os.path.join(cfg.variant, 'ap_config.h'))
+
+    # add in generated flags
+    cfg.env.CXXFLAGS += ['-include', 'ap_config.h']
 
     _collect_autoconfig_files(cfg)
 
