@@ -192,7 +192,7 @@ class AutoTestCopter(AutoTest):
         self.delay_sim_time(10)
         self.set_rc(2, 1500)
         self.hover()
-        self.progress("Cotper staging 50 meters east of home at 50 meters altitude In mode Alt Hold")
+        self.progress("Copter staging 50 meters east of home at 50 meters altitude In mode Alt Hold")
 
     # Start and stop the GCS heartbeat for GCS failsafe testing
     def set_heartbeat_rate(self, rate):
@@ -656,7 +656,7 @@ class AutoTestCopter(AutoTest):
         num_wp = self.load_mission("copter_mission.txt")
         if not num_wp:
             raise NotAchievedException("load copter_mission failed")
-        self.takeoffAndMoveAway()
+#        self.takeoffAndMoveAway()
         self.change_mode("AUTO")
         self.set_parameter("SIM_RC_FAIL", 1)
         self.delay_sim_time(5)
@@ -693,6 +693,43 @@ class AutoTestCopter(AutoTest):
             raise ex
 
     def test_gcs_failsafe(self, side=60, timeout=360):
+        # Test double-SmartRTL; ensure we do SmarRTL twice rather than
+        # landing (tests fix for actual bug)
+        self.context_push()
+        self.start_subtest("GCS failsafe SmartRTL twice")
+        self.setGCSfailsafe(3)
+        self.set_parameter('FS_OPTIONS', 8)
+        self.takeoffAndMoveAway()
+        self.set_heartbeat_rate(0)
+        self.wait_mode("SMART_RTL")
+        self.wait_disarmed()
+        self.set_heartbeat_rate(self.speedup)
+        self.mavproxy.expect("GCS Failsafe Cleared")
+
+        self.takeoffAndMoveAway()
+        self.set_heartbeat_rate(0)
+        self.wait_statustext("GCS Failsafe")
+        def ensure_smartrtl(mav, m):
+            if m.get_type() != "HEARTBEAT":
+                return
+            # can't use mode_is here because we're in the message hook
+            print("Mode: %s" % self.mav.flightmode)
+            if self.mav.flightmode != "SMART_RTL":
+                raise NotAchievedException("Not in SMART_RTL")
+        self.install_message_hook_context(ensure_smartrtl)
+
+        self.set_heartbeat_rate(self.speedup)
+        self.mavproxy.expect("GCS Failsafe Cleared")
+        self.set_heartbeat_rate(0)
+        self.wait_statustext("GCS Failsafe")
+
+        self.wait_disarmed()
+
+        self.end_subtest("GCS failsafe SmartRTL twice")
+        self.set_heartbeat_rate(self.speedup)
+        self.mavproxy.expect("GCS Failsafe Cleared")
+        self.context_pop()
+
         # Trigger telemety loss with failsafe disabled. Verify no action taken.
         self.start_subtest("GCS failsafe disabled test: FS_GCS_ENABLE=0 should take no failsafe action")
         self.setGCSfailsafe(0)
@@ -1585,6 +1622,50 @@ class AutoTestCopter(AutoTest):
 
         self.do_RTL()
 
+    # test_mag_fail - test failover of compass in EKF
+    def test_mag_fail(self):
+        # we want both EK2 and EK3
+        self.set_parameter("EK2_ENABLE", 1)
+        self.set_parameter("EK3_ENABLE", 1)
+
+        self.takeoff(10, mode="LOITER")
+
+        self.mavproxy.send('mode CIRCLE\n')
+        self.wait_mode('CIRCLE')
+
+        self.delay_sim_time(20)
+
+        self.progress("Failing first compass")
+        self.set_parameter("SIM_MAG1_FAIL", 1)
+
+        # we want for the message twice, one for EK2 and again for EK3
+        self.wait_statustext("IMU0 switching to compass 1")
+        self.wait_statustext("IMU0 switching to compass 1")
+        self.progress("compass switch 1 OK")
+
+        self.delay_sim_time(2)
+
+        self.progress("Failing 2nd compass")
+        self.set_parameter("SIM_MAG2_FAIL", 1)
+
+        self.wait_statustext("IMU0 switching to compass 2")
+        self.wait_statustext("IMU0 switching to compass 2")
+
+        self.progress("compass switch 2 OK")
+
+        self.delay_sim_time(2)
+
+        self.progress("Failing 3rd compass")
+        self.set_parameter("SIM_MAG3_FAIL", 1)
+        self.delay_sim_time(2)
+        self.set_parameter("SIM_MAG1_FAIL", 0)
+
+        self.wait_statustext("IMU0 switching to compass 0")
+        self.wait_statustext("IMU0 switching to compass 0")
+        self.progress("compass switch 0 OK")
+
+        self.do_RTL()
+        
     def wait_attitude(self, desroll=None, despitch=None, timeout=2, tolerance=10):
         '''wait for an attitude (degrees)'''
         if desroll is None and despitch is None:
@@ -2489,7 +2570,7 @@ class AutoTestCopter(AutoTest):
                      0, # compass learning
                      0,
                      timeout=timeout)
-        # long timeouts here because they're a pause before we start motors
+        # long timeouts here because there's a pause before we start motors
         self.wait_servo_channel_value(1, pwm_in, timeout=10)
         self.wait_servo_channel_value(4, pwm_in, timeout=10)
         self.wait_statustext("finished motor test")
@@ -2509,7 +2590,7 @@ class AutoTestCopter(AutoTest):
         # since MOT_SPIN_MIN and MOT_SPIN_MAX are not set, the RC3
         # min/max are used.
         expected_pwm = 1000 + (self.get_parameter("RC3_MAX") - self.get_parameter("RC3_MIN")) * percentage/100.0
-        self.progress("expected pwm=%f\n" % expected_pwm)
+        self.progress("expected pwm=%f" % expected_pwm)
         self.wait_servo_channel_value(1, expected_pwm, timeout=10)
         self.wait_servo_channel_value(4, expected_pwm, timeout=10)
         self.wait_statustext("finished motor test")
@@ -5331,6 +5412,10 @@ class AutoTestCopter(AutoTest):
              "Fly CIRCLE mode",
              self.fly_circle),
 
+            ("MagFail",
+             "Test magnetometer failure",
+             self.test_mag_fail),
+
             ("OpticalFlowLimits",
              "Fly Optical Flow limits",
              self.fly_optical_flow_limits),
@@ -5508,6 +5593,7 @@ class AutoTestCopter(AutoTest):
             "Parachute": "See https://github.com/ArduPilot/ardupilot/issues/4702",
             "HorizontalAvoidFence": "See https://github.com/ArduPilot/ardupilot/issues/11525",
             "AltEstimation": "See https://github.com/ArduPilot/ardupilot/issues/15191",
+            "Button": "See https://github.com/ArduPilot/ardupilot/issues/15259",
         }
 
 class AutoTestHeli(AutoTestCopter):

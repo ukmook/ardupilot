@@ -329,7 +329,7 @@ const AP_Param::GroupInfo QuadPlane::var_info[] = {
     // @Param: OPTIONS
     // @DisplayName: quadplane options
     // @Description: This provides a set of additional control options for quadplanes. LevelTransition means that the wings should be held level to within LEVEL_ROLL_LIMIT degrees during transition to fixed wing flight, and the vehicle will not use the vertical lift motors to climb during the transition. If AllowFWTakeoff bit is not set then fixed wing takeoff on quadplanes will instead perform a VTOL takeoff. If AllowFWLand bit is not set then fixed wing land on quadplanes will instead perform a VTOL land. If respect takeoff frame is not set the vehicle will interpret all takeoff waypoints as an altitude above the current position. When Use QRTL is set it will replace QLAND with QRTL for failsafe actions when in VTOL modes. When AIRMODE is set AirMode is automatically enabled if arming by RC channel.
-    // @Bitmask: 0:LevelTransition,1:AllowFWTakeoff,2:AllowFWLand,3:Respect takeoff frame types,4:Use a fixed wing approach for VTOL landings,5:Use QRTL instead of QLAND for failsafe when in VTOL modes,6:Use idle governor in MANUAL,7:QAssist force enabled,8:Tailsitter QAssist motors only,9:enable AirMode if arming by aux switch
+    // @Bitmask: 0:LevelTransition,1:AllowFWTakeoff,2:AllowFWLand,3:Respect takeoff frame types,4:Use a fixed wing approach for VTOL landings,5:Use QRTL instead of QLAND for failsafe when in VTOL modes,6:Use idle governor in MANUAL,7:QAssist force enabled,8:Tailsitter QAssist motors only,9:enable AirMode if arming by aux switch,10:Enable motor tilt when disarmed,11:Delay spoolup for 2 seconds after arming
     AP_GROUPINFO("OPTIONS", 58, QuadPlane, options, 0),
 
     AP_SUBGROUPEXTENSION("",59, QuadPlane, var_info2),
@@ -695,8 +695,8 @@ bool QuadPlane::setup(void)
             tilt.tilt_mask.set(0);
         }
         rotation = ROTATION_PITCH_90;
-        motors = new AP_MotorsMatrixTS(plane.scheduler.get_loop_rate_hz(), rc_speed);
-        motors_var_info = AP_MotorsMatrixTS::var_info;
+        motors = new AP_MotorsMatrix(plane.scheduler.get_loop_rate_hz(), rc_speed);
+        motors_var_info = AP_MotorsMatrix::var_info;
     }
 
     const static char *strUnableToAllocate = "Unable to allocate";
@@ -1975,7 +1975,8 @@ void QuadPlane::update_throttle_hover()
     }
 
     // do not update if quadplane forward motor is running (wing may be generating lift)
-    if (!is_tailsitter() && (SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) != 0)) {
+    // we use the THR_MIN value to account for petrol motors idling at THR_MIN
+    if (!is_tailsitter() && (SRV_Channels::get_output_scaled(SRV_Channel::k_throttle) > MAX(0,plane.aparm.throttle_min+10))) {
         return;
     }
 
@@ -2004,6 +2005,19 @@ void QuadPlane::motors_output(bool run_rate_controller)
 {
     if (run_rate_controller) {
         attitude_control->rate_controller_run();
+    }
+
+    /* Delay for ARMING_DELAY_MS after arming before allowing props to spin:
+       1) for safety (OPTION_DELAY_ARMING)
+       2) to allow motors to return to vertical (OPTION_DISARMED_TILT)
+     */
+    if ((options & OPTION_DISARMED_TILT) || (options & OPTION_DELAY_ARMING)) {
+        if (plane.arming.get_delay_arming()) {
+            // delay motor start after arming
+            motors->set_desired_spool_state(AP_Motors::DesiredSpoolState::SHUT_DOWN);
+            motors->output();
+            return;
+        }
     }
 
 #if ADVANCED_FAILSAFE == ENABLED
