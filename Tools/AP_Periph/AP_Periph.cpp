@@ -142,6 +142,10 @@ void AP_Periph_FW::init()
     hwesc_telem.init(hal.uartB);
 #endif
 
+#ifdef HAL_PERIPH_ENABLE_MSP
+    msp_init(hal.uartD);
+#endif
+
     start_ms = AP_HAL::millis();
 }
 

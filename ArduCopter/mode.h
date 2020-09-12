@@ -1052,7 +1052,7 @@ public:
     // this should probably not be exposed
     bool state_complete() { return _state_complete; }
 
-    bool is_landing() const override;
+    virtual bool is_landing() const override;
 
     void restart_without_terrain();
 
@@ -1104,9 +1104,9 @@ private:
 
     // return target alt type
     enum class ReturnTargetAltType {
-        RETURN_TARGET_ALTTYPE_RELATIVE = 0,
-        RETURN_TARGET_ALTTYPE_RANGEFINDER = 1,
-        RETURN_TARGET_ALTTYPE_TERRAINDATABASE = 2
+        RELATIVE = 0,
+        RANGEFINDER = 1,
+        TERRAINDATABASE = 2
     };
 
     // Loiter timer - Records how long we have been in loiter
@@ -1132,6 +1132,8 @@ public:
 
     void save_position();
     void exit();
+
+    bool is_landing() const override;
 
 protected:
 

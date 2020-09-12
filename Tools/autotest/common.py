@@ -134,6 +134,7 @@ class Context(object):
         self.parameters = []
         self.sitl_commandline_customised = False
         self.message_hooks = []
+        self.collections = {}
 
 # https://stackoverflow.com/questions/616645/how-do-i-duplicate-sys-stdout-to-a-log-file-in-python
 class TeeBoth(object):
@@ -829,12 +830,19 @@ class AutoTest(ABC):
             self.force_ahrs_type = int(self.force_ahrs_type)
         self.logs_dir = logs_dir
         self.timesync_number = 137
+        self.last_progress_sent_as_statustext = None
 
-    def progress(self, text):
+    def progress(self, text, send_statustext=True):
         """Display autotest progress text."""
         global __autotest__
         delta_time = time.time() - __autotest__.start_time
-        print("AT-%06.1f: %s" % (delta_time,text))
+        formatted_text = "AT-%06.1f: %s" % (delta_time,text)
+        print(formatted_text)
+        if (send_statustext and
+            self.mav is not None and
+            self.last_progress_sent_as_statustext != text):
+                self.send_statustext(formatted_text)
+                self.last_progress_sent_as_statustext = text
 
     # following two functions swiped from autotest.py:
     @staticmethod
@@ -970,7 +978,6 @@ class AutoTest(ABC):
             self.params = [self.params]
         for x in self.params:
             self.repeatedly_apply_parameter_file(os.path.join(testdir, x))
-        self.set_parameter('LOG_REPLAY', 1)
         self.set_parameter('LOG_DISARMED', 1)
         if self.force_ahrs_type is not None:
             if self.force_ahrs_type == 2:
@@ -1082,7 +1089,7 @@ class AutoTest(ABC):
                 raise AutoTestTimeoutException("Did not detect reboot")
             try:
                 current_bootcount = self.get_parameter('STAT_BOOTCNT', timeout=1, attempts=3)
-                print("current=%s required=%u" % (str(current_bootcount), required_bootcount))
+                self.progress("current=%s required=%u" % (str(current_bootcount), required_bootcount))
                 if current_bootcount == required_bootcount:
                     break
             except NotAchievedException:
@@ -1655,7 +1662,7 @@ class AutoTest(ABC):
             rate = "instantly"
         else:
             rate = "%f/s" % (count/float(tdelta),)
-        self.progress("Drained %u bytes from mav (%s).  These were unparsed." % (count, rate))
+        self.progress("Drained %u bytes from mav (%s).  These were unparsed." % (count, rate), send_statustext=False)
         if freshen_sim_time:
             self.get_sim_time()
 
@@ -1674,7 +1681,7 @@ class AutoTest(ABC):
         else:
             rate = "%f/s" % (count/float(tdelta),)
 
-        self.progress("Drained %u messages from mav (%s)" % (count, rate))
+        self.progress("Drained %u messages from mav (%s)" % (count, rate), send_statustext=False)
 
     def do_timesync_roundtrip(self):
         self.progress("Doing timesync roundtrip")
@@ -2224,10 +2231,14 @@ class AutoTest(ABC):
     def install_message_hook_context(self, hook):
         '''installs a message hook which will be removed when the context goes
         away'''
+        if self.mav is None:
+            return
         self.mav.message_hooks.append(hook)
         self.context_get().message_hooks.append(hook)
 
     def remove_message_hook(self, hook):
+        if self.mav is None:
+            return
         oldlen = len(self.mav.message_hooks)
         self.mav.message_hooks = list(filter(lambda x : x != hook,
                                         self.mav.message_hooks))
@@ -3021,7 +3032,9 @@ class AutoTest(ABC):
         while attempts > 0:
             if verbose:
                 self.progress("Sending param_request_read for (%s)" % name)
-            self.drain_mav_unparsed(quiet=True)
+            # we MUST parse here or collections fail where we need
+            # them to work!
+            self.drain_mav(quiet=True)
             tstart = self.get_sim_time()
             encname = name
             if sys.version_info.major >= 3 and type(encname) != bytes:
@@ -3075,7 +3088,38 @@ class AutoTest(ABC):
 
     def context_push(self):
         """Save a copy of the parameters."""
-        self.contexts.append(Context())
+        context = Context()
+        self.contexts.append(context)
+        # add a message hook so we can collect messages conveniently:
+        def mh(mav, m):
+            t = m.get_type()
+            if t in context.collections:
+                print("m=%s" % str(m))
+                context.collections[t].append(m)
+        self.install_message_hook_context(mh)
+
+    def context_collect(self, msg_type):
+        '''start collecting messages of type msg_type into context collection'''
+        context = self.context_get()
+        if msg_type in context.collections:
+            return
+        context.collections[msg_type] = []
+
+    def context_clear_collection(self, msg_type):
+        '''clear collection of message type msg_type'''
+        context = self.context_get()
+        if msg_type not in context.collections:
+            raise NotAchievedException("Not collecting (%s)" % str(msg_type))
+        context.collections[msg_type] = []
+
+    def context_stop_collecting(self, msg_type):
+        '''stop collecting messages of type msg_type in context collection.  Returns the collected messages'''
+        context = self.context_get()
+        if msg_type not in context.collections:
+            raise Exception("Not collecting %s" % str(msg_type))
+        ret = context.collections[msg_type]
+        del context.collections[msg_type]
+        return ret
 
     def context_pop(self):
         """Set parameters to origin values in reverse order."""
@@ -4012,7 +4056,7 @@ Also, ignores heartbeats not from our target system'''
     def wait_text(self, *args, **kwargs):
         self.wait_statustext(*args, **kwargs)
 
-    def wait_statustext(self, text, timeout=20, the_function=None):
+    def wait_statustext(self, text, timeout=20, the_function=None, check_context=False):
         """Wait for a specific STATUSTEXT."""
 
         # Statustexts are often triggered by something we've just
@@ -4022,6 +4066,15 @@ Also, ignores heartbeats not from our target system'''
         # a new SYSTEM_TIME message), so we install a message hook
         # which checks all incoming messages.
         self.progress("Waiting for text : %s" % text.lower())
+        if check_context:
+            c = self.context_get()
+            if "STATUSTEXT" not in c.collections:
+                raise NotAchievedException("Asked to check context but it isn't collecting!")
+            for statustext in [x.text for x in c.collections["STATUSTEXT"]]:
+                if text.lower() in statustext.lower():
+                    self.progress("Found expected text in collection: %s" % text.lower())
+                    return
+
         global statustext_found
         statustext_found = False
         def mh(mav, m):
@@ -4029,17 +4082,20 @@ Also, ignores heartbeats not from our target system'''
             if m.get_type() != "STATUSTEXT":
                 return
             if text.lower() in m.text.lower():
-                self.progress("Received expected text : %s" % m.text.lower())
+                self.progress("Received expected text: %s" % m.text.lower())
                 statustext_found = True
-        self.install_message_hook_context(mh)
-        tstart = self.get_sim_time()
-        while self.get_sim_time_cached() < tstart + timeout:
-            if statustext_found:
-                return
-            if the_function is not None:
-                the_function()
-            m = self.mav.recv_match(type='STATUSTEXT', blocking=True, timeout=0.1)
-        raise AutoTestTimeoutException("Failed to received text : %s" %
+        self.install_message_hook(mh)
+        try:
+            tstart = self.get_sim_time()
+            while self.get_sim_time_cached() < tstart + timeout:
+                if statustext_found:
+                    return
+                if the_function is not None:
+                    the_function()
+                m = self.mav.recv_match(type='STATUSTEXT', blocking=True, timeout=0.1)
+        finally:
+            self.remove_message_hook(mh)
+        raise AutoTestTimeoutException("Failed to receive text: %s" %
                                        text.lower())
 
     def get_mavlink_connection_going(self):
@@ -4119,7 +4175,6 @@ Also, ignores heartbeats not from our target system'''
         tee = TeeBoth(test_output_filename, 'w', self.mavproxy_logfile)
 
         prettyname = "%s (%s)" % (name, desc)
-        self.send_statustext(prettyname)
         self.start_test(prettyname)
         self.set_current_test_name(name)
         old_contexts_length = len(self.contexts)
@@ -4935,8 +4990,9 @@ Also, ignores heartbeats not from our target system'''
                         for param_name in param_names:
                             self.progress("%s=%f" % (param_name, self.get_parameter(param_name)))
                         if m.cal_status == mavutil.mavlink.MAG_CAL_SUCCESS:
-                            if reached_pct[m.compass_id] < 99:
-                                raise NotAchievedException("Mag calibration report SUCCESS without 100%% completion")
+                            threshold = 95
+                            if reached_pct[m.compass_id] < threshold:
+                                raise NotAchievedException("Mag calibration report SUCCESS without >=%f%% completion (got %f%%)" % (threshold, reached_pct[m.compass_id]))
                             report_get[m.compass_id] = 1
                         else:
                             raise NotAchievedException(
@@ -6672,6 +6728,7 @@ switch value'''
         # not attempting to fetch the value back here:
         new_mask = 0
         self.send_set_parameter("SIM_PIN_MASK", new_mask)
+        self.send_set_parameter("SIM_PIN_MASK", new_mask, verbose=True)
         tstart = self.get_sim_time_cached()
         while True:
             now = self.get_sim_time_cached()
@@ -6793,7 +6850,7 @@ switch value'''
             raise NotAchievedException("Did not get HEARTBEAT message")
         mav_flight_mode = heartbeat.custom_mode
         self.progress(" mode=%u heartbeat=%u" % (flight_mode, mav_flight_mode))
-        if mav_flight_mode == flight_mode: 
+        if mav_flight_mode == flight_mode:
             self.progress("flight mode match")
             return True
             # FIXME: need to check other values as well
@@ -6817,7 +6874,7 @@ switch value'''
             return True
             # FIXME: need to check other values as well
         return False
-    
+
     def tfp_validate_home_status(self, value):
         self.progress("validating home status(0x%02x)" % value)
         home_dist_m = self.bit_extract(value,2,10) * (10^self.bit_extract(value,0,2))
@@ -6836,7 +6893,7 @@ switch value'''
             return True
             # FIXME: need to check other values as well
         return False
-    
+
     def tfp_validate_gps_status(self, value):
         self.progress("validating gps status(0x%02x)" % value)
         num_sats = self.bit_extract(value,0,4)
@@ -6871,7 +6928,7 @@ switch value'''
         self.progress(" yaw=%u gpi=%u" % (yaw, gpi.hdg*0.01))
         self.progress(" xy_vel=%u" % xy_vel)
         self.progress(" z_vel_dm_per_second=%u" % z_vel_dm_per_second)
-        if self.compare_number_percent(gpi.hdg*0.01,yaw,10): 
+        if self.compare_number_percent(gpi.hdg*0.01,yaw,10):
             self.progress("Yaw match")
             return True
               # FIXME: need to be under way to check the velocities, really....
@@ -7120,7 +7177,7 @@ switch value'''
         self.progress("BATTERY_STATUS volatge==%f frsky==%f" % (battery_status_value, voltage))
         if self.compare_number_percent(battery_status_value,voltage,10):
             return True
-        return False  
+        return False
     def tfs_validate_current1(self, value):
         self.progress("validating battery1 (0x%02x)" % value)
         current = value
@@ -7136,7 +7193,7 @@ switch value'''
         self.progress("BATTERY_STATUS current==%f frsky==%f" % (battery_status_current, current))
         if self.compare_number_percent(battery_status_current,current,10):
             return True
-        return False 
+        return False
     def tfs_validate_fuel(self, value):
         self.progress("validating fuel (0x%02x)" % value)
         fuel = value
@@ -7152,7 +7209,7 @@ switch value'''
         self.progress("BATTERY_STATUS fuel==%f frsky==%f" % (battery_status_fuel, fuel))
         if self.compare_number_percent(battery_status_fuel,fuel,10):
             return True
-        return False 
+        return False
 
     def tfs_validate_tmp1(self, value):
         self.progress("validating tmp1 (0x%02x)" % value)
