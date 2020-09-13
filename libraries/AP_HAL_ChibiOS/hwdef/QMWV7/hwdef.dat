@@ -213,13 +213,14 @@ define HAL_OS_FATFS_IO 1
 define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
 define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
-# define STM32_PWM_USE_ADVANCED TRUE
+# -----------DMA PRIORITY---------------
 
 DMA_NOSHARE TIM4* USART3_TX USART2_TX
 
 # -----------OSD---------------
 
 define OSD_ENABLED 1
+define HAL_OSD_TYPE_DEFAULT 3
 
 # -----------Debug---------------
 
@@ -233,3 +234,5 @@ define OSD_ENABLED 1
 
 # PA13 JTMS-SWDIO SWD
 # PA14 JTCK-SWCLK SW
+
+# define STM32_PWM_USE_ADVANCED TRUE
