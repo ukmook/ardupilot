@@ -19,21 +19,23 @@ define STM32_ST_USE_TIMER 5
 define CH_CFG_ST_RESOLUTION 32
 
 #----------Flash setup---------
+
+RAM_SIZE_KB 320
 # flash size
 FLASH_SIZE_KB 1536
 FLASH_RESERVE_START_KB 64
 
 define HAL_STORAGE_SIZE 16384
-define STORAGE_FLASH_PAGE 1
 
-# reserve 16k for bootloader, 16k for OSD and 32k for flash storage
-FLASH_RESERVE_START_KB 64
 
 # ---------I2C---------------
 I2C_ORDER I2C2
 
 PB10 I2C2_SCL I2C2
 PB3 I2C2_SDA I2C2
+
+# EEPROM supports 400KHz, 400 is conservative
+define HAL_I2C_MAX_CLOCK 400000
 
 # ---------ANALOG-----------
 # analog pins
@@ -148,6 +150,9 @@ COMPASS LIS3MDL SPI:lis3mdl false ROTATION_PITCH_180
 define HAL_PROBE_EXTERNAL_I2C_COMPASSES
 define HAL_I2C_INTERNAL_MASK 0
 define HAL_COMPASS_AUTO_ROT_DEFAULT 2
+
+DMA_PRIORITY SPI2_*
+DMA_NOSHARE SPI2_*
 
 #------------SD card-----------------
 define HAL_OS_FATFS_IO 1
