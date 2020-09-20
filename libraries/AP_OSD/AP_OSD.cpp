@@ -70,9 +70,7 @@ const AP_Param::GroupInfo AP_OSD::var_info[] = {
     // @Param: _SW_METHOD
     // @DisplayName: Screen switch method
     // @Description: This sets the method used to switch different OSD screens.
-    // @Values: 0: switch to next screen if channel value was changed,
-    //          1: select screen based on pwm ranges specified for each screen,
-    //          2: switch to next screen after low to high transition and every 1s while channel value is high
+    // @Values: 0: switch to next screen if channel value was changed, 1: select screen based on pwm ranges specified for each screen, 2: switch to next screen after low to high transition and every 1s while channel value is high
     // @User: Standard
     AP_GROUPINFO("_SW_METHOD", 7, AP_OSD, sw_method, AP_OSD::TOGGLE),
 
@@ -269,16 +267,7 @@ void AP_OSD::update_osd()
         update_current_screen();
 
         get_screen(current_screen).set_backend(backend);
-
-        // skip the drawing if we are not using a font based backend. This saves a lot of flash space when
-        // using the MSP OSD system on boards that don't have a MAX7456
-#if HAL_WITH_OSD_BITMAP
-#if OSD_PARAM_ENABLED
         get_screen(current_screen).draw();
-#else
-        ((AP_OSD_Screen&)get_screen(current_screen)).draw();
-#endif
-#endif
     }
 
     backend->flush();

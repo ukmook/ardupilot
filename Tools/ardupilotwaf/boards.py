@@ -131,6 +131,8 @@ class Board:
                 AP_SCRIPTING_CHECKS = 1,
                 )
 
+        cfg.msg("CXX Compiler", "%s %s"  % (cfg.env.COMPILER_CXX, ".".join(cfg.env.CC_VERSION)))
+
         if 'clang' in cfg.env.COMPILER_CC:
             env.CFLAGS += [
                 '-fcolor-diagnostics',
@@ -417,7 +419,6 @@ class sitl(Board):
         if not cfg.env.DEBUG:
             env.CXXFLAGS += [
                 '-O3',
-                '-march=native',
             ]
 
         if 'clang++' in cfg.env.COMPILER_CXX and cfg.options.asan:
@@ -622,6 +623,19 @@ class chibios(Board):
         env.INCLUDES += [
             cfg.srcnode.find_dir('libraries/AP_GyroFFT/CMSIS_5/include').abspath()
         ]
+
+        # whitelist of compilers which we should build with -Werror
+        gcc_whitelist = [
+            ('4','9','3'),
+            ('6','3','1'),
+        ]
+
+        if cfg.options.Werror or cfg.env.CC_VERSION in gcc_whitelist:
+            cfg.msg("Enabling -Werror", "yes")
+            if '-Werror' not in env.CXXFLAGS:
+                env.CXXFLAGS += [ '-Werror' ]
+        else:
+            cfg.msg("Enabling -Werror", "no")
 
         try:
             import intelhex
