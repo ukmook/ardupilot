@@ -42,7 +42,7 @@ const AP_Param::GroupInfo AP_Vehicle::var_info[] = {
 };
 
 // reference to the vehicle. using AP::vehicle() here does not work on clang
-#if APM_BUILD_TYPE(APM_BUILD_Replay) || APM_BUILD_TYPE(APM_BUILD_UNKNOWN)
+#if APM_BUILD_TYPE(APM_BUILD_UNKNOWN)
 AP_Vehicle& vehicle = *AP_Vehicle::get_singleton();
 #else
 extern AP_Vehicle& vehicle;
@@ -173,6 +173,11 @@ void AP_Vehicle::get_common_scheduler_tasks(const AP_Scheduler::Task*& tasks, ui
  */
 void AP_Vehicle::scheduler_delay_callback()
 {
+#if APM_BUILD_TYPE(APM_BUILD_Replay)
+    // compass.init() delays, so we end up here.
+    return;
+#endif
+
     static uint32_t last_1hz, last_50hz, last_5s;
 
     AP_Logger &logger = AP::logger();
