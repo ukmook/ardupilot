@@ -5,7 +5,7 @@
 MCU STM32H7xx STM32H743xx
 
 # board ID for firmware load
-APJ_BOARD_ID 1002
+APJ_BOARD_ID 7002
 
 # crystal frequency
 OSCILLATOR_HZ 16000000
@@ -14,9 +14,6 @@ FLASH_SIZE_KB 2048
 
 # bootloader starts at zero offset
 FLASH_RESERVE_START_KB 0
-
-# bootloader is installed at zero offset
-FLASH_RESERVE_END_KB 256
 
 # the location where the bootloader will put the firmware
 # the H743 has 128k sectors

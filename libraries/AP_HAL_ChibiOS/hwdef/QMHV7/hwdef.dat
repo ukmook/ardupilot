@@ -1,5 +1,5 @@
 # hw definition file for processing by chibios_hwdef.py
-# for H743 bootloader qUark_H7_Heli
+# for H743 bootloader QMHV7
 
 # ------- CPU --------------
 
@@ -14,25 +14,17 @@ OSCILLATOR_HZ 16000000
 # ------ ID ----------------
 
 # board ID for firmware load
-APJ_BOARD_ID 1002
-
-# -------- Board --------------
-
-# define CONFIG_HAL_BOARD_SUBTYPE HAL_BOARD_SUBTYPE_CHIBIOS_QRKH743H
+APJ_BOARD_ID 7002
 
 # ---------- Storage -----------
 
-env OPTIMIZE -O3
+env OPTIMIZE -O2
 
 FLASH_SIZE_KB 2048
 
 FLASH_RESERVE_START_KB 128
 
 define HAL_STORAGE_SIZE 16384
-
-# use last 2 pages for flash storage
-# H743 has 16 pages of 128k each
-define STORAGE_FLASH_PAGE 14
 
 # --------- Board Timer ---------
 
@@ -72,7 +64,7 @@ define HAL_BATT_CURR_SCALE 10.0
 # ---------UARTS-----------
 
 # order of UARTs (and USB)
-# Order    USB   sr3    sr1    sr2    sr4     sr5
+# Order    USB   sr1    sr2    sr3    sr4     sr5
 # AP Name  USB   GPS1  TELM1  TELM2  GPS2   DEBUG
 SERIAL_ORDER OTG1 USART3 USART6 UART7 USART2
 
