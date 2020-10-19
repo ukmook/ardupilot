@@ -2251,5 +2251,4 @@ class AutoTestSoaring(AutoTestPlane):
         return ret
     def disabled_tests(self):
         return {
-            "Button": "See https://github.com/ArduPilot/ardupilot/issues/15259",
         }
