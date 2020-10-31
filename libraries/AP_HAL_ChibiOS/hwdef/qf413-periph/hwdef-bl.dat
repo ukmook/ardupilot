@@ -1,0 +1,57 @@
+# hw definition file for processing by chibios_pins.py
+# qUark F413 GPS Board
+
+# MCU class and specific type
+MCU STM32F4xx STM32F413xx
+
+FLASH_RESERVE_START_KB 0
+FLASH_BOOTLOADER_LOAD_KB 32
+
+# board ID for firmware load
+APJ_BOARD_ID 2005
+
+# setup build for a peripheral firmware
+env AP_PERIPH 1
+
+# crystal frequency
+OSCILLATOR_HZ 16000000
+# define HAL_CUSTOM_CLOCK_TREE
+# define STM32_PLLM_VALUE 8
+# define STM32_PLLN_VALUE 100
+# define STM32_PLLP_VALUE 2
+# define STM32_PLLQ_VALUE 7
+
+# assume 1536k flash part
+FLASH_SIZE_KB 1536
+
+# order of UARTs
+SERIAL_ORDER OTG1 USART1
+
+PA15 LED_BOOTLOADER OUTPUT LOW
+define HAL_LED_ON 1
+
+PA11 OTG_FS_DM OTG1
+PA12 OTG_FS_DP OTG1
+
+# USART1
+PB6 USART1_TX USART1
+PB7 USART1_RX USART1
+
+# SWD debugging
+PA13 JTMS-SWDIO SWD
+PA14 JTCK-SWCLK SWD
+
+define HAL_USE_EMPTY_STORAGE 1
+define HAL_STORAGE_SIZE 16384
+
+# enable CAN support
+PB8 CAN1_RX CAN1
+PB9 CAN1_TX CAN1
+
+define CAN_APP_NODE_NAME "org.ardupilot.qF413_periph"
+
+# use DNA
+define HAL_CAN_DEFAULT_NODE_ID 0
+
+# reserve 256 bytes for comms between app and bootloader
+RAM_RESERVE_START 256
