@@ -5,10 +5,12 @@
 MCU STM32F4xx STM32F413xx
 
 FLASH_RESERVE_START_KB 0
-FLASH_BOOTLOADER_LOAD_KB 32
+FLASH_BOOTLOADER_LOAD_KB 64
 
 # board ID for firmware load
 APJ_BOARD_ID 2005
+
+FLASH_SIZE_KB 1536
 
 # setup build for a peripheral firmware
 env AP_PERIPH 1
@@ -55,3 +57,5 @@ define HAL_CAN_DEFAULT_NODE_ID 0
 
 # reserve 256 bytes for comms between app and bootloader
 RAM_RESERVE_START 256
+
+PB3 STAY_IN_BOOTLOADER INPUT FLOATING
