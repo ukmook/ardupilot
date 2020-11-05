@@ -45,6 +45,7 @@
 #include <uavcan/equipment/gnss/RTCMStream.h>
 #include <uavcan/protocol/debug/LogMessage.h>
 #include <uavcan/equipment/esc/RawCommand.h>
+#include <uavcan/equipment/actuator/ArrayCommand.h>
 #include <stdio.h>
 #include <AP_HAL_ChibiOS/hwdef/common/stm32_util.h>
 #include <AP_HAL_ChibiOS/hwdef/common/watchdog.h>
@@ -580,6 +581,19 @@ static void handle_esc_rawcommand(CanardInstance* ins, CanardRxTransfer* transfe
     periph.translate_rcout_esc(cmd.cmd.data, cmd.cmd.len);
 }
 
+static void handle_act_command(CanardInstance* ins, CanardRxTransfer* transfer)
+{
+    uavcan_equipment_actuator_ArrayCommand cmd;
+    uint8_t arraybuf[UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_MAX_SIZE];
+    uint8_t *arraybuf_ptr = arraybuf;
+    if (uavcan_equipment_actuator_ArrayCommand_decode(transfer, transfer->payload_len, &cmd, &arraybuf_ptr) < 0) {
+        return;
+    }
+    for (uint8_t i =0; i < cmd.commands.len; i++) {
+        periph.translate_rcout_srv(cmd.commands.data[i].actuator_id, cmd.commands.data[i].command_value);
+    }
+}
+
 void AP_Periph_FW::can_send_esc_telem(uavcan_equipment_esc_Status esc_telem)
 {
     uint8_t buffer[UAVCAN_EQUIPMENT_ESC_STATUS_MAX_SIZE];
@@ -742,6 +756,10 @@ static void onTransferReceived(CanardInstance* ins,
     case UAVCAN_EQUIPMENT_ESC_RAWCOMMAND_ID:
         handle_esc_rawcommand(ins, transfer);
         break;
+
+    case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
+        handle_act_command(ins, transfer);
+        break;
 #endif
     }
 }
@@ -815,6 +833,10 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
 #ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
     case UAVCAN_EQUIPMENT_ESC_RAWCOMMAND_ID:
         *out_data_type_signature = UAVCAN_EQUIPMENT_GNSS_RTCMSTREAM_SIGNATURE;
+        return true;
+    
+    case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
+        *out_data_type_signature = UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_SIGNATURE;
         return true;
 #endif
     default:
