@@ -44,7 +44,7 @@ PC2 BATT_CURRENT_SENS ADC1 SCALE(1)
 # define default battery setup
 define HAL_BATT_VOLT_PIN 10
 define HAL_BATT_CURR_PIN 12
-define HAL_BATT_VOLT_SCALE 5.97
+define HAL_BATT_VOLT_SCALE 8.527
 define HAL_BATT_CURR_SCALE 11.6
 # current 1mOhm shunt and 82.5k
 # Volt 68k1 & 9k1 28V divider
