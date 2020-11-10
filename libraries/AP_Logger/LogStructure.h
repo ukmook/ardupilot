@@ -1,5 +1,7 @@
 #pragma once
 
+#include <AP_Common/AP_Common.h>
+
 // if you add any new types, units or multipliers, please update README.md
 
 /*
@@ -114,6 +116,10 @@ const struct MultiplierStructure log_Multipliers[] = {
 // this header
 #define HEAD_BYTE1  0xA3    // Decimal 163
 #define HEAD_BYTE2  0x95    // Decimal 149
+
+#include <AP_DAL/LogStructure.h>
+#include <AP_NavEKF2/LogStructure.h>
+#include <AP_NavEKF3/LogStructure.h>
 
 // structure used to define logging format
 struct LogStructure {
@@ -553,6 +559,7 @@ struct PACKED log_NKF4 {
 struct PACKED log_EKF5 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     uint8_t normInnov;
     int16_t FIX;
     int16_t FIY;
@@ -567,6 +574,7 @@ struct PACKED log_EKF5 {
 struct PACKED log_NKF5 {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     uint8_t normInnov;
     int16_t FIX;
     int16_t FIY;
@@ -605,6 +613,7 @@ struct PACKED log_Quaternion {
 struct PACKED log_RngBcnDebug {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     uint8_t ID;             // beacon identifier
     int16_t rng;            // beacon range (cm)
     int16_t innov;          // beacon range innovation (cm)
@@ -668,6 +677,7 @@ struct PACKED log_VisualVelocity {
 struct PACKED log_ekfBodyOdomDebug {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     float velInnovX;
     float velInnovY;
     float velInnovZ;
@@ -679,6 +689,7 @@ struct PACKED log_ekfBodyOdomDebug {
 struct PACKED log_ekfStateVar {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t core;
     float v00;
     float v01;
     float v02;
@@ -1186,6 +1197,7 @@ struct PACKED log_Performance {
     uint32_t max_time;
     uint32_t mem_avail;
     uint16_t load;
+    uint16_t internal_error_last_line;
     uint32_t internal_errors;
     uint32_t internal_error_count;
     uint32_t spi_count;
@@ -1857,6 +1869,7 @@ struct PACKED log_PSC {
 // @LoggerMessage: NKF0
 // @Description: EKF2 beacon sensor diagnostics
 // @Field: TimeUS: Time since system startup
+// @Field: C: EKF2 core this data is for
 // @Field: ID: Beacon sensor ID
 // @Field: rng: Beacon range
 // @Field: innov: Beacon range innovation
@@ -1947,6 +1960,7 @@ struct PACKED log_PSC {
 // @LoggerMessage: NKF5
 // @Description: EKF2 Sensor innovations (primary core) and general dumping ground
 // @Field: TimeUS: Time since system startup
+// @Field: C: EKF2 core this data is for
 // @Field: NI: Normalised flow variance
 // @Field: FIX: Optical flow LOS rate vector innovations from the main nav filter (X-axis)
 // @Field: FIY: Optical flow LOS rate vector innovations from the main nav filter (Y-axis)
@@ -2042,11 +2056,12 @@ struct PACKED log_PSC {
 // @Field: Mem: Free memory available
 // @Field: Load: System processor load
 // @Field: IntE: Internal error mask; which internal errors have been detected
-// @Field: IntEC: Internal error count; how many internal errors have been detected
+// @Field: ErrL: Internal error line number; last line number on which a internal error was detected
+// @Field: ErrC: Internal error count; how many internal errors have been detected
 // @Field: SPIC: Number of SPI transactions processed
 // @Field: I2CC: Number of i2c transactions processed
 // @Field: I2CI: Number of i2c interrupts serviced
-// @Field: ExUS: number of microseconds being added to each loop to address scheduler overruns
+// @Field: Ex: number of microseconds being added to each loop to address scheduler overruns
 
 // @LoggerMessage: POS
 // @Description: Canonical vehicle position
@@ -2313,6 +2328,7 @@ struct PACKED log_PSC {
 // @LoggerMessage: XKF0
 // @Description: EKF3 beacon sensor diagnostics
 // @Field: TimeUS: Time since system startup
+// @Field: C: EKF3 core this data is for
 // @Field: ID: Beacon sensor ID
 // @Field: rng: Beacon range
 // @Field: innov: Beacon range innovation
@@ -2401,6 +2417,7 @@ struct PACKED log_PSC {
 // @LoggerMessage: XKF5
 // @Description: EKF3 Sensor innovations (primary core) and general dumping ground
 // @Field: TimeUS: Time since system startup
+// @Field: C: EKF3 core this data is for
 // @Field: NI: Normalised flow variance
 // @Field: FIX: Optical flow LOS rate vector innovations from the main nav filter (X-axis)
 // @Field: FIY: Optical flow LOS rate vector innovations from the main nav filter (Y-axis)
@@ -2426,6 +2443,7 @@ struct PACKED log_PSC {
 // @LoggerMessage: XKFD
 // @Description: EKF3 Body Frame Odometry errors
 // @Field: TimeUS: Time since system startup
+// @Field: C: EKF3 core this data is for
 // @Field: IX: Innovation in velocity (X-axis)
 // @Field: IY: Innovation in velocity (Y-axis)
 // @Field: IZ: Innovation in velocity (Z-axis)
@@ -2445,6 +2463,7 @@ struct PACKED log_PSC {
 // @LoggerMessage: XKV1
 // @Description: EKF3 State variances (primary core)
 // @Field: TimeUS: Time since system startup
+// @Field: C: EKF3 core this data is for
 // @Field: V00: Variance for state 0
 // @Field: V01: Variance for state 1
 // @Field: V02: Variance for state 2
@@ -2461,6 +2480,7 @@ struct PACKED log_PSC {
 // @LoggerMessage: XKV2
 // @Description: more EKF3 State Variances (primary core)
 // @Field: TimeUS: Time since system startup
+// @Field: C: EKF3 core this data is for
 // @Field: V12: Variance for state 12
 // @Field: V13: Variance for state 13
 // @Field: V14: Variance for state 14
@@ -2576,7 +2596,7 @@ struct PACKED log_PSC {
     { LOG_PROXIMITY_MSG, sizeof(log_Proximity), \
       "PRX", "QBfffffffffff", "TimeUS,Health,D0,D45,D90,D135,D180,D225,D270,D315,DUp,CAn,CDis", "s-mmmmmmmmmhm", "F-00000000000" }, \
     { LOG_PERFORMANCE_MSG, sizeof(log_Performance),                     \
-      "PM",  "QHHIIHIIIIII", "TimeUS,NLon,NLoop,MaxT,Mem,Load,IntE,IntEC,SPIC,I2CC,I2CI,ExUS", "s---b%-----s", "F---0A-----F" }, \
+      "PM",  "QHHIIHHIIIIII", "TimeUS,NLon,NLoop,MaxT,Mem,Load,ErrL,IntE,ErrC,SPIC,I2CC,I2CI,Ex", "s---b%------s", "F---0A------F" }, \
     { LOG_SRTL_MSG, sizeof(log_SRTL), \
       "SRTL", "QBHHBfff", "TimeUS,Active,NumPts,MaxPts,Action,N,E,D", "s----mmm", "F----000" }, \
     { LOG_OA_BENDYRULER_MSG, sizeof(log_OABendyRuler), \
@@ -2604,9 +2624,9 @@ struct PACKED log_PSC {
     { LOG_NKF4_MSG, sizeof(log_NKF4), \
       "NKF4","QBcccccfbbHBIHb","TimeUS,C,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s#------??-----", "F-------??-----" }, \
     { LOG_NKF5_MSG, sizeof(log_NKF5), \
-      "NKF5","QBhhhcccCCfff","TimeUS,NI,FIX,FIY,AFI,HAGL,offset,RI,rng,Herr,eAng,eVel,ePos", "s----m???mrnm", "F----BBBBB000" }, \
+      "NKF5","QBBhhhcccCCfff","TimeUS,C,NI,FIX,FIY,AFI,HAGL,offset,RI,rng,Herr,eAng,eVel,ePos", "s#----m???mrnm", "F-----BBBBB000" }, \
     { LOG_NKF10_MSG, sizeof(log_RngBcnDebug), \
-      "NKF0","QBccCCcccccccc","TimeUS,ID,rng,innov,SIV,TR,BPN,BPE,BPD,OFH,OFL,OFN,OFE,OFD", "s-m---mmmmmmmm", "F-B---BBBBBBBB" }, \
+      "NKF0","QBBccCCcccccccc","TimeUS,C,ID,rng,innov,SIV,TR,BPN,BPE,BPD,OFH,OFL,OFN,OFE,OFD", "s#-m---mmmmmmmm", "F--B---BBBBBBBB" }, \
     { LOG_NKQ_MSG, sizeof(log_Quaternion), "NKQ", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
     { LOG_XKF1_MSG, sizeof(log_EKF1), \
       "XKF1","QBccCfffffffccce","TimeUS,C,Roll,Pitch,Yaw,VN,VE,VD,dPD,PN,PE,PD,GX,GY,GZ,OH", "s#ddhnnnnmmmkkkm", "F-BBB0000000BBBB" }, \
@@ -2617,18 +2637,18 @@ struct PACKED log_PSC {
     { LOG_XKF4_MSG, sizeof(log_NKF4), \
       "XKF4","QBcccccfbbHBIHb","TimeUS,C,SV,SP,SH,SM,SVT,errRP,OFN,OFE,FS,TS,SS,GPS,PI", "s#------??-----", "F-------??-----" }, \
     { LOG_XKF5_MSG, sizeof(log_NKF5), \
-      "XKF5","QBhhhcccCCfff","TimeUS,NI,FIX,FIY,AFI,HAGL,offset,RI,rng,Herr,eAng,eVel,ePos", "s----m???mrnm", "F----BBBBB000" }, \
+      "XKF5","QBBhhhcccCCfff","TimeUS,C,NI,FIX,FIY,AFI,HAGL,offset,RI,rng,Herr,eAng,eVel,ePos", "s#----m???mrnm", "F-----BBBBB000" }, \
     { LOG_XKF10_MSG, sizeof(log_RngBcnDebug), \
-      "XKF0","QBccCCcccccccc","TimeUS,ID,rng,innov,SIV,TR,BPN,BPE,BPD,OFH,OFL,OFN,OFE,OFD", "s-m---mmmmmmmm", "F-B---BBBBBBBB" }, \
+      "XKF0","QBBccCCcccccccc","TimeUS,C,ID,rng,innov,SIV,TR,BPN,BPE,BPD,OFH,OFL,OFN,OFE,OFD", "s#-m---mmmmmmmm", "F--B---BBBBBBBB" }, \
     { LOG_XKFS_MSG, sizeof(log_EKFS), \
       "XKFS","QBBBBB","TimeUS,C,MI,BI,GI,AI", "s#----", "F-----" }, \
     { LOG_XKQ_MSG, sizeof(log_Quaternion), "XKQ", QUAT_FMT, QUAT_LABELS, QUAT_UNITS, QUAT_MULTS }, \
     { LOG_XKFD_MSG, sizeof(log_ekfBodyOdomDebug), \
-      "XKFD","Qffffff","TimeUS,IX,IY,IZ,IVX,IVY,IVZ", "s------", "F------" }, \
+      "XKFD","QBffffff","TimeUS,C,IX,IY,IZ,IVX,IVY,IVZ", "s#------", "F-------" }, \
     { LOG_XKV1_MSG, sizeof(log_ekfStateVar), \
-      "XKV1","Qffffffffffff","TimeUS,V00,V01,V02,V03,V04,V05,V06,V07,V08,V09,V10,V11", "s------------", "F------------" }, \
+      "XKV1","QBffffffffffff","TimeUS,C,V00,V01,V02,V03,V04,V05,V06,V07,V08,V09,V10,V11", "s#------------", "F-------------" }, \
     { LOG_XKV2_MSG, sizeof(log_ekfStateVar), \
-      "XKV2","Qffffffffffff","TimeUS,V12,V13,V14,V15,V16,V17,V18,V19,V20,V21,V22,V23", "s------------", "F------------" }, \
+      "XKV2","QBffffffffffff","TimeUS,C,V12,V13,V14,V15,V16,V17,V18,V19,V20,V21,V22,V23", "s#------------", "F-------------" }, \
     { LOG_TERRAIN_MSG, sizeof(log_TERRAIN), \
       "TERR","QBLLHffHH","TimeUS,Status,Lat,Lng,Spacing,TerrH,CHeight,Pending,Loaded", "s-DU-mm--", "F-GG-00--" }, \
     { LOG_GPS_UBX1_MSG, sizeof(log_Ubx1), \
@@ -2693,6 +2713,9 @@ struct PACKED log_PSC {
       "ISBD",ISBD_FMT,ISBD_LABELS, ISBD_UNITS, ISBD_MULTS }, \
     { LOG_ORGN_MSG, sizeof(log_ORGN), \
       "ORGN","QBLLe","TimeUS,Type,Lat,Lng,Alt", "s-DUm", "F-GGB" },   \
+LOG_STRUCTURE_FROM_DAL \
+LOG_STRUCTURE_FROM_NAVEKF2 \
+LOG_STRUCTURE_FROM_NAVEKF3 \
     { LOG_DF_FILE_STATS, sizeof(log_DSF), \
       "DSF", "QIHIIII", "TimeUS,Dp,Blk,Bytes,FMn,FMx,FAv", "s--b---", "F--0---" }, \
     { LOG_RPM_MSG, sizeof(log_RPM), \
@@ -2820,6 +2843,10 @@ enum LogMessages : uint8_t {
     LOG_GPS_RAWH_MSG,
 
     LOG_FORMAT_MSG = 128, // this must remain #128
+
+    LOG_IDS_FROM_DAL,
+    LOG_IDS_FROM_NAVEKF2,
+    LOG_IDS_FROM_NAVEKF3,
 
     LOG_GPS_RAWS_MSG,
     LOG_ACC1_MSG,
