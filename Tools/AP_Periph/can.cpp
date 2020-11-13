@@ -756,6 +756,10 @@ static void onTransferReceived(CanardInstance* ins,
     case UAVCAN_EQUIPMENT_ESC_RAWCOMMAND_ID:
         handle_esc_rawcommand(ins, transfer);
         break;
+
+    case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
+        handle_act_command(ins, transfer);
+        break;
 #endif
     }
 }
@@ -829,6 +833,10 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
 #ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
     case UAVCAN_EQUIPMENT_ESC_RAWCOMMAND_ID:
         *out_data_type_signature = UAVCAN_EQUIPMENT_GNSS_RTCMSTREAM_SIGNATURE;
+        return true;
+    
+    case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
+        *out_data_type_signature = UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_SIGNATURE;
         return true;
 #endif
     default:
