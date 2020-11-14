@@ -838,10 +838,6 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
     case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
         *out_data_type_signature = UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_SIGNATURE;
         return true;
-
-  //  case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
-        //*out_data_type_signature = UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_SIGNATURE;
-      //  return true;
 #endif
     default:
         break;
