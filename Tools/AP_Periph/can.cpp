@@ -589,7 +589,7 @@ static void handle_act_command(CanardInstance* ins, CanardRxTransfer* transfer)
     if (uavcan_equipment_actuator_ArrayCommand_decode(transfer, transfer->payload_len, &cmd, &arraybuf_ptr) < 0) {
         return;
     }
-    for (uint8_t i =0; i < cmd.commands.len; i++) {
+    for (uint8_t i=0; i < cmd.commands.len; i++) {
         periph.translate_rcout_srv(cmd.commands.data[i].actuator_id, cmd.commands.data[i].command_value);
     }
 }
@@ -745,7 +745,7 @@ static void onTransferReceived(CanardInstance* ins,
         handle_RTCMStream(ins, transfer);
         break;
 #endif
-        
+
 #ifdef AP_PERIPH_HAVE_LED
     case UAVCAN_EQUIPMENT_INDICATION_LIGHTSCOMMAND_ID:
         handle_lightscommand(ins, transfer);
@@ -832,12 +832,16 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
 #endif
 #ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
     case UAVCAN_EQUIPMENT_ESC_RAWCOMMAND_ID:
-        *out_data_type_signature = UAVCAN_EQUIPMENT_GNSS_RTCMSTREAM_SIGNATURE;
+        *out_data_type_signature = UAVCAN_EQUIPMENT_ESC_RAWCOMMAND_SIGNATURE;
         return true;
-    
+
     case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
         *out_data_type_signature = UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_SIGNATURE;
         return true;
+
+  //  case UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_ID:
+        //*out_data_type_signature = UAVCAN_EQUIPMENT_ACTUATOR_ARRAYCOMMAND_SIGNATURE;
+      //  return true;
 #endif
     default:
         break;
@@ -1344,7 +1348,7 @@ void AP_Periph_FW::can_gps_update(void)
             fix_float16(pos_cov[0]);
             fix_float16(pos_cov[4]);
         }
-    
+
         float vel_cov[9] {};
         pkt.velocity_covariance.data = &pos_cov[0];
         pkt.velocity_covariance.len = 9;
@@ -1435,7 +1439,7 @@ void AP_Periph_FW::can_gps_update(void)
         if (gps.horizontal_accuracy(hacc)) {
             cov[0] = cov[1] = sq(hacc);
         }
-    
+
         float vacc;
         if (gps.vertical_accuracy(vacc)) {
             cov[2] = sq(vacc);
@@ -1462,7 +1466,7 @@ void AP_Periph_FW::can_gps_update(void)
                         &buffer[0],
                         total_size);
     }
-    
+
     /*
       send aux packet
      */
