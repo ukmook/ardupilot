@@ -70,7 +70,9 @@ void AP_BattMonitor_FuelFlow::read()
                     last_pin,
                     FUNCTOR_BIND_MEMBER(&AP_BattMonitor_FuelFlow::irq_handler, void, uint8_t, bool, uint32_t),
                     AP_HAL::GPIO::INTERRUPT_RISING)) {
+#ifndef HAL_NO_GCS
                 gcs().send_text(MAV_SEVERITY_WARNING, "FuelFlow: Failed to attach to pin %u", last_pin);
+#endif
             }
         }
     }
