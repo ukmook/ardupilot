@@ -121,6 +121,10 @@ void AP_Periph_FW::init()
     baro.init();
 #endif
 
+#ifdef HAL_PERIPH_ENABLE_BATTERY
+    battery.init();
+#endif
+
 #ifdef HAL_PERIPH_NEOPIXEL_COUNT
     hal.rcout->init();
     hal.rcout->set_serial_led_num_LEDs(HAL_PERIPH_NEOPIXEL_CHAN, AP_HAL::RCOutput::MODE_NEOPIXEL);
@@ -244,6 +248,15 @@ void AP_Periph_FW::update()
         hal.rcout->set_serial_led_num_LEDs(HAL_PERIPH_NEOPIXEL_CHAN, HAL_PERIPH_NEOPIXEL_COUNT, AP_HAL::RCOutput::MODE_NEOPIXEL);
 #endif
     }
+
+#ifdef HAL_PERIPH_ENABLE_BATTERY
+    if (now - battery_last_read_ms >= 100) {
+        // update battery at 10Hz
+        battery_last_read_ms = now;
+        battery.read();
+    }
+#endif
+
     can_update();
     hal.scheduler->delay(1);
 #if defined(HAL_PERIPH_NEOPIXEL_COUNT) && HAL_PERIPH_NEOPIXEL_COUNT == 8
