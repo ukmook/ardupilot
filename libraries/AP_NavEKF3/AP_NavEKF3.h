@@ -24,6 +24,7 @@
 #include <AP_Param/AP_Param.h>
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <AP_NavEKF/AP_Nav_Common.h>
+#include <AP_NavEKF/AP_NavEKF_Source.h>
 
 class NavEKF3_core;
 
@@ -38,6 +39,7 @@ public:
     NavEKF3 &operator=(const NavEKF3&) = delete;
 
     static const struct AP_Param::GroupInfo var_info[];
+    static const struct AP_Param::GroupInfo var_info2[];
 
     // allow logging to determine the number of active cores
     uint8_t activeCores(void) const {
@@ -196,6 +198,10 @@ public:
 
     // return the diagonals from the covariance matrix for the specified instance
     void getStateVariances(int8_t instance, float stateVar[24]) const;
+
+    // get a source's velocity innovations for the specified instance.  Set instance to -1 for the primary instance
+    // returns true on success and results are placed in innovations and variances arguments
+    bool getVelInnovationsAndVariancesForSource(int8_t instance, AP_NavEKF_Source::SourceXY source, Vector3f &innovations, Vector3f &variances) const WARN_IF_UNUSED;
 
     // should we use the compass? This is public so it can be used for
     // reporting via ahrs.use_compass()
@@ -406,6 +412,9 @@ public:
      */
     void requestYawReset(void);
 
+    // set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
+    void setPosVelYawSourceSet(uint8_t source_set_idx);
+
     // write EKF information to on-board logs
     void Log_Write();
 
@@ -418,6 +427,9 @@ public:
     // log debug data for yaw estimator
     // return false if data not available
     bool getDataEKFGSF(int8_t instance, float &yaw_composite, float &yaw_composite_variance, float yaw[N_MODELS_EKFGSF], float innov_VN[N_MODELS_EKFGSF], float innov_VE[N_MODELS_EKFGSF], float weight[N_MODELS_EKFGSF]) const;
+
+    // parameter conversion
+    void convert_parameters();
 
 private:
     uint8_t num_cores; // number of allocated cores
@@ -444,7 +456,6 @@ private:
     AP_Float _gyroBiasProcessNoise; // gyro bias state process noise : rad/s
     AP_Float _accelBiasProcessNoise;// accel bias state process noise : m/s^2
     AP_Int16 _hgtDelay_ms;          // effective average delay of Height measurements relative to inertial measurements (msec)
-    AP_Int8  _fusionModeGPS;        // 0 = use 3D velocity, 1 = use 2D velocity, 2 = use no velocity, 3 = do not use GPS
     AP_Int16  _gpsVelInnovGate;     // Percentage number of standard deviations applied to GPS velocity innovation consistency check
     AP_Int16  _gpsPosInnovGate;     // Percentage number of standard deviations applied to GPS position innovation consistency check
     AP_Int16  _hgtInnovGate;        // Percentage number of standard deviations applied to height innovation consistency check
@@ -457,7 +468,6 @@ private:
     AP_Int8  _flowDelay_ms;         // effective average delay of optical flow measurements rel to IMU (msec)
     AP_Int16  _rngInnovGate;        // Percentage number of standard deviations applied to range finder innovation consistency check
     AP_Float _maxFlowRate;          // Maximum flow rate magnitude that will be accepted by the filter
-    AP_Int8 _altSource;             // Primary alt source. 0 = Baro, 1 = range finder, 2 = GPS, 3 = range beacons, 4 = external nav
     AP_Float _rngNoise;             // Range finder noise : m
     AP_Int8 _gpsCheck;              // Bitmask controlling which preflight GPS checks are bypassed
     AP_Int8 _imuMask;               // Bitmask of IMUs to instantiate EKF3 for
@@ -524,6 +534,7 @@ private:
     const uint8_t sensorIntervalMin_ms = 50;       // The minimum allowed time between measurements from any non-IMU sensor (msec)
     const uint8_t flowIntervalMin_ms = 20;         // The minimum allowed time between measurements from optical flow sensors (msec)
     const uint8_t extNavIntervalMin_ms = 20;       // The minimum allowed time between measurements from external navigation sensors (msec)
+    const float maxYawEstVelInnov = 2.0f;          // Maximum acceptable length of the velocity innovation returned by the EKF-GSF yaw estimator (m/s)
 
     // time at start of current filter update
     uint64_t imuSampleTime_us;
@@ -614,4 +625,6 @@ private:
     void Log_Write_Timing(uint8_t core, uint64_t time_us) const;
     void Log_Write_GSF(uint8_t core, uint64_t time_us) const;
 
+    // position, velocity and yaw source control
+    AP_NavEKF_Source sources;
 };

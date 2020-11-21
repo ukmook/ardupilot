@@ -207,6 +207,7 @@ struct PACKED log_Error {
 struct PACKED log_GPS {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t  instance;
     uint8_t  status;
     uint32_t gps_week_ms;
     uint16_t gps_week;
@@ -225,6 +226,7 @@ struct PACKED log_GPS {
 struct PACKED log_GPA {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t  instance;
     uint16_t vdop;
     uint16_t hacc;
     uint16_t vacc;
@@ -244,20 +246,13 @@ struct PACKED log_Message {
 struct PACKED log_IMU {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t instance;
     float gyro_x, gyro_y, gyro_z;
     float accel_x, accel_y, accel_z;
     uint32_t gyro_error, accel_error;
     float temperature;
     uint8_t gyro_health, accel_health;
     uint16_t gyro_rate, accel_rate;
-};
-
-struct PACKED log_IMUDT {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    float delta_time, delta_vel_dt, delta_ang_dt;
-    float delta_ang_x, delta_ang_y, delta_ang_z;
-    float delta_vel_x, delta_vel_y, delta_vel_z;
 };
 
 struct PACKED log_ISBH {
@@ -358,6 +353,7 @@ struct PACKED log_RSSI {
 struct PACKED log_BARO {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t instance;
     float   altitude;
     float   pressure;
     int16_t temperature;
@@ -836,9 +832,10 @@ struct PACKED log_Current_Cells {
     uint16_t cell_voltages[12];
 };
 
-struct PACKED log_Compass {
+struct PACKED log_MAG {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t  instance;
     int16_t  mag_x;
     int16_t  mag_y;
     int16_t  mag_z;
@@ -1019,16 +1016,18 @@ struct PACKED log_AIRSPEED {
     uint8_t primary;
 };
 
-struct PACKED log_ACCEL {
+struct PACKED log_ACC {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t instance;
     uint64_t sample_us;
     float AccX, AccY, AccZ;
 };
 
-struct PACKED log_GYRO {
+struct PACKED log_GYR {
     LOG_PACKET_HEADER;
     uint64_t time_us;
+    uint8_t instance;
     uint64_t sample_us;
     float GyrX, GyrY, GyrZ;
 };
@@ -1324,38 +1323,6 @@ struct PACKED log_PSC {
 // UNIT messages define units which can be referenced by FMTU messages
 // FMTU messages associate types (e.g. centimeters/second/second) to FMT message fields
 
-#define ACC_LABELS "TimeUS,SampleUS,AccX,AccY,AccZ"
-#define ACC_FMT   "QQfff"
-#define ACC_UNITS "ssooo"
-#define ACC_MULTS "FF000"
-
-// see "struct sensor" in AP_Baro.h and "Write_Baro":
-#define BARO_LABELS "TimeUS,Alt,Press,Temp,CRt,SMS,Offset,GndTemp,Health"
-#define BARO_FMT   "QffcfIffB"
-#define BARO_UNITS "smPOnsmO-"
-#define BARO_MULTS "F00B0C?0-"
-
-#define GPA_LABELS "TimeUS,VDop,HAcc,VAcc,SAcc,YAcc,VV,SMS,Delta"
-#define GPA_FMT   "QCCCCfBIH"
-#define GPA_UNITS "smmmnd-ss"
-#define GPA_MULTS "FBBBB0-CC"
-
-// see "struct GPS_State" and "Write_GPS":
-#define GPS_LABELS "TimeUS,Status,GMS,GWk,NSats,HDop,Lat,Lng,Alt,Spd,GCrs,VZ,Yaw,U"
-#define GPS_FMT   "QBIHBcLLeffffB"
-#define GPS_UNITS "s---SmDUmnhnh-"
-#define GPS_MULTS "F---0BGGB000--"
-
-#define GYR_LABELS "TimeUS,SampleUS,GyrX,GyrY,GyrZ"
-#define GYR_FMT    "QQfff"
-#define GYR_UNITS  "ssEEE"
-#define GYR_MULTS  "FF000"
-
-#define IMT_LABELS "TimeUS,DelT,DelvT,DelaT,DelAX,DelAY,DelAZ,DelVX,DelVY,DelVZ"
-#define IMT_FMT    "Qfffffffff"
-#define IMT_UNITS  "ssssrrrnnn"
-#define IMT_MULTS  "FF00000000"
-
 #define ISBH_LABELS "TimeUS,N,type,instance,mul,smp_cnt,SampleUS,smp_rate"
 #define ISBH_FMT    "QHBBHHQf"
 #define ISBH_UNITS  "s-----sz"
@@ -1365,16 +1332,6 @@ struct PACKED log_PSC {
 #define ISBD_FMT    "QHHaaa"
 #define ISBD_UNITS  "s--ooo"
 #define ISBD_MULTS  "F--???"
-
-#define IMU_LABELS "TimeUS,GyrX,GyrY,GyrZ,AccX,AccY,AccZ,EG,EA,T,GH,AH,GHz,AHz"
-#define IMU_FMT   "QffffffIIfBBHH"
-#define IMU_UNITS "sEEEooo--O--zz"
-#define IMU_MULTS "F000000-----00"
-
-#define MAG_LABELS "TimeUS,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOfsX,MOfsY,MOfsZ,Health,S"
-#define MAG_FMT   "QhhhhhhhhhBI"
-#define MAG_UNITS "sGGGGGGGGG-s"
-#define MAG_MULTS "FCCCCCCCCC-F"
 
 #define PID_LABELS "TimeUS,Tar,Act,Err,P,I,D,FF,Dmod"
 #define PID_FMT    "Qffffffff"
@@ -1391,9 +1348,10 @@ struct PACKED log_PSC {
 #define ARSP_UNITS "snPOPP----"
 #define ARSP_MULTS "F00B00----"
 
-// @LoggerMessage: ACC1,ACC2,ACC3
+// @LoggerMessage: ACC
 // @Description: IMU accelerometer data
 // @Field: TimeUS: Time since system startup
+// @Field: I: accelerometer sensor instance number
 // @Field: SampleUS: time since system startup this sample was taken
 // @Field: AccX: acceleration along X axis
 // @Field: AccY: acceleration along Y axis
@@ -1458,9 +1416,10 @@ struct PACKED log_PSC {
 // @Field: ErrRP: lowest estimated gyro drift error
 // @Field: ErrYaw: difference between measured yaw and DCM yaw estimate
 
-// @LoggerMessage: BARO,BAR2,BAR3
+// @LoggerMessage: BARO
 // @Description: Gathered Barometer data
 // @Field: TimeUS: Time since system startup
+// @Field: I: barometer sensor instance number
 // @Field: Alt: calculated altitude
 // @Field: Press: measured atmospheric pressure
 // @Field: Temp: measured atmospheric temperature
@@ -1644,8 +1603,9 @@ struct PACKED log_PSC {
 // @Field: UnitIds: each character refers to a UNIT message.  The unit at an offset corresponds to the field at the same offset in FMT.Format
 // @Field: MultIds: each character refers to a MULT message.  The multiplier at an offset corresponds to the field at the same offset in FMT.Format
 
-// @LoggerMessage: GPA,GPA2
+// @LoggerMessage: GPA
 // @Description: GPS accuracy information
+// @Field: I: GPS instance number
 // @Field: TimeUS: Time since system startup
 // @Field: VDop: vertical degree of procession
 // @Field: HAcc: horizontal position accuracy
@@ -1656,42 +1616,10 @@ struct PACKED log_PSC {
 // @Field: SMS: time since system startup this sample was taken
 // @Field: Delta: system time delta between the last two reported positions
 
-//note: GPAB is a copy of GPA and GPA2!
-
-// @LoggerMessage: GPAB
-// @Description: Blended GPS accuracy information
-// @Field: TimeUS: Time since system startup
-// @Field: VDop: vertical degree of procession
-// @Field: HAcc: horizontal position accuracy
-// @Field: VAcc: vertical position accuracy
-// @Field: SAcc: speed accuracy
-// @Field: YAcc: yaw accuracy
-// @Field: VV: true if vertical velocity is available
-// @Field: SMS: time since system startup this sample was taken
-// @Field: Delta: system time delta between the last two reported positions
-
-// @LoggerMessage: GPS,GPS2
+// @LoggerMessage: GPS
 // @Description: Information received from GNSS systems attached to the autopilot
 // @Field: TimeUS: Time since system startup
-// @Field: Status: GPS Fix type; 2D fix, 3D fix etc.
-// @Field: GMS: milliseconds since start of GPS Week
-// @Field: GWk: weeks since 5 Jan 1980
-// @Field: NSats: number of satellites visible
-// @Field: HDop: horizontal precision
-// @Field: Lat: latitude
-// @Field: Lng: longitude
-// @Field: Alt: altitude
-// @Field: Spd: ground speed
-// @Field: GCrs: ground course
-// @Field: VZ: vertical speed
-// @Field: Yaw: vehicle yaw
-// @Field: U: boolean value indicating whether this GPS is in use
-
-// Note: GPSB is a copy of GPS!
-
-// @LoggerMessage: GPSB
-// @Description: Information blended from GNSS systems attached to the autopilot
-// @Field: TimeUS: Time since system startup
+// @Field: I: GPS instance number
 // @Field: Status: GPS Fix type; 2D fix, 3D fix etc.
 // @Field: GMS: milliseconds since start of GPS Week
 // @Field: GWk: weeks since 5 Jan 1980
@@ -1745,30 +1673,19 @@ struct PACKED log_PSC {
 // @Field: doD: estimated Doppler measurement standard deviation
 // @Field: trk: tracking status bitfield
 
-// @LoggerMessage: GYR1,GYR2,GYR3
+// @LoggerMessage: GYR
 // @Description: IMU gyroscope data
 // @Field: TimeUS: Time since system startup
+// @Field: I: gyroscope sensor instance number
 // @Field: SampleUS: time since system startup this sample was taken
 // @Field: GyrX: measured rotation rate about X axis
 // @Field: GyrY: measured rotation rate about Y axis
 // @Field: GyrZ: measured rotation rate about Z axis
 
-// @LoggerMessage: IMT,IMT2,IMT3
-// @Description: Inertial Measurement Unit timing data
-// @Field: TimeUS: Time since system startup
-// @Field: DelT: Delta time
-// @Field: DelvT: Delta velocity accumulation time
-// @Field: DelaT: Delta angle accumulation time
-// @Field: DelAX: Accumulated delta angle X
-// @Field: DelAY: Accumulated delta angle Y
-// @Field: DelAZ: Accumulated delta angle Z
-// @Field: DelVX: Accumulated delta velocity X
-// @Field: DelVY: Accumulated delta velocity Y
-// @Field: DelVZ: Accumulated delta velocity Z
-
-// @LoggerMessage: IMU,IMU2,IMU3
+// @LoggerMessage: IMU
 // @Description: Inertial Measurement Unit data
 // @Field: TimeUS: Time since system startup
+// @Field: I: IMU sensor instance number
 // @Field: GyrX: measured rotation rate about X axis
 // @Field: GyrY: measured rotation rate about Y axis
 // @Field: GyrZ: measured rotation rate about Z axis
@@ -1789,18 +1706,19 @@ struct PACKED log_PSC {
 // @Field: LandingGear: Current landing gear state
 // @Field: WeightOnWheels: True if there is weight on wheels
 
-// @LoggerMessage: MAG,MAG2,MAG3
+// @LoggerMessage: MAG
 // @Description: Information received from compasses
 // @Field: TimeUS: Time since system startup
+// @Field: I: magnetometer sensor instance number
 // @Field: MagX: magnetic field strength in body frame
 // @Field: MagY: magnetic field strength in body frame
 // @Field: MagZ: magnetic field strength in body frame
 // @Field: OfsX: magnetic field offset in body frame
 // @Field: OfsY: magnetic field offset in body frame
 // @Field: OfsZ: magnetic field offset in body frame
-// @Field: MOfsX: motor interference magnetic field offset in body frame
-// @Field: MOfsY: motor interference magnetic field offset in body frame
-// @Field: MOfsZ: motor interference magnetic field offset in body frame
+// @Field: MOX: motor interference magnetic field offset in body frame
+// @Field: MOY: motor interference magnetic field offset in body frame
+// @Field: MOZ: motor interference magnetic field offset in body frame
 // @Field: Health: true if the compass is considered healthy
 // @Field: S: time measurement was taken
 
@@ -2538,19 +2456,11 @@ struct PACKED log_PSC {
     { LOG_PARAMETER_MSG, sizeof(log_Parameter), \
      "PARM", "QNf",        "TimeUS,Name,Value", "s--", "F--"  },       \
     { LOG_GPS_MSG, sizeof(log_GPS), \
-      "GPS",  GPS_FMT, GPS_LABELS, GPS_UNITS, GPS_MULTS }, \
-    { LOG_GPS2_MSG, sizeof(log_GPS), \
-      "GPS2", GPS_FMT, GPS_LABELS, GPS_UNITS, GPS_MULTS }, \
-    { LOG_GPSB_MSG, sizeof(log_GPS), \
-      "GPSB", GPS_FMT, GPS_LABELS, GPS_UNITS, GPS_MULTS }, \
+      "GPS",  "QBBIHBcLLeffffB", "TimeUS,I,Status,GMS,GWk,NSats,HDop,Lat,Lng,Alt,Spd,GCrs,VZ,Yaw,U", "s#---SmDUmnhnh-", "F----0BGGB000--" }, \
     { LOG_GPA_MSG,  sizeof(log_GPA), \
-      "GPA",  GPA_FMT, GPA_LABELS, GPA_UNITS, GPA_MULTS }, \
-    { LOG_GPA2_MSG, sizeof(log_GPA), \
-      "GPA2", GPA_FMT, GPA_LABELS, GPA_UNITS, GPA_MULTS }, \
-    { LOG_GPAB_MSG, sizeof(log_GPA), \
-      "GPAB", GPA_FMT, GPA_LABELS, GPA_UNITS, GPA_MULTS }, \
+      "GPA",  "QBCCCCfBIH", "TimeUS,I,VDop,HAcc,VAcc,SAcc,YAcc,VV,SMS,Delta", "s#mmmnd-ss", "F-BBBB0-CC" }, \
     { LOG_IMU_MSG, sizeof(log_IMU), \
-      "IMU",  IMU_FMT,     IMU_LABELS, IMU_UNITS, IMU_MULTS }, \
+      "IMU",  "QBffffffIIfBBHH",     "TimeUS,I,GyrX,GyrY,GyrZ,AccX,AccY,AccZ,EG,EA,T,GH,AH,GHz,AHz", "s#EEEooo--O--zz", "F-000000-----00" }, \
     { LOG_MESSAGE_MSG, sizeof(log_Message), \
       "MSG",  "QZ",     "TimeUS,Message", "s-", "F-"}, \
     { LOG_RCIN_MSG, sizeof(log_RCIN), \
@@ -2562,7 +2472,7 @@ struct PACKED log_PSC {
     { LOG_RSSI_MSG, sizeof(log_RSSI), \
       "RSSI",  "Qf",     "TimeUS,RXRSSI", "s-", "F-"  }, \
     { LOG_BARO_MSG, sizeof(log_BARO), \
-      "BARO",  BARO_FMT, BARO_LABELS, BARO_UNITS, BARO_MULTS }, \
+      "BARO",  "QBffcfIffB", "TimeUS,I,Alt,Press,Temp,CRt,SMS,Offset,GndTemp,Health", "s#mPOnsmO-", "F-00B0C?0-" }, \
     { LOG_POWR_MSG, sizeof(log_POWR), \
       "POWR","QffHHB","TimeUS,Vcc,VServo,Flags,AccFlags,Safety", "svv---", "F00---" },  \
     { LOG_CMD_MSG, sizeof(log_Cmd), \
@@ -2583,8 +2493,8 @@ struct PACKED log_PSC {
       "BCL", "QBfHHHHHHHHHHHH", "TimeUS,Instance,Volt,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,V11,V12", "s#vvvvvvvvvvvvv", "F-0CCCCCCCCCCCC" }, \
 	{ LOG_ATTITUDE_MSG, sizeof(log_Attitude),\
       "ATT", "QccccCCCC", "TimeUS,DesRoll,Roll,DesPitch,Pitch,DesYaw,Yaw,ErrRP,ErrYaw", "sddddhhdh", "FBBBBBBBB" }, \
-    { LOG_COMPASS_MSG, sizeof(log_Compass), \
-      "MAG", MAG_FMT,    MAG_LABELS, MAG_UNITS, MAG_MULTS }, \
+    { LOG_MAG_MSG, sizeof(log_MAG), \
+      "MAG", "QBhhhhhhhhhBI",    "TimeUS,I,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOX,MOY,MOZ,Health,S", "s#GGGGGGGGG-s", "F-CCCCCCCCC-F" }, \
     { LOG_MODE_MSG, sizeof(log_Mode), \
       "MODE", "QMBB",         "TimeUS,Mode,ModeNum,Rsn", "s---", "F---" }, \
     { LOG_RFND_MSG, sizeof(log_RFND), \
@@ -2605,10 +2515,6 @@ struct PACKED log_PSC {
       "OADJ","QBBBBLLLL","TimeUS,State,Err,CurrPoint,TotPoints,DLat,DLng,OALat,OALng", "sbbbbDUDU", "F----GGGG" }, \
     { LOG_SIMPLE_AVOID_MSG, sizeof(log_SimpleAvoid), \
       "SA",  "QBffffB","TimeUS,State,DVelX,DVelY,MVelX,MVelY,Back", "sbnnnnb", "F------"}, \
-    { LOG_IMU2_MSG, sizeof(log_IMU), \
-      "IMU2",  IMU_FMT,     IMU_LABELS, IMU_UNITS, IMU_MULTS }, \
-    { LOG_IMU3_MSG, sizeof(log_IMU), \
-      "IMU3",  IMU_FMT,     IMU_LABELS, IMU_UNITS, IMU_MULTS }, \
     { LOG_AHR2_MSG, sizeof(log_AHRS), \
       "AHR2","QccCfLLffff","TimeUS,Roll,Pitch,Yaw,Alt,Lat,Lng,Q1,Q2,Q3,Q4","sddhmDU????", "FBBB0GG????" }, \
     { LOG_POS_MSG, sizeof(log_POS), \
@@ -2667,22 +2573,10 @@ struct PACKED log_PSC {
       "CSRV","QBfffB","TimeUS,Id,Pos,Force,Speed,Pow", "s#---%", "F-0000" }, \
     { LOG_CESC_MSG, sizeof(log_CESC), \
       "CESC","QBIfffiB","TimeUS,Id,ECnt,Voltage,Curr,Temp,RPM,Pow", "s#-vAOq%", "F-000000" }, \
-    { LOG_COMPASS2_MSG, sizeof(log_Compass), \
-      "MAG2",MAG_FMT,    MAG_LABELS, MAG_UNITS, MAG_MULTS }, \
-    { LOG_COMPASS3_MSG, sizeof(log_Compass), \
-      "MAG3",MAG_FMT,    MAG_LABELS, MAG_UNITS, MAG_MULTS }, \
-    { LOG_ACC1_MSG, sizeof(log_ACCEL), \
-      "ACC1", ACC_FMT,        ACC_LABELS, ACC_UNITS, ACC_MULTS }, \
-    { LOG_ACC2_MSG, sizeof(log_ACCEL), \
-      "ACC2", ACC_FMT,        ACC_LABELS, ACC_UNITS, ACC_MULTS }, \
-    { LOG_ACC3_MSG, sizeof(log_ACCEL), \
-      "ACC3", ACC_FMT,        ACC_LABELS, ACC_UNITS, ACC_MULTS }, \
-    { LOG_GYR1_MSG, sizeof(log_GYRO), \
-      "GYR1", GYR_FMT,        GYR_LABELS, GYR_UNITS, GYR_MULTS }, \
-    { LOG_GYR2_MSG, sizeof(log_GYRO), \
-      "GYR2", GYR_FMT,        GYR_LABELS, GYR_UNITS, GYR_MULTS }, \
-    { LOG_GYR3_MSG, sizeof(log_GYRO), \
-      "GYR3", GYR_FMT,        GYR_LABELS, GYR_UNITS, GYR_MULTS }, \
+    { LOG_ACC_MSG, sizeof(log_ACC), \
+      "ACC", "QBQfff",        "TimeUS,I,SampleUS,AccX,AccY,AccZ", "s#sooo", "F-F000" }, \
+    { LOG_GYR_MSG, sizeof(log_GYR), \
+      "GYR", "QBQfff",        "TimeUS,I,SampleUS,GyrX,GyrY,GyrZ", "s#sEEE", "F-F000" }, \
     { LOG_PIDR_MSG, sizeof(log_PID), \
       "PIDR", PID_FMT,  PID_LABELS, PID_UNITS, PID_MULTS }, \
     { LOG_PIDP_MSG, sizeof(log_PID), \
@@ -2695,18 +2589,8 @@ struct PACKED log_PSC {
       "PIDS", PID_FMT,  PID_LABELS, PID_UNITS, PID_MULTS }, \
     { LOG_DSTL_MSG, sizeof(log_DSTL), \
       "DSTL", "QBfLLeccfeffff", "TimeUS,Stg,THdg,Lat,Lng,Alt,XT,Travel,L1I,Loiter,Des,P,I,D", "s??DUm--------", "F??000--------" }, \
-    { LOG_BAR2_MSG, sizeof(log_BARO), \
-      "BAR2",  BARO_FMT, BARO_LABELS, BARO_UNITS, BARO_MULTS }, \
-    { LOG_BAR3_MSG, sizeof(log_BARO), \
-      "BAR3",  BARO_FMT, BARO_LABELS, BARO_UNITS, BARO_MULTS }, \
     { LOG_VIBE_MSG, sizeof(log_Vibe), \
       "VIBE", "QBfffI",     "TimeUS,IMU,VibeX,VibeY,VibeZ,Clip", "s#----", "F-----" }, \
-    { LOG_IMUDT_MSG, sizeof(log_IMUDT), \
-      "IMT",IMT_FMT,IMT_LABELS, IMT_UNITS, IMT_MULTS }, \
-    { LOG_IMUDT2_MSG, sizeof(log_IMUDT), \
-      "IMT2",IMT_FMT,IMT_LABELS, IMT_UNITS, IMT_MULTS }, \
-    { LOG_IMUDT3_MSG, sizeof(log_IMUDT), \
-      "IMT3",IMT_FMT,IMT_LABELS, IMT_UNITS, IMT_MULTS }, \
     { LOG_ISBH_MSG, sizeof(log_ISBH), \
       "ISBH",ISBH_FMT,ISBH_LABELS,ISBH_UNITS,ISBH_MULTS },  \
     { LOG_ISBD_MSG, sizeof(log_ISBD), \
@@ -2803,15 +2687,12 @@ enum LogMessages : uint8_t {
     LOG_XKV2_MSG,
     LOG_PARAMETER_MSG,
     LOG_GPS_MSG,
-    LOG_GPS2_MSG,
-    LOG_GPSB_MSG,
     LOG_IMU_MSG,
     LOG_MESSAGE_MSG,
     LOG_RCIN_MSG,
     LOG_RCIN2_MSG,
     LOG_RCOUT_MSG,
     LOG_RSSI_MSG,
-    LOG_IMU2_MSG,
     LOG_BARO_MSG,
     LOG_POWR_MSG,
     LOG_AHR2_MSG,
@@ -2821,21 +2702,17 @@ enum LogMessages : uint8_t {
     LOG_RADIO_MSG,
     LOG_ATRP_MSG,
     LOG_CAMERA_MSG,
-    LOG_IMU3_MSG,
     LOG_TERRAIN_MSG,
     LOG_GPS_UBX1_MSG,
     LOG_GPS_UBX2_MSG,
     LOG_ESC_MSG,
     LOG_CSRV_MSG,
     LOG_CESC_MSG,
-    LOG_BAR2_MSG,
     LOG_ARSP_MSG,
     LOG_ATTITUDE_MSG,
     LOG_CURRENT_MSG,
     LOG_CURRENT_CELLS_MSG,
-    LOG_COMPASS_MSG,
-    LOG_COMPASS2_MSG,
-    LOG_COMPASS3_MSG,
+    LOG_MAG_MSG,
     LOG_MODE_MSG,
     LOG_GPS_RAW_MSG,
 
@@ -2849,12 +2726,8 @@ enum LogMessages : uint8_t {
     LOG_IDS_FROM_NAVEKF3,
 
     LOG_GPS_RAWS_MSG,
-    LOG_ACC1_MSG,
-    LOG_ACC2_MSG,
-    LOG_ACC3_MSG,
-    LOG_GYR1_MSG,
-    LOG_GYR2_MSG,
-    LOG_GYR3_MSG,
+    LOG_ACC_MSG,
+    LOG_GYR_MSG,
     LOG_POS_MSG,
     LOG_PIDR_MSG,
     LOG_PIDP_MSG,
@@ -2863,16 +2736,10 @@ enum LogMessages : uint8_t {
     LOG_PIDS_MSG,
     LOG_DSTL_MSG,
     LOG_VIBE_MSG,
-    LOG_IMUDT_MSG,
-    LOG_IMUDT2_MSG,
-    LOG_IMUDT3_MSG,
     LOG_ORGN_MSG,
     LOG_RPM_MSG,
     LOG_GPA_MSG,
-    LOG_GPA2_MSG,
-    LOG_GPAB_MSG,
     LOG_RFND_MSG,
-    LOG_BAR3_MSG,
     LOG_MAV_STATS,
     LOG_FORMAT_UNITS_MSG,
     LOG_UNIT_MSG,

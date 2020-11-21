@@ -119,7 +119,7 @@ bool NavEKF3_core::getRangeBeaconDebug(uint8_t &ID, float &rng, float &innov, fl
 bool NavEKF3_core::getHeightControlLimit(float &height) const
 {
     // only ask for limiting if we are doing optical flow navigation
-    if (frontend->_fusionModeGPS == 3 && (PV_AidingMode == AID_RELATIVE) && flowDataValid) {
+    if (frontend->sources.useVelXYSource(AP_NavEKF_Source::SourceXY::OPTFLOW) && (PV_AidingMode == AID_RELATIVE) && flowDataValid) {
         // If are doing optical flow nav, ensure the height above ground is within range finder limits after accounting for vehicle tilt and control errors
         const auto *_rng = dal.rangefinder();
         if (_rng == nullptr) {
@@ -128,7 +128,7 @@ bool NavEKF3_core::getHeightControlLimit(float &height) const
         }
         height = MAX(float(_rng->max_distance_cm_orient(ROTATION_PITCH_270)) * 0.007f - 1.0f, 1.0f);
         // If we are are not using the range finder as the height reference, then compensate for the difference between terrain and EKF origin
-        if (frontend->_altSource != 1) {
+        if (frontend->sources.getPosZSource() != AP_NavEKF_Source::SourceZ::RANGEFINDER) {
             height -= terrainState;
         }
         return true;
@@ -513,6 +513,36 @@ void  NavEKF3_core::getStateVariances(float stateVar[24])
     }
 }
 
+// get a particular source's velocity innovations
+// returns true on success and results are placed in innovations and variances arguments
+bool NavEKF3_core::getVelInnovationsAndVariancesForSource(AP_NavEKF_Source::SourceXY source, Vector3f &innovations, Vector3f &variances) const
+{
+    switch (source) {
+    case AP_NavEKF_Source::SourceXY::GPS:
+        // check for timeouts
+        if (AP_HAL::millis() - gpsVelInnovTime_ms > 500) {
+            return false;
+        }
+        innovations = gpsVelInnov;
+        variances = gpsVelVarInnov;
+        return true;
+    case AP_NavEKF_Source::SourceXY::EXTNAV:
+        // check for timeouts
+        if (AP_HAL::millis() - extNavVelInnovTime_ms > 500) {
+            return false;
+        }
+        innovations = extNavVelInnov;
+        variances = extNavVelVarInnov;
+        return true;
+    default:
+        // variances are not available for this source
+        return false;
+    }
+
+    // should never get here but just in case
+    return false;
+}
+
 /*
 return the filter fault status as a bitmasked integer
  0 = quaternions are NaN
@@ -635,7 +665,7 @@ void NavEKF3_core::send_status_report(mavlink_channel_t chan) const
     // height estimation or optical flow operation. This prevents false alarms at the GCS if a
     // range finder is fitted for other applications
     float temp;
-    if (((frontend->_useRngSwHgt > 0) && activeHgtSource == HGT_SOURCE_RNG) || (PV_AidingMode == AID_RELATIVE && flowDataValid)) {
+    if (((frontend->_useRngSwHgt > 0) && activeHgtSource == AP_NavEKF_Source::SourceZ::RANGEFINDER) || (PV_AidingMode == AID_RELATIVE && flowDataValid)) {
         temp = sqrtf(auxRngTestRatio);
     } else {
         temp = 0.0f;

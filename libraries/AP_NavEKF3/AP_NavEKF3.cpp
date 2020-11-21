@@ -4,6 +4,7 @@
 #include <GCS_MAVLink/GCS.h>
 #include <AP_Logger/AP_Logger.h>
 #include <AP_Vehicle/AP_Vehicle_Type.h>
+#include <AP_BoardConfig/AP_BoardConfig.h>
 
 #include "AP_DAL/AP_DAL.h"
 
@@ -129,12 +130,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
 
     // GPS measurement parameters
 
-    // @Param: GPS_TYPE
-    // @DisplayName: GPS mode control
-    // @Description: This controls use of GPS measurements : 0 = use 3D velocity & 2D position, 1 = use 2D velocity and 2D position, 2 = use 2D position, 3 = Inhibit GPS use - this can be useful when flying with an optical flow sensor in an environment where GPS quality is poor and subject to large multipath errors.
-    // @Values: 0:GPS 3D Vel and 2D Pos, 1:GPS 2D vel and 2D pos, 2:GPS 2D pos, 3:No GPS
-    // @User: Advanced
-    AP_GROUPINFO("GPS_TYPE", 1, NavEKF3, _fusionModeGPS, 0),
+    // 1 was GPS_TYPE
 
     // @Param: VELNE_M_NSE
     // @DisplayName: GPS horizontal velocity measurement noise (m/s)
@@ -194,13 +190,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
 
     // Height measurement parameters
 
-    // @Param: ALT_SOURCE
-    // @DisplayName: Primary altitude sensor source
-    // @Description: Primary height sensor used by the EKF. If a sensor other than Baro is selected and becomes unavailable, then the Baro sensor will be used as a fallback. NOTE: the EK3_RNG_USE_HGT parameter can be used to switch to range-finder when close to the ground in conjunction with EK3_ALT_SOURCE = 0 or 2 (Baro or GPS). NOTE: Setting EK3_ALT_SOURCE = 4 uses external nav system data only if data is also being used for horizontal position
-    // @Values: 0:Use Baro, 1:Use Range Finder, 2:Use GPS, 3:Use Range Beacon, 4:Use External Nav
-    // @User: Advanced
-    // @RebootRequired: True
-    AP_GROUPINFO("ALT_SOURCE", 9, NavEKF3, _altSource, 0),
+    // 9 was ALT_SOURCE
 
     // @Param: ALT_M_NSE
     // @DisplayName: Altitude measurement noise (m)
@@ -244,7 +234,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Param: MAG_CAL
     // @DisplayName: Magnetometer default fusion mode
     // @Description: This determines when the filter will use the 3-axis magnetometer fusion model that estimates both earth and body fixed magnetic field states and when it will use a simpler magnetic heading fusion model that does not use magnetic field states. The 3-axis magnetometer fusion is only suitable for use when the external magnetic field environment is stable. EK3_MAG_CAL = 0 uses heading fusion on ground, 3-axis fusion in-flight, and is the default setting for Plane users. EK3_MAG_CAL = 1 uses 3-axis fusion only when manoeuvring. EK3_MAG_CAL = 2 uses heading fusion at all times, is recommended if the external magnetic field is varying and is the default for rovers. EK3_MAG_CAL = 3 uses heading fusion on the ground and 3-axis fusion after the first in-air field and yaw reset has completed, and is the default for copters. EK3_MAG_CAL = 4 uses 3-axis fusion at all times. EK3_MAG_CAL = 5 uses an external yaw sensor with simple heading fusion. NOTE : Use of simple heading magnetometer fusion makes vehicle compass calibration and alignment errors harder for the EKF to detect which reduces the sensitivity of the Copter EKF failsafe algorithm. NOTE: The fusion mode can be forced to 2 for specific EKF cores using the EK3_MAG_MASK parameter. EK3_MAG_CAL = 6 uses an external yaw sensor with fallback to compass when the external sensor is not available if we are flying. NOTE: The fusion mode can be forced to 2 for specific EKF cores using the EK3_MAG_MASK parameter. NOTE: limited operation without a magnetometer or any other yaw sensor is possible by setting all COMPASS_USE, COMPASS_USE2, COMPASS_USE3, etc parameters to 0 and setting COMPASS_ENABLE to 0. If this is done, the EK3_GSF_RUN and EK3_GSF_USE masks must be set to the same as EK3_IMU_MASK. A yaw angle derived from IMU and GPS velocity data using a Gaussian Sum Filter (GSF) will then be used to align the yaw when flight commences and there is sufficient movement.
-    // @Values: 0:When flying,1:When manoeuvring,2:Never,3:After first climb yaw reset,4:Always,5:Use external yaw sensor,6:External yaw sensor with compass fallback
+    // @Values: 0:When flying,1:When manoeuvring,2:Never,3:After first climb yaw reset,4:Always,5:Use external yaw sensor (Deprecated in 4.1+ see EK3_SRCn_YAW),6:External yaw sensor with compass fallback (Deprecated in 4.1+ see EK3_SRCn_YAW)
     // @User: Advanced
     // @RebootRequired: True
     AP_GROUPINFO("MAG_CAL", 14, NavEKF3, _magCal, MAG_CAL_DEFAULT),
@@ -650,12 +640,25 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @RebootRequired: True
     AP_GROUPINFO("AFFINITY", 62, NavEKF3, _affinity, 0),
 
+    AP_SUBGROUPEXTENSION("", 63, NavEKF3, var_info2),
+
+    AP_GROUPEND
+};
+
+// second table of parameters. allows us to go beyond the 64 parameter limit
+const AP_Param::GroupInfo NavEKF3::var_info2[] = {
+
+    // @Group: SRC
+    // @Path: ../AP_NavEKF/AP_NavEKF_Source.cpp
+    AP_SUBGROUPINFO(sources, "SRC", 1, NavEKF3, AP_NavEKF_Source),
+
     AP_GROUPEND
 };
 
 NavEKF3::NavEKF3()
 {
     AP_Param::setup_object_defaults(this, var_info);
+    AP_Param::setup_object_defaults(this, var_info2);
 }
 
 
@@ -676,6 +679,12 @@ bool NavEKF3::InitialiseFilter(void)
 
     // expected number of IMU frames per prediction
     _framesPerPrediction = uint8_t((EKF_TARGET_DT / (_frameTimeUsec * 1.0e-6) + 0.5));
+
+    // convert parameters if necessary
+    convert_parameters();
+
+    // initialise sources
+    sources.init();
 
 #if APM_BUILD_TYPE(APM_BUILD_Replay)
     if (ins.get_accel_count() == 0) {
@@ -900,6 +909,9 @@ void NavEKF3::UpdateFilter(void)
         // performance
         primary = 0;
     }
+
+    // align position of inactive sources to ahrs
+    sources.align_inactive_sources();
 }
 
 /*
@@ -910,7 +922,7 @@ void NavEKF3::UpdateFilter(void)
 */
 void NavEKF3::checkLaneSwitch(void)
 {
-    AP::dal().log_event3(AP_DAL::Event3::checkLaneSwitch);
+    AP::dal().log_event3(AP_DAL::Event::checkLaneSwitch);
 
     uint32_t now = AP::dal().millis();
     if (lastLaneSwitch_ms != 0 && now - lastLaneSwitch_ms < 5000) {
@@ -947,7 +959,7 @@ void NavEKF3::checkLaneSwitch(void)
 
 void NavEKF3::requestYawReset(void)
 {
-    AP::dal().log_event3(AP_DAL::Event3::requestYawReset);
+    AP::dal().log_event3(AP_DAL::Event::requestYawReset);
 
     for (uint8_t i = 0; i < num_cores; i++) {
         core[i].EKFGSF_requestYawReset();
@@ -993,6 +1005,12 @@ void NavEKF3::resetCoreErrors(void)
     }
 }
 
+// set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
+void NavEKF3::setPosVelYawSourceSet(uint8_t source_set_idx)
+{
+    sources.setPosVelYawSourceSet(source_set_idx);
+}
+
 // Check basic filter health metrics and return a consolidated health status
 bool NavEKF3::healthy(void) const
 {
@@ -1005,6 +1023,20 @@ bool NavEKF3::healthy(void) const
 // returns false if we fail arming checks, in which case the buffer will be populated with a failure message
 bool NavEKF3::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
 {
+    // check source configuration
+    if (!sources.pre_arm_check(failure_msg, failure_msg_len)) {
+        return false;
+    }
+
+    // check if using compass (i.e. EK3_SRCn_YAW) with deprecated MAG_CAL values (5 was EXTERNAL_YAW, 6 was EXTERNAL_YAW_FALLBACK)
+    const int8_t magCalParamVal = _magCal.get();
+    const AP_NavEKF_Source::SourceYaw yaw_source = sources.getYawSource();
+    if (((magCalParamVal == 5) || (magCalParamVal == 6)) && (yaw_source != AP_NavEKF_Source::SourceYaw::EXTERNAL)) {
+        // yaw source is configured to use compass but MAG_CAL valid is deprecated
+        AP::dal().snprintf(failure_msg, failure_msg_len, "EK3_MAG_CAL and EK3_SRC1_YAW inconsistent");
+        return false;
+    }
+
     if (!core) {
         AP::dal().snprintf(failure_msg, failure_msg_len, "no EKF3 cores");
         return false;
@@ -1125,7 +1157,7 @@ void NavEKF3::getTiltError(int8_t instance, float &ang) const
 // reset body axis gyro bias estimates
 void NavEKF3::resetGyroBias(void)
 {
-    AP::dal().log_event3(AP_DAL::Event3::resetGyroBias);
+    AP::dal().log_event3(AP_DAL::Event::resetGyroBias);
 
     if (core) {
         for (uint8_t i=0; i<num_cores; i++) {
@@ -1141,7 +1173,7 @@ void NavEKF3::resetGyroBias(void)
 // If using a range finder for height no reset is performed and it returns false
 bool NavEKF3::resetHeightDatum(void)
 {
-    AP::dal().log_event3(AP_DAL::Event3::resetHeightDatum);
+    AP::dal().log_event3(AP_DAL::Event::resetHeightDatum);
 
     bool status = true;
     if (core) {
@@ -1162,7 +1194,7 @@ bool NavEKF3::resetHeightDatum(void)
 // Returns 1 if command accepted
 uint8_t NavEKF3::setInhibitGPS(void)
 {
-    AP::dal().log_event3(AP_DAL::Event3::setInhibitGPS);
+    AP::dal().log_event3(AP_DAL::Event::setInhibitGPS);
 
     if (!core) {
         return 0;
@@ -1308,10 +1340,9 @@ bool NavEKF3::setOriginLLH(const Location &loc)
     if (!core) {
         return false;
     }
-    if (_fusionModeGPS != 3) {
-        // we don't allow setting of the EKF origin unless we are
-        // flying in non-GPS mode. This is to prevent accidental set
-        // of EKF origin with invalid position or height
+    if (sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::GPS) {
+        // we don't allow setting of the EKF origin if using GPS to prevent
+        // accidental setting of EKF origin with invalid position or height
         GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "EKF3 refusing set origin");
         return false;
     }
@@ -1404,6 +1435,19 @@ void NavEKF3::getStateVariances(int8_t instance, float stateVar[24]) const
     if (core) {
         core[instance].getStateVariances(stateVar);
     }
+}
+
+// get a source's velocity innovations for the specified instance.  Set instance to -1 for the primary instance
+// returns true on success and results are placed in innovations and variances arguments
+bool NavEKF3::getVelInnovationsAndVariancesForSource(int8_t instance, AP_NavEKF_Source::SourceXY source, Vector3f &innovations, Vector3f &variances) const
+{
+    if (instance < 0 || instance >= num_cores) {
+        instance = primary;
+    }
+    if (core) {
+        return core[instance].getVelInnovationsAndVariancesForSource(source, innovations, variances);
+    }
+    return false;
 }
 
 // should we use the compass? This is public so it can be used for
@@ -1574,6 +1618,107 @@ bool NavEKF3::getDataEKFGSF(int8_t instance, float &yaw_composite, float &yaw_co
     return false;
 }
 
+// parameter conversion of EKF3 parameters
+void NavEKF3::convert_parameters()
+{
+    // exit immediately if param conversion has been done before
+    if (sources.configured_in_storage()) {
+        return;
+    }
+
+    // find EKF3's top level key
+    uint16_t k_param_ekf3;
+    if (!AP_Param::find_top_level_key_by_pointer(this, k_param_ekf3)) {
+        return;
+    }
+
+    // use EK3_GPS_TYPE to set EK3_SRC1_POSXY, EK3_SRC1_VELXY, EK3_SRC1_VELZ
+    const AP_Param::ConversionInfo gps_type_info = {k_param_ekf3, 1, AP_PARAM_INT8, "EK3_GPS_TYPE"};
+    AP_Int8 gps_type_old;
+    const bool found_gps_type = AP_Param::find_old_parameter(&gps_type_info, &gps_type_old);
+    if (found_gps_type) {
+        switch (gps_type_old.get()) {
+        case 0:
+            // EK3_GPS_TYPE == 0 (GPS 3D Vel and 2D Pos)
+            AP_Param::set_and_save_by_name("EK3_SRC1_POSXY", (int8_t)AP_NavEKF_Source::SourceXY::GPS);
+            AP_Param::set_and_save_by_name("EK3_SRC1_VELXY", (int8_t)AP_NavEKF_Source::SourceXY::GPS);
+            AP_Param::set_and_save_by_name("EK3_SRC1_VELZ", (int8_t)AP_NavEKF_Source::SourceZ::GPS);
+            break;
+        case 1:
+            // EK3_GPS_TYPE == 1 (GPS 2D Vel and 2D Pos) then EK3_SRC1_POSXY = GPS(1), EK3_SRC1_VELXY = GPS(1), EK3_SRC1_VELZ = NONE(0)
+            AP_Param::set_and_save_by_name("EK3_SRC1_POSXY", (int8_t)AP_NavEKF_Source::SourceXY::GPS);
+            AP_Param::set_and_save_by_name("EK3_SRC1_VELXY", (int8_t)AP_NavEKF_Source::SourceXY::GPS);
+            AP_Param::set_and_save_by_name("EK3_SRC1_VELZ", (int8_t)AP_NavEKF_Source::SourceZ::NONE);
+            break;
+        case 2:
+            // EK3_GPS_TYPE == 2 (GPS 2D Pos) then EK3_SRC1_POSXY = GPS(1), EK3_SRC1_VELXY = None(0), EK3_SRC1_VELZ = NONE(0)
+            AP_Param::set_and_save_by_name("EK3_SRC1_POSXY", (int8_t)AP_NavEKF_Source::SourceXY::GPS);
+            AP_Param::set_and_save_by_name("EK3_SRC1_VELXY", (int8_t)AP_NavEKF_Source::SourceXY::NONE);
+            AP_Param::set_and_save_by_name("EK3_SRC1_VELZ", (int8_t)AP_NavEKF_Source::SourceZ::NONE);
+            break;
+        case 3:
+        default:
+            // EK3_GPS_TYPE == 3 (No GPS) we don't know what to do, could be optical flow or external nav
+            AP_BoardConfig::config_error("Configure EK3_SRC1_POSXY and _VELXY");
+            break;
+        }
+    } else {
+        // mark configured in storage so conversion is only run once
+        sources.mark_configured_in_storage();
+    }
+
+    // use EK3_ALT_SOURCE to set EK3_SRC1_POSZ
+    const AP_Param::ConversionInfo alt_source_info = {k_param_ekf3, 9, AP_PARAM_INT8, "EK3_ALT_SOURCE"};
+    AP_Int8 alt_source_old;
+    if (AP_Param::find_old_parameter(&alt_source_info, &alt_source_old)) {
+        switch (alt_source_old.get()) {
+        case 0:
+            // EK3_ALT_SOURCE = BARO, the default so do nothing
+            break;
+        case 1:
+            // EK3_ALT_SOURCE == 1 (RangeFinder)
+            AP_Param::set_and_save_by_name("EK3_SRC1_POSZ", (int8_t)AP_NavEKF_Source::SourceZ::RANGEFINDER);
+            break;
+        case 2:
+            // EK3_ALT_SOURCE == 2 (GPS)
+            AP_Param::set_and_save_by_name("EK3_SRC1_POSZ", (int8_t)AP_NavEKF_Source::SourceZ::GPS);
+            break;
+        case 3:
+            // EK3_ALT_SOURCE == 3 (Beacon)
+            AP_Param::set_and_save_by_name("EK3_SRC1_POSZ", (int8_t)AP_NavEKF_Source::SourceZ::BEACON);
+            break;
+        case 4:
+            // EK3_ALT_SOURCE == 4 (ExtNav)
+            AP_Param::set_and_save_by_name("EK3_SRC1_POSZ", (int8_t)AP_NavEKF_Source::SourceZ::EXTNAV);
+            break;
+        default:
+            // do nothing
+            break;
+        }
+    }
+
+    // use EK3_MAG_CAL to set EK3_SRC1_YAW
+    switch (_magCal.get()) {
+    case 5:
+        // EK3_MAG_CAL = 5 (External Yaw sensor).  We rely on effective_magCal to interpret old "5" values as "Never"
+        AP_Param::set_and_save_by_name("EK3_SRC1_YAW", (int8_t)AP_NavEKF_Source::SourceYaw::EXTERNAL);
+        break;
+    case 6:
+        // EK3_MAG_CAL = 6 (ExtYaw with Compass fallback).  We rely on effective_magCal to interpret old "6" values as "When Flying"
+        AP_Param::set_and_save_by_name("EK3_SRC1_YAW", (int8_t)AP_NavEKF_Source::SourceYaw::EXTERNAL_COMPASS_FALLBACK);
+        break;
+    default:
+        // do nothing
+        break;
+    }
+
+    // if GPS and optical flow enabled set EK3_SRC2_VELXY to optical flow
+    // EK3_SRC_OPTIONS should default to 1 meaning both GPS and optical flow velocities will be fused
+    if (AP::dal().opticalflow_enabled() && (!found_gps_type || (gps_type_old.get() <= 2))) {
+        AP_Param::set_and_save_by_name("EK3_SRC2_VELXY", (int8_t)AP_NavEKF_Source::SourceXY::OPTFLOW);
+    }
+}
+
 // return data for debugging range beacon fusion
 bool NavEKF3::getRangeBeaconDebug(int8_t instance, uint8_t &ID, float &rng, float &innov, float &innovVar, float &testRatio, Vector3f &beaconPosNED,
                                   float &offsetHigh, float &offsetLow, Vector3f &posNED) const
@@ -1592,9 +1737,9 @@ bool NavEKF3::getRangeBeaconDebug(int8_t instance, uint8_t &ID, float &rng, floa
 void NavEKF3::setTakeoffExpected(bool val)
 {
     if (val) {
-        AP::dal().log_event3(AP_DAL::Event3::setTakeoffExpected);
+        AP::dal().log_event3(AP_DAL::Event::setTakeoffExpected);
     } else {
-        AP::dal().log_event3(AP_DAL::Event3::unsetTakeoffExpected);
+        AP::dal().log_event3(AP_DAL::Event::unsetTakeoffExpected);
     }
 
     if (core) {
@@ -1609,9 +1754,9 @@ void NavEKF3::setTakeoffExpected(bool val)
 void NavEKF3::setTouchdownExpected(bool val)
 {
     if (val) {
-        AP::dal().log_event3(AP_DAL::Event3::setTouchdownExpected);
+        AP::dal().log_event3(AP_DAL::Event::setTouchdownExpected);
     } else {
-        AP::dal().log_event3(AP_DAL::Event3::unsetTouchdownExpected);
+        AP::dal().log_event3(AP_DAL::Event::unsetTouchdownExpected);
     }
 
     if (core) {
@@ -1628,9 +1773,9 @@ void NavEKF3::setTouchdownExpected(bool val)
 void NavEKF3::setTerrainHgtStable(bool val)
 {
     if (val) {
-        AP::dal().log_event3(AP_DAL::Event3::setTerrainHgtStable);
+        AP::dal().log_event3(AP_DAL::Event::setTerrainHgtStable);
     } else {
-        AP::dal().log_event3(AP_DAL::Event3::unsetTerrainHgtStable);
+        AP::dal().log_event3(AP_DAL::Event::unsetTerrainHgtStable);
     }
 
     if (core) {
