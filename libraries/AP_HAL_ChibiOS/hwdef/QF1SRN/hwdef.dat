@@ -84,7 +84,7 @@ PA12 CAN_TX CAN
 # use DNA
 define HAL_CAN_DEFAULT_NODE_ID 0
 
-define CAN_APP_NODE_NAME "org.ardupilot.ap_periph_gps"
+define CAN_APP_NODE_NAME "org.ardupilot.ap_periph_QF1SRN"
 
 # reduce memory overheads
 define HAL_CAN_POOL_SIZE 2500
@@ -149,3 +149,5 @@ PA6 TIM3_CH1 TIM3 PWM(1) GPIO(50)
 PA7 TIM3_CH2 TIM3 PWM(2) GPIO(51)
 PB0 TIM3_CH3 TIM3 PWM(3) GPIO(52)
 PB1 TIM3_CH4 TIM3 PWM(4) GPIO(53)
+
+define HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
