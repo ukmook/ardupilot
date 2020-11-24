@@ -109,7 +109,51 @@ public:
     HWESC_Telem hwesc_telem;
     void hwesc_telem_update();
 #endif
-    
+
+#ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
+    class RCOUTTranslator_Params
+    {
+        friend class AP_Periph_FW;
+
+    public:
+        RCOUTTranslator_Params()
+        {
+            AP_Param::setup_object_defaults(this, var_info);
+        }
+        static const struct AP_Param::GroupInfo var_info[];
+
+        enum OutputType {
+            ESC_Fwd_Only        = 0,
+            Servo               = 1,
+            ESC_Fwd_and_Rev     = 2,
+        };
+
+    private:
+        AP_Int8 chan_start;
+        AP_Int8 chan_end;
+        AP_Int8 pwm_type;
+        AP_Int8 output_type;
+        AP_Int16 pwm_min;
+        AP_Int16 pwm_max;
+        AP_Int16 frequency;
+    } rcout_params;
+
+    struct {
+        uint8_t num_channels;
+        uint8_t chan_start;
+        uint8_t chan_end;
+        uint8_t pwm_type;
+        uint8_t output_type;
+        uint16_t frequency;
+    } rcout;
+
+    void init_rcout_translator();
+    void translate_rcout_esc(int16_t *rc, uint8_t num_channels);
+    void translate_rcout_srv(uint8_t chan, float rc);
+    void translate_rcout_update();
+    void translate_rcout_handle_safety_state(uint8_t safety_state);
+#endif
+
     // setup the var_info table
     AP_Param param_loader{var_info};
 
