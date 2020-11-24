@@ -173,6 +173,11 @@ public:
      */
     void serial_led_send(const uint16_t chan) override;
 
+    /*
+     get the max supported channels
+     */
+    uint8_t get_max_channels(void) const override { return max_channels; }
+
 private:
     struct pwm_group {
         // only advanced timers can do high clocks needed for more than 400Hz
