@@ -45,7 +45,7 @@ PC3 BATT_CURRENT_SENS ADC1 SCALE(1)
 
 # define default battery setup
 define HAL_BATT_VOLT_PIN 10
-define HAL_BATT_CURR_PIN 12
+define HAL_BATT_CURR_PIN 13
 define HAL_BATT_VOLT_SCALE 5.97
 define HAL_BATT_CURR_SCALE 11.6
 # current 1mOhm shunt and 82.5k
@@ -173,6 +173,8 @@ define HAL_BATTMON_FUEL_ENABLE 0
 # disable parachute and sprayer to save flash
 define HAL_PARACHUTE_ENABLED 0
 define HAL_SPRAYER_ENABLED 0
+
+define HAL_MINIMIZE_FEATURES 1
 
 # -----------OSD---------------
 
