@@ -26,7 +26,7 @@
 #include <AP_CANManager/AP_CANManager.h>
 #include <AP_Button/AP_Button.h>
 #include <AP_GPS/AP_GPS.h>
-#include <AP_Generator/AP_Generator_RichenPower.h>
+#include <AP_Generator/AP_Generator.h>
 #include <AP_Logger/AP_Logger.h>
 #include <AP_Notify/AP_Notify.h>                    // Notify library
 #include <AP_Param/AP_Param.h>
@@ -43,6 +43,7 @@
 #include <AP_VisualOdom/AP_VisualOdom.h>
 #include <AP_RCTelemetry/AP_VideoTX.h>
 #include <AP_MSP/AP_MSP.h>
+#include <AP_Frsky_Telem/AP_Frsky_Parameters.h>
 
 class AP_Vehicle : public AP_HAL::HAL::Callbacks {
 
@@ -213,6 +214,10 @@ public:
     // and flashing LEDs as appropriate
     void reboot(bool hold_in_bootloader);
 
+#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+    AP_Frsky_Parameters frsky_parameters;
+#endif
+
 protected:
 
     virtual void init_ardupilot() = 0;
@@ -283,7 +288,7 @@ protected:
 #endif
 
 #if GENERATOR_ENABLED
-    AP_Generator_RichenPower generator;
+    AP_Generator generator;
 #endif
 
     static const struct AP_Param::GroupInfo var_info[];

@@ -105,6 +105,11 @@ public:
     virtual void     force_safety_off(void) {}
 
     /*
+     get the max supported channels
+     */
+    virtual uint8_t  get_max_channels(void) const { return 16; }
+
+    /*
       setup scaling of ESC output for ESCs that can output a
       percentage of power (such as UAVCAN ESCs). The values are in
       microseconds, and represent minimum and maximum PWM values which

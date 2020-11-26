@@ -1,3 +1,5 @@
+#pragma once
+
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Param/AP_Param.h>
 #include <AP_GPS/AP_GPS.h>
@@ -9,20 +11,17 @@
 #include <AP_MSP/msp.h>
 #include "../AP_Bootloader/app_comms.h"
 #include "hwing_esc.h"
-#ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
-#if HAL_NUM_CAN_IFACES > 1
-#include <AP_CANManager/AP_CANDriver.h>
-#include <AP_KDECAN/AP_KDECAN.h>
-#endif
-#include <uavcan/equipment/esc/Status.h>
-#endif
+
 #if defined(HAL_PERIPH_NEOPIXEL_COUNT) || defined(HAL_PERIPH_ENABLE_NCP5623_LED)
 #define AP_PERIPH_HAVE_LED
 #endif
 
 #include "Parameters.h"
-#include "ch.h"
 
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+void stm32_watchdog_init();
+void stm32_watchdog_pat();
+#endif
 /*
   app descriptor compatible with MissionPlanner
  */
@@ -74,7 +73,7 @@ public:
     void send_msp_compass(void);
     void send_msp_baro(void);
 #endif
-    
+
 #ifdef HAL_PERIPH_ENABLE_ADSB
     void adsb_init();
     void adsb_update();
@@ -112,7 +111,6 @@ public:
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
-    //Parameter Interface for CANDrivers
     class RCOUTTranslator_Params
     {
         friend class AP_Periph_FW;
@@ -124,37 +122,29 @@ public:
         }
         static const struct AP_Param::GroupInfo var_info[];
 
-        enum ActType {
-            ESC = 0,
-            SRV = 1,
+        enum OutputType {
+            ESC_Fwd_Only        = 0,
+            Servo               = 1,
+            ESC_Fwd_and_Rev     = 2,
         };
-        enum can_translate_mode {
-            RCOUT_UAVCAN = 0,
-            RCOUT_KDECAN = 1,
-        };
+
     private:
         AP_Int8 chan_start;
         AP_Int8 chan_end;
-        AP_Int8 protocol;
-        AP_Int8 act_type;
+        AP_Int8 pwm_type;
+        AP_Int8 output_type;
         AP_Int16 pwm_min;
         AP_Int16 pwm_max;
         AP_Int16 frequency;
-#if HAL_NUM_CAN_IFACES > 1
-        AP_Int8 kdecan_enum_mode;
-        AP_Int8 can_out;
-        AP_KDECAN*  kdecan;
-#endif
     } rcout_params;
 
     struct {
         uint8_t num_channels;
-        uint8_t protocol;
-        uint8_t act_type;
-        bool kdecan_enum_state;
         uint8_t chan_start;
         uint8_t chan_end;
-        bool can_init_done;
+        uint8_t pwm_type;
+        uint8_t output_type;
+        uint16_t frequency;
     } rcout;
 
     void init_rcout_translator();
@@ -162,7 +152,6 @@ public:
     void translate_rcout_srv(uint8_t chan, float rc);
     void translate_rcout_update();
     void translate_rcout_handle_safety_state(uint8_t safety_state);
-    void can_send_esc_telem(uavcan_equipment_esc_Status esc_telem);
 #endif
 
     // setup the var_info table
@@ -181,4 +170,3 @@ extern AP_Periph_FW periph;
 extern "C" {
 void can_printf(const char *fmt, ...);
 }
-

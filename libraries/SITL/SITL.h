@@ -19,6 +19,7 @@
 #include "SIM_ToneAlarm.h"
 #include "SIM_EFI_MegaSquirt.h"
 #include "SIM_RichenPower.h"
+#include "SIM_IntelligentEnergy24.h"
 #include "SIM_Ship.h"
 #include <AP_RangeFinder/AP_RangeFinder.h>
 
@@ -55,7 +56,9 @@ struct sitl_fdm {
     double airspeed; // m/s
     double battery_voltage; // Volts
     double battery_current; // Amps
+    double battery_remaining; // Ah, if non-zero capacity
     uint8_t num_motors;
+    uint8_t vtol_motor_start;
     float rpm[12];         // RPM of all motors
     uint8_t rcin_chan_count;
     float  rcin[12];         // RC input 0..1
@@ -93,6 +96,9 @@ public:
         AP_Param::setup_object_defaults(this, var_info3);
         AP_Param::setup_object_defaults(this, var_gps);
         AP_Param::setup_object_defaults(this, var_mag);
+#ifdef SFML_JOYSTICK
+        AP_Param::setup_object_defaults(this, var_sfml_joystick);
+#endif // SFML_JOYSTICK
         if (_singleton != nullptr) {
             AP_HAL::panic("Too many SITL instances");
         }
@@ -141,6 +147,9 @@ public:
     static const struct AP_Param::GroupInfo var_info3[];
     static const struct AP_Param::GroupInfo var_gps[];
     static const struct AP_Param::GroupInfo var_mag[];
+#ifdef SFML_JOYSTICK
+    static const struct AP_Param::GroupInfo var_sfml_joystick[];
+#endif //SFML_JOYSTICK
 
     // Board Orientation (and inverse)
     Matrix3f ahrs_rotation;
@@ -199,6 +208,7 @@ public:
     AP_Vector3f gps_vel_err[2]; // Velocity error offsets in NED (x = N, y = E, z = D)
 
     AP_Float batt_voltage; // battery voltage base
+    AP_Float batt_capacity_ah; // battery capacity in Ah
     AP_Float accel_fail;  // accelerometer failure value
     AP_Int8  rc_fail;     // fail RC input
     AP_Int8  rc_chancount; // channel count
@@ -220,6 +230,11 @@ public:
     AP_Int32 mag_devid[MAX_CONNECTED_MAGS]; // Mag devid
     AP_Float buoyancy; // submarine buoyancy in Newtons
     AP_Int16 loop_rate_hz;
+
+#ifdef SFML_JOYSTICK
+    AP_Int8 sfml_joystick_id;
+    AP_Int8 sfml_joystick_axis[8];
+#endif
 
     // EFI type
     enum EFIType {
@@ -383,6 +398,7 @@ public:
     ToneAlarm tonealarm_sim;
     SIM_Precland precland_sim;
     RichenPower richenpower_sim;
+    IntelligentEnergy24 ie24_sim;
 
     struct {
         // LED state, for serial LED emulation
