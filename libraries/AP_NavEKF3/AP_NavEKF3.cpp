@@ -1418,6 +1418,13 @@ bool NavEKF3::using_external_yaw(void) const
     return core[primary].using_external_yaw();
 }
 
+// check if configured to use GPS for horizontal position estimation
+bool NavEKF3::configuredToUseGPSForPosXY(void) const
+{
+    // 0 = use 3D velocity, 1 = use 2D velocity, 2 = use no velocity, 3 = do not use GPS
+    return  (sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::GPS);
+}
+
 // write the raw optical flow measurements
 // rawFlowQuality is a measured of quality between 0 and 255, with 255 being the best quality
 // rawFlowRates are the optical flow rates in rad/sec about the X and Y sensor axes.
@@ -1585,8 +1592,8 @@ void NavEKF3::convert_parameters()
             break;
         case 3:
         default:
-            // EK3_GPS_TYPE == 3 (No GPS) we don't know what to do, could be optical flow or external nav
-            AP_BoardConfig::config_error("Configure EK3_SRC1_POSXY and _VELXY");
+            // EK3_GPS_TYPE == 3 (No GPS) we don't know what to do, could be optical flow, beacon or external nav
+            sources.mark_configured_in_storage();
             break;
         }
     } else {

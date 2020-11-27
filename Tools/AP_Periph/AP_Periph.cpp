@@ -66,7 +66,7 @@ const struct app_descriptor app_descriptor;
 
 void AP_Periph_FW::init()
 {
-    
+
     // always run with watchdog enabled. This should have already been
     // setup by the bootloader, but if not then enable now
     stm32_watchdog_init();
@@ -121,6 +121,10 @@ void AP_Periph_FW::init()
     baro.init();
 #endif
 
+#ifdef HAL_PERIPH_ENABLE_BATTERY
+    battery.lib.init();
+#endif
+
 #if defined(HAL_PERIPH_NEOPIXEL_COUNT) || defined(HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR)
     hal.rcout->init();
 #endif
@@ -163,7 +167,7 @@ void AP_Periph_FW::init()
 #ifdef HAL_PERIPH_ENABLE_MSP
     msp_init(hal.uartD);
 #endif
-    
+
     start_ms = AP_HAL::native_millis();
 }
 
@@ -251,6 +255,15 @@ void AP_Periph_FW::update()
         hal.rcout->set_serial_led_num_LEDs(HAL_PERIPH_NEOPIXEL_CHAN, HAL_PERIPH_NEOPIXEL_COUNT, AP_HAL::RCOutput::MODE_NEOPIXEL);
 #endif
     }
+
+#ifdef HAL_PERIPH_ENABLE_BATTERY
+    if (now - battery.last_read_ms >= 100) {
+        // update battery at 10Hz
+        battery.last_read_ms = now;
+        battery.lib.read();
+    }
+#endif
+
     can_update();
     hal.scheduler->delay(1);
 #if defined(HAL_PERIPH_NEOPIXEL_COUNT) && HAL_PERIPH_NEOPIXEL_COUNT == 8
