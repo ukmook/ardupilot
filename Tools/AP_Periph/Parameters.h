@@ -29,7 +29,9 @@ public:
         k_param_baro_enable,
         k_param_esc_number,
         k_param_battery,
+        k_param_debug,
         k_param_rcout_params,
+        k_param_servo_channels,
     };
 
     AP_Int16 format_version;
@@ -64,6 +66,8 @@ public:
 #ifdef HAL_PERIPH_ENABLE_HWESC
     AP_Int8 esc_number;
 #endif
+
+    AP_Int8 debug;
 
     Parameters() {}
 };

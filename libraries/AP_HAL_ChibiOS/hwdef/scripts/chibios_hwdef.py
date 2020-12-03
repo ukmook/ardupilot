@@ -679,10 +679,13 @@ def write_mcu_config(f):
     else:
         env_vars['PROCESS_STACK'] = "0x2000"
 
+    # MAIN_STACK is location of initial stack on startup and is also the stack
+    # used for slow interrupts. It needs to be big enough for maximum interrupt
+    # nesting
     if get_config('MAIN_STACK', required=False):
         env_vars['MAIN_STACK'] = get_config('MAIN_STACK')
     else:
-        env_vars['MAIN_STACK'] = "0x400"
+        env_vars['MAIN_STACK'] = "0x600"
 
     if get_config('IOMCU_FW', required=False):
         env_vars['IOMCU_FW'] = get_config('IOMCU_FW')
@@ -817,12 +820,6 @@ def write_mcu_config(f):
 ''')
     if env_vars.get('ROMFS_UNCOMPRESSED', False):
         f.write('#define HAL_ROMFS_UNCOMPRESSED\n')
-
-    if 'AP_PERIPH' in env_vars:
-        f.write('''
-#define CH_DBG_ENABLE_STACK_CHECK FALSE
-''')
-
 
 def write_ldscript(fname):
     '''write ldscript.ld for this board'''
@@ -1154,7 +1151,7 @@ def write_UART_config(f):
     f.write('\n// UART configuration\n')
 
     # write out driver declarations for HAL_ChibOS_Class.cpp
-    devnames = "ABCDEFGH"
+    devnames = "ABCDEFGHI"
     sdev = 0
     idx = 0
     num_empty_uarts = 0
@@ -1262,8 +1259,8 @@ def write_UART_config(f):
     num_uarts = len(devlist)
     if 'IOMCU_UART' in config:
         num_uarts -= 1
-    if num_uarts > 8:
-        error("Exceeded max num UARTs of 8 (%u)" % num_uarts)
+    if num_uarts > 9:
+        error("Exceeded max num UARTs of 9 (%u)" % num_uarts)
     f.write('#define HAL_UART_NUM_SERIAL_PORTS %u\n' % (num_uarts+num_empty_uarts))
 
 
@@ -1372,6 +1369,7 @@ def write_PWM_config(f):
                 if p.type not in pwm_timers:
                     pwm_timers.append(p.type)
 
+    f.write('#define HAL_PWM_COUNT %u\n' % len(pwm_out))
     if not pwm_out and not alarm:
         print("No PWM output defined")
         f.write('''

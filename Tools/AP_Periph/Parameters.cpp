@@ -38,7 +38,9 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
     // trigger bootloader flash
     GSCALAR(flash_bootloader,     "FLASH_BOOTLOADER", 0),
 #endif
-    
+
+    GSCALAR(debug, "DEBUG", 0),
+
 #ifdef HAL_PERIPH_ENABLE_BUZZER
     GSCALAR(buzz_volume,     "BUZZER_VOLUME", 100),
 #endif
@@ -106,10 +108,10 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
-    // RCOUT Translator
-    // @Group: RCOUT
-    // @Path: AP_Periph.cpp
-    GOBJECT(rcout_params, "RCOUT_", AP_Periph_FW::RCOUTTranslator_Params),
+    // Servo driver
+    // @Group: OUT
+    // @Path: ../libraries/SRV_Channel/SRV_Channels.cpp
+    GOBJECT(servo_channels, "OUT",     SRV_Channels),
 #endif
 
     AP_VAREND

@@ -113,33 +113,34 @@ bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
     if(!storedBaro.init(obs_buffer_length)) {
         return false;
     }
-    if(!storedTAS.init(obs_buffer_length)) {
+    if(dal.airspeed() && !storedTAS.init(obs_buffer_length)) {
         return false;
     }
-    if (!storedOF.init(flow_buffer_length)) {
+    if(dal.opticalflow_enabled() && !storedOF.init(flow_buffer_length)) {
         return false;
     }
-    if(!storedBodyOdm.init(obs_buffer_length)) {
+    if(frontend->sources.ext_nav_enabled() && !storedBodyOdm.init(obs_buffer_length)) {
         return false;
     }
-    if(!storedWheelOdm.init(imu_buffer_length)) { // initialise to same length of IMU to allow for multiple wheel sensors
+    if(frontend->sources.wheel_encoder_enabled() && !storedWheelOdm.init(imu_buffer_length)) {
+        // initialise to same length of IMU to allow for multiple wheel sensors
         return false;
     }
-    if(!storedYawAng.init(yaw_angle_buffer_length)) {
+    if(frontend->sources.ext_yaw_enabled() && !storedYawAng.init(yaw_angle_buffer_length)) {
         return false;
     }
     // Note: the use of dual range finders potentially doubles the amount of data to be stored
-    if(!storedRange.init(MIN(2*obs_buffer_length , imu_buffer_length))) {
+    if(dal.rangefinder() && !storedRange.init(MIN(2*obs_buffer_length , imu_buffer_length))) {
         return false;
     }
     // Note: range beacon data is read one beacon at a time and can arrive at a high rate
-    if(!storedRangeBeacon.init(imu_buffer_length+1)) {
+    if(dal.beacon() && !storedRangeBeacon.init(imu_buffer_length+1)) {
         return false;
     }
-    if (!storedExtNav.init(extnav_buffer_length)) {
+    if (frontend->sources.ext_nav_enabled() && !storedExtNav.init(extnav_buffer_length)) {
         return false;
     }
-    if (!storedExtNavVel.init(extnav_buffer_length)) {
+    if (frontend->sources.ext_nav_enabled() && !storedExtNavVel.init(extnav_buffer_length)) {
         return false;
     }
     if(!storedIMU.init(imu_buffer_length)) {
@@ -198,8 +199,6 @@ void NavEKF3_core::InitialiseVariables()
     lastTasPassTime_ms = 0;
     lastSynthYawTime_ms = 0;
     lastTimeGpsReceived_ms = 0;
-    secondLastGpsTime_ms = 0;
-    lastDecayTime_ms = imuSampleTime_ms;
     timeAtLastAuxEKF_ms = imuSampleTime_ms;
     flowValidMeaTime_ms = imuSampleTime_ms;
     rngValidMeaTime_ms = imuSampleTime_ms;
@@ -316,7 +315,6 @@ void NavEKF3_core::InitialiseVariables()
     gpsYawResetRequest = false;
     delAngBiasLearned = false;
     memset(&filterStatus, 0, sizeof(filterStatus));
-    gpsInhibit = false;
     activeHgtSource = AP_NavEKF_Source::SourceZ::BARO;
     prevHgtSource = activeHgtSource;
     memset(&rngMeasIndex, 0, sizeof(rngMeasIndex));
@@ -362,7 +360,11 @@ void NavEKF3_core::InitialiseVariables()
     bcnPosOffsetMinVar = 0.0f;
     minOffsetStateChangeFilt = 0.0f;
     rngBcnFuseDataReportIndex = 0;
-    memset(&rngBcnFusionReport, 0, sizeof(rngBcnFusionReport));
+    if (dal.beacon()) {
+        if (rngBcnFusionReport == nullptr) {
+            rngBcnFusionReport = new rngBcnFusionReport_t[dal.beacon()->count()];
+        }
+    }
     bcnPosOffsetNED.zero();
     bcnOriginEstInit = false;
 
@@ -431,7 +433,6 @@ void NavEKF3_core::InitialiseVariablesMag()
     magYawResetTimer_ms = imuSampleTime_ms;
     magTimeout = false;
     allMagSensorsFailed = false;
-    badMagYaw = false;
     finalInflightMagInit = false;
     mag_state.q0 = 1;
     mag_state.DCM.identity();

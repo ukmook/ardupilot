@@ -300,11 +300,12 @@ bool Util::was_watchdog_reset() const
  */
 size_t Util::thread_info(char *buf, size_t bufsize)
 {
-  thread_t *tp;
   size_t total = 0;
 
   // a header to allow for machine parsers to determine format
-  int n = snprintf(buf, bufsize, "ThreadsV1\n");
+  const uint32_t isr_stack_size = uint32_t((const uint8_t *)&__main_stack_end__ - (const uint8_t *)&__main_stack_base__);
+  int n = snprintf(buf, bufsize, "ThreadsV2\nISR           PRI=255 sp=%p STACK=%u/%u\n",
+                   &__main_stack_base__, stack_free(&__main_stack_base__), isr_stack_size);
   if (n <= 0) {
       return 0;
   }
@@ -312,24 +313,28 @@ size_t Util::thread_info(char *buf, size_t bufsize)
   bufsize -= n;
   total += n;
 
-  tp = chRegFirstThread();
-
-  do {
-      uint32_t stklimit = (uint32_t)tp->wabase;
-      uint8_t *p = (uint8_t *)tp->wabase;
-      while (*p == CH_DBG_STACK_FILL_VALUE) {
-          p++;
+  for (thread_t *tp = chRegFirstThread(); tp; tp = chRegNextThread(tp)) {
+      uint32_t total_stack;
+      if (tp->wabase == (void*)&__main_thread_stack_base__) {
+          // main thread has its stack separated from the thread context
+          total_stack = uint32_t((const uint8_t *)&__main_thread_stack_end__ - (const uint8_t *)&__main_thread_stack_base__);
+      } else {
+          // all other threads have their thread context pointer
+          // above the stack top
+          total_stack = uint32_t(tp) - uint32_t(tp->wabase);
       }
-      uint32_t stack_left = ((uint32_t)p) - stklimit;
-      n = snprintf(buf, bufsize, "%-13.13s PRI=%3u STACK_LEFT=%u\n", tp->name, unsigned(tp->prio), unsigned(stack_left));
-      if (n <= 0) {
-          break;
+      if (bufsize > 0) {
+          n = snprintf(buf, bufsize, "%-13.13s PRI=%3u sp=%p STACK=%u/%u\n",
+                       tp->name, unsigned(tp->prio), tp->wabase,
+                       stack_free(tp->wabase), total_stack);
+          if (n > bufsize) {
+              n = bufsize;
+          }
+          buf += n;
+          bufsize -= n;
+          total += n;
       }
-      buf += n;
-      bufsize -= n;
-      total += n;
-      tp = chRegNextThread(tp);
-  } while (tp != NULL);
+  }
 
   return total;
 }

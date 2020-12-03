@@ -3073,7 +3073,6 @@ class AutoTest(ABC):
         """Arm vehicle with mavlink arm message."""
         self.progress("Arm motors with MAVLink cmd")
         self.drain_mav()
-        tstart = self.get_sim_time()
         self.run_cmd(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
                      1,  # ARM
                      0,
@@ -3083,12 +3082,20 @@ class AutoTest(ABC):
                      0,
                      0,
                      timeout=timeout)
+        try:
+            self.wait_armed()
+        except AutoTestTimeoutException:
+            raise AutoTestTimeoutException("Failed to ARM with mavlink")
+        return True
+
+    def wait_armed(self, timeout=20):
+        tstart = self.get_sim_time()
         while self.get_sim_time_cached() - tstart < timeout:
             self.wait_heartbeat()
             if self.mav.motors_armed():
                 self.progress("Motors ARMED")
-                return True
-        raise AutoTestTimeoutException("Failed to ARM with mavlink")
+                return
+        raise AutoTestTimeoutException("Did not become armed")
 
     def disarm_vehicle(self, timeout=60, force=False):
         """Disarm vehicle with mavlink disarm message."""
@@ -7132,6 +7139,50 @@ switch value'''
             raise NotAchievedException("Unexpected mask (want=%u got=%u)" %
                                        (new_mask, m3.state))
         self.progress("correct BUTTON_CHANGE event received")
+
+        if self.is_tracker():
+            # tracker starts armed, which is annoying
+            self.progress("Skipping arm/disarm tests for tracker")
+            return
+
+        self.wait_ready_to_arm()
+        self.set_parameter("BTN_FUNC%u" % btn, 41)  # ARM/DISARM
+        self.set_parameter("SIM_PIN_MASK", mask)
+        self.wait_armed()
+        self.set_parameter("SIM_PIN_MASK", 0)
+        self.wait_disarmed()
+
+        if self.is_rover():
+            self.context_push()
+            # arming should be inhibited while e-STOP is in use:
+            # set the function:
+            self.set_parameter("BTN_FUNC%u" % btn, 31)
+            # invert the sense of the pin, so eStop is asserted when pin is low:
+            self.set_parameter("BTN_OPTIONS%u" % btn, 1<<1)
+            self.reboot_sitl()
+            # assert the pin:
+            self.set_parameter("SIM_PIN_MASK", mask)
+            self.wait_ready_to_arm()
+            self.arm_vehicle()
+            self.disarm_vehicle()
+            # de-assert the pin:
+            self.set_parameter("SIM_PIN_MASK", 0)
+            self.delay_sim_time(1)  # 5Hz update rate on Button library
+            self.context_collect("STATUSTEXT")
+            # try to arm the vehicle:
+            self.run_cmd(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+                         1,  # ARM
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         want_result=mavutil.mavlink.MAV_RESULT_FAILED
+            )
+            self.wait_statustext("PreArm: Motors Emergency Stopped", check_context=True)
+            self.context_pop()
+            self.reboot_sitl()
 
     def compare_number_percent(self, num1, num2, percent):
         if num1 == 0 and num2 == 0:

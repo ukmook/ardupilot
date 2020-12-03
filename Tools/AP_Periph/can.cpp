@@ -46,6 +46,7 @@
 #include <uavcan/protocol/debug/LogMessage.h>
 #include <uavcan/equipment/esc/RawCommand.h>
 #include <uavcan/equipment/actuator/ArrayCommand.h>
+#include <uavcan/equipment/actuator/Command.h>
 #include <stdio.h>
 #include <drivers/stm32/canard_stm32.h>
 #include <AP_HAL/I2CDevice.h>
@@ -606,6 +607,10 @@ static void handle_act_command(CanardInstance* ins, CanardRxTransfer* transfer)
         return;
     }
     for (uint8_t i=0; i < cmd.commands.len; i++) {
+        if (cmd.commands.data[i].command_type != UAVCAN_EQUIPMENT_ACTUATOR_COMMAND_COMMAND_TYPE_UNITLESS) {
+            // this is the only type we support
+            continue;
+        }
         periph.translate_rcout_srv(cmd.commands.data[i].actuator_id, cmd.commands.data[i].command_value);
     }
 }
@@ -955,7 +960,23 @@ static void process1HzTasks(uint64_t timestamp_usec)
 
 #if !defined(HAL_NO_FLASH_SUPPORT) && !defined(HAL_NO_ROMFS_SUPPORT)
     if (periph.g.flash_bootloader.get()) {
+        const uint8_t flash_bl = periph.g.flash_bootloader.get();
         periph.g.flash_bootloader.set_and_save_ifchanged(0);
+        if (flash_bl == 42) {
+            // magic developer value to test watchdog support with main loop lockup
+            while (true) {
+                can_printf("entering lockup\n");
+                hal.scheduler->delay(100);
+            }
+        }
+        if (flash_bl == 43) {
+            // magic developer value to test watchdog support with hard fault
+            can_printf("entering fault\n");
+            void *foo = (void*)0xE000ED38;
+            typedef void (*fptr)();
+            fptr gptr = (fptr) (void *) foo;
+            gptr();
+        }
         hal.scheduler->delay(1000);
         AP_HAL::Util::FlashBootloader res = hal.util->flash_bootloader();
         switch (res) {
@@ -987,6 +1008,10 @@ static void process1HzTasks(uint64_t timestamp_usec)
         // user has a chance to load a fixed firmware
         set_fast_reboot(RTC_BOOT_FWOK);
     }
+#endif
+
+#ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
+    SRV_Channels::enable_aux_servos();
 #endif
 }
 
@@ -1096,6 +1121,8 @@ void AP_Periph_FW::can_start()
     if (g.can_node >= 0 && g.can_node < 128) {
         PreferredNodeID = g.can_node;
     }
+
+    periph.g.flash_bootloader.set_and_save_ifchanged(0);
 
     can_iface.init(1000000, AP_HAL::CANIface::NormalMode);
 
