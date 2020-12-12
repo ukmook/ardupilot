@@ -794,6 +794,10 @@ void QuadPlane::setup_defaults(void)
     if (esc_calibration != 0) {
         esc_calibration.set_and_save(0);
     }
+    // Quadplanes need the same level of GPS error checking as Copters do, Plane is more relaxed
+    AP_Param::set_default_by_name("EK2_CHECK_SCALE",100);
+    AP_Param::set_default_by_name("EK3_CHECK_SCALE",100);
+
 }
 
 // run ESC calibration
@@ -1201,6 +1205,7 @@ void QuadPlane::init_qland(void)
 #if LANDING_GEAR_ENABLED == ENABLED
     plane.g2.landing_gear.deploy_for_landing();
 #endif
+    plane.disable_fence_for_landing();
 }
 
 
@@ -2929,6 +2934,7 @@ bool QuadPlane::verify_vtol_land(void)
     if (poscontrol.state == QPOS_POSITION2 &&
         plane.auto_state.wp_distance < 2) {
         poscontrol.state = QPOS_LAND_DESCEND;
+        plane.disable_fence_for_landing();
 #if LANDING_GEAR_ENABLED == ENABLED
         plane.g2.landing_gear.deploy_for_landing();
 #endif

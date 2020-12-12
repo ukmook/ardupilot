@@ -5,6 +5,7 @@
 #include <AP_GPS/AP_GPS.h>
 #include <AP_Compass/AP_Compass.h>
 #include <AP_Baro/AP_Baro.h>
+#include "SRV_Channel/SRV_Channel.h"
 #include <AP_BattMonitor/AP_BattMonitor.h>
 #include <AP_Airspeed/AP_Airspeed.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>
@@ -13,9 +14,7 @@
 #include "../AP_Bootloader/app_comms.h"
 #include "hwing_esc.h"
 
-#include "SRV_Channel/SRV_Channel.h"
-
-#if defined(HAL_PERIPH_NEOPIXEL_COUNT) || defined(HAL_PERIPH_ENABLE_NCP5623_LED)
+#if defined(HAL_PERIPH_NEOPIXEL_COUNT) || defined(HAL_PERIPH_ENABLE_NCP5623_LED) || defined(HAL_PERIPH_ENABLE_NCP5623_BGR_LED)
 #define AP_PERIPH_HAVE_LED
 #endif
 
@@ -80,6 +79,7 @@ public:
         uint32_t last_gps_ms;
         uint32_t last_baro_ms;
         uint32_t last_mag_ms;
+        uint32_t last_airspeed_ms;
     } msp;
     void msp_init(AP_HAL::UARTDriver *_uart);
     void msp_sensor_update(void);
@@ -87,6 +87,7 @@ public:
     void send_msp_GPS(void);
     void send_msp_compass(void);
     void send_msp_baro(void);
+    void send_msp_airspeed(void);
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_ADSB
@@ -125,16 +126,14 @@ public:
     void hwesc_telem_update();
 #endif
 
-#ifdef HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
-
+#ifdef HAL_PERIPH_ENABLE_RC_OUT
     SRV_Channels servo_channels;
-    bool has_new_data_to_update = true;
 
-    void translate_rcout_init();
-    void translate_rcout_esc(int16_t *rc, uint8_t num_channels);
-    void translate_rcout_srv(const uint8_t actuator_id, const float command_value);
-    void translate_rcout_update();
-    void translate_rcout_handle_safety_state(uint8_t safety_state);
+    void rcout_init();
+    void rcout_esc(int16_t *rc, uint8_t num_channels);
+    void rcout_srv(const uint8_t actuator_id, const float command_value);
+    void rcout_update();
+    void rcout_handle_safety_state(uint8_t safety_state);
 #endif
 
     // setup the var_info table
