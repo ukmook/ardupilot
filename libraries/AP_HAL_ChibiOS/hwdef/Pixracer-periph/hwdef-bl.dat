@@ -10,6 +10,9 @@ APJ_BOARD_ID 2006
 # crystal frequency
 OSCILLATOR_HZ 24000000
 
+# ChibiOS system timer
+STM32_ST_USE_TIMER 5
+
 # flash size
 FLASH_SIZE_KB 2048
 
