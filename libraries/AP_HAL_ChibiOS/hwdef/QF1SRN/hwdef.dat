@@ -39,10 +39,21 @@ define HAL_UART_NODMA
 -----------------------------------------
 
 # analog input
-# PA5 VIN5 ADC1
 define HAL_USE_ADC TRUE
 define STM32_ADC_USE_ADC1 TRUE
-define HAL_DISABLE_ADC_DRIVER TRUE
+define HAL_DISABLE_ADC_DRIVER FALSE
+
+PA0 BATT_VOLTAGE_SENS ADC1 SCALE(1)
+PA1 BATT_CURRENT_SENS ADC1 SCALE(1)
+
+
+# define default battery setup
+define HAL_BATT_VOLT_PIN 0
+define HAL_BATT_CURR_PIN 1
+define HAL_BATT_VOLT_SCALE 5.97
+define HAL_BATT_CURR_SCALE 11.6
+# current 1mOhm shunt and 82.5k
+# Volt 100k & 20k divider
 -----------------------------------------
 
 # a LED to flash
@@ -69,8 +80,8 @@ define DMA_RESERVE_SIZE 0
 
 define PERIPH_FW TRUE
 
-# MAIN_STACK is stack of initial thread
-MAIN_STACK 0x80
+# MAIN_STACK is stack of initial thread and ISRs
+MAIN_STACK 0x200
 
 # PROCESS_STACK controls stack for main thread
 PROCESS_STACK 0x600
@@ -92,11 +103,11 @@ define HAL_CAN_POOL_SIZE 2500
 
 -----------------------------------------
 # only one I2C bus in normal config
-# PB6 I2C1_SCL I2C1
-# PB7 I2C1_SDA I2C1
+PB6 I2C1_SCL I2C1
+PB7 I2C1_SDA I2C1
 
 # only one I2C bus
-# I2C_ORDER I2C1
+I2C_ORDER I2C1
 
 define HAL_USE_I2C TRUE
 define STM32_I2C_USE_I2C1 TRUE
@@ -109,8 +120,8 @@ define HAL_UART_MIN_TX_SIZE 128
 define HAL_UART_MIN_RX_SIZE 128
 
 define HAL_UART_STACK_SIZE 256
-define STORAGE_THD_WA_SIZE 256
-define IO_THD_WA_SIZE      256
+define STORAGE_THD_WA_SIZE 300
+define IO_THD_WA_SIZE      300
 
 define HAL_NO_GCS
 define HAL_NO_LOGGING
@@ -145,9 +156,21 @@ env ROMFS_UNCOMPRESSED True
 # reduce the number of CAN RX Buffer
 define HAL_CAN_RX_QUEUE_SIZE 32
 
+# disable stack checking to reduce flash cost
+define CH_DBG_ENABLE_STACK_CHECK FALSE
+
 PA6 TIM3_CH1 TIM3 PWM(1) GPIO(50)
 PA7 TIM3_CH2 TIM3 PWM(2) GPIO(51)
 PB0 TIM3_CH3 TIM3 PWM(3) GPIO(52)
 PB1 TIM3_CH4 TIM3 PWM(4) GPIO(53)
 
-define HAL_PERIPH_ENABLE_RCOUT_TRANSLATOR
+define BOARD_PWM_COUNT_DEFAULT 4
+
+PB3 TIM2_CH2 TIM2 PWM(5) GPIO(54)
+
+define HAL_PERIPH_ENABLE_RC_OUT
+# define HAL_PERIPH_ENABLE_BATTERY
+# define HAL_SUPPORT_RCOUT_SERIAL 0
+# define HAL_PERIPH_NEOPIXEL_COUNT 10
+# define HAL_PERIPH_NEOPIXEL_CHAN 4
+# define AP_PERIPH_LED_BRIGHT_DEFAULT 50
