@@ -6,6 +6,14 @@ extern const AP_HAL::HAL &hal;
 #define AP_PERIPH_LED_BRIGHT_DEFAULT 100
 #endif
 
+#ifndef AP_PERIPH_RANGEFINDER_BAUDRATE_DEFAULT
+#define AP_PERIPH_RANGEFINDER_BAUDRATE_DEFAULT 115200
+#endif
+
+#ifndef AP_PERIPH_RANGEFINDER_PORT_DEFAULT
+#define AP_PERIPH_RANGEFINDER_PORT_DEFAULT 3
+#endif
+
 #ifndef HAL_PERIPH_ADSB_BAUD_DEFAULT
 #define HAL_PERIPH_ADSB_BAUD_DEFAULT 57600
 #endif
@@ -89,10 +97,9 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_RANGEFINDER
-    GSCALAR(rangefinder_baud, "RNGFND_BAUDRATE", 115200),
-#endif
+    GSCALAR(rangefinder_baud, "RNGFND_BAUDRATE", AP_PERIPH_RANGEFINDER_BAUDRATE_DEFAULT),
+    GSCALAR(rangefinder_port, "RNGFND_PORT", AP_PERIPH_RANGEFINDER_PORT_DEFAULT),
 
-#ifdef HAL_PERIPH_ENABLE_RANGEFINDER
     // Rangefinder driver
     // @Group: RNGFND
     // @Path: ../../libraries/AP_RangeFinder/Rangefinder.cpp
