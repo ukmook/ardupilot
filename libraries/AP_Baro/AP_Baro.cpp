@@ -197,7 +197,25 @@ const AP_Param::GroupInfo AP_Baro::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO_FLAGS("3_DEVID", 17, AP_Baro, sensors[2].bus_id, 0, AP_PARAM_FLAG_INTERNAL_USE_ONLY),
 #endif
-    
+
+#if HAL_BARO_WIND_COMP_ENABLED
+    // @Group: 1_WCF_
+    // @Path: AP_Baro_Wind.cpp
+    AP_SUBGROUPINFO(sensors[0].wind_coeff, "1_WCF_", 18, AP_Baro, WindCoeff),
+
+#if BARO_MAX_INSTANCES > 1
+    // @Group: 2_WCF_
+    // @Path: AP_Baro_Wind.cpp
+    AP_SUBGROUPINFO(sensors[1].wind_coeff, "2_WCF_", 19, AP_Baro, WindCoeff),
+#endif
+
+#if BARO_MAX_INSTANCES > 2
+    // @Group: 3_WCF_
+    // @Path: AP_Baro_Wind.cpp
+    AP_SUBGROUPINFO(sensors[2].wind_coeff, "3_WCF_", 20, AP_Baro, WindCoeff),
+#endif
+#endif
+
     AP_GROUPEND
 };
 
@@ -826,6 +844,9 @@ void AP_Baro::update(void)
             float altitude = sensors[i].altitude;
             float corrected_pressure = sensors[i].pressure + sensors[i].p_correction;
             if (sensors[i].type == BARO_TYPE_AIR) {
+#if HAL_BARO_WIND_COMP_ENABLED
+                corrected_pressure -= wind_pressure_correction(i);
+#endif
                 altitude = get_altitude_difference(sensors[i].ground_pressure, corrected_pressure);
             } else if (sensors[i].type == BARO_TYPE_WATER) {
                 //101325Pa is sea level air pressure, 9800 Pascal/ m depth in water.
@@ -934,7 +955,6 @@ void AP_Baro::handle_msp(const MSP::msp_baro_data_message_t &pkt)
     }
 }
 #endif 
-
 
 namespace AP {
 

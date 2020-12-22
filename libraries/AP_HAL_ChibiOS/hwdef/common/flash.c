@@ -341,7 +341,9 @@ bool stm32_flash_ispageerased(uint32_t page)
     return true;
 }
 
+#ifndef HAL_BOOTLOADER_BUILD
 static uint32_t last_erase_ms;
+#endif
 
 /*
   erase a page
@@ -352,7 +354,9 @@ bool stm32_flash_erasepage(uint32_t page)
         return false;
     }
 
+#ifndef HAL_BOOTLOADER_BUILD
     last_erase_ms = hrt_millis32();
+#endif
 
 #if STM32_FLASH_DISABLE_ISR
     syssts_t sts = chSysGetStatusAndLockX();
@@ -413,7 +417,9 @@ bool stm32_flash_erasepage(uint32_t page)
     chSysRestoreStatusX(sts);
 #endif
 
+#ifndef HAL_BOOTLOADER_BUILD
     last_erase_ms = hrt_millis32();
+#endif
 
     return stm32_flash_ispageerased(page);
 }
@@ -669,6 +675,7 @@ void stm32_flash_keep_unlocked(bool set)
     }
 }
 
+#ifndef HAL_BOOTLOADER_BUILD
 /*
   return true if we had a recent erase
  */
@@ -676,5 +683,6 @@ bool stm32_flash_recent_erase(void)
 {
     return hrt_millis32() - last_erase_ms < 3000U;
 }
+#endif
 
 #endif // HAL_NO_FLASH_SUPPORT
