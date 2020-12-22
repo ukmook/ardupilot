@@ -10,7 +10,5 @@ define AIRSPEED_MAX_SENSORS 1
 
 define HAL_PERIPH_ENABLE_RANGEFINDER
 
-define HAL_SERIAL3_PROTOCOL SerialProtocol_Rangefinder
-
 # we're too low on flash with old compiler for bootloader
 define HAL_NO_ROMFS_SUPPORT
