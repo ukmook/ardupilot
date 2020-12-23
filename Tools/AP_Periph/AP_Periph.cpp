@@ -107,6 +107,16 @@ void AP_Periph_FW::init()
 
 #ifdef HAL_PERIPH_ENABLE_GPS
     if (gps.get_type(0) != AP_GPS::GPS_Type::GPS_TYPE_NONE) {
+        // remove all currently configured GPS ports because AP_GPS will always grab the first instance
+        // and that may not be the serial port we're setting
+        AP_HAL::UARTDriver *uart;
+        do {
+            uart = serial_manager.find_serial(AP_SerialManager::SerialProtocol_GPS, 0);
+            if (uart != nullptr) {
+                serial_manager.set_protocol_and_baud(g.gps_port, AP_SerialManager::SerialProtocol_None, 0);
+            }
+        } while (uart != nullptr);
+
         serial_manager.set_protocol_and_baud(g.gps_port, AP_SerialManager::SerialProtocol_GPS, AP_SERIALMANAGER_GPS_BAUD);
         gps.init(serial_manager);
     }
