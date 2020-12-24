@@ -198,8 +198,11 @@ public:
     // get Serial Port
     AP_HAL::UARTDriver *get_serial_by_id(uint8_t id);
 
-    // accessors for AP_Periph to set baudrate and type
+    // accessors for AP_Periph to set baudrate and set/get type
     void set_protocol_and_baud(uint8_t sernum, enum SerialProtocol protocol, uint32_t baudrate);
+    SerialProtocol get_protocol(uint8_t sernum) const;
+
+    static uint8_t get_num_ports() { return SERIALMANAGER_NUM_PORTS; }
 
     static uint32_t map_baudrate(int32_t rate);
 

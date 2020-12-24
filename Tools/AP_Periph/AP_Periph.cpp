@@ -66,7 +66,7 @@ const struct app_descriptor app_descriptor;
 
 void AP_Periph_FW::init()
 {
-    
+
     // always run with watchdog enabled. This should have already been
     // setup by the bootloader, but if not then enable now
     stm32_watchdog_init();
@@ -107,15 +107,14 @@ void AP_Periph_FW::init()
 
 #ifdef HAL_PERIPH_ENABLE_GPS
     if (gps.get_type(0) != AP_GPS::GPS_Type::GPS_TYPE_NONE) {
-        // remove all currently configured GPS ports because AP_GPS will always grab the first instance
-        // and that may not be the serial port we're setting
-        AP_HAL::UARTDriver *uart;
-        do {
-            uart = serial_manager.find_serial(AP_SerialManager::SerialProtocol_GPS, 0);
-            if (uart != nullptr) {
-                serial_manager.set_protocol_and_baud(g.gps_port, AP_SerialManager::SerialProtocol_None, 0);
+        // remove all currently configured GPS ports because AP_GPS will always grab
+        // the first instance and that may not be the serial port we're setting
+        for (uint8_t i=0; i<serial_manager.get_num_ports(); i++) {
+            const AP_SerialManager::SerialProtocol protocol = serial_manager.get_protocol(i);
+            if (protocol == AP_SerialManager::SerialProtocol_GPS || protocol == AP_SerialManager::SerialProtocol_GPS2) {
+                serial_manager.set_protocol_and_baud(i, AP_SerialManager::SerialProtocol_None, 0);
             }
-        } while (uart != nullptr);
+        }
 
         serial_manager.set_protocol_and_baud(g.gps_port, AP_SerialManager::SerialProtocol_GPS, AP_SERIALMANAGER_GPS_BAUD);
         gps.init(serial_manager);
@@ -180,7 +179,7 @@ void AP_Periph_FW::init()
 #ifdef HAL_PERIPH_ENABLE_MSP
     msp_init(hal.serial(2));
 #endif
-    
+
     start_ms = AP_HAL::native_millis();
 }
 
@@ -313,7 +312,7 @@ void AP_Periph_FW::update()
         show_stack_free();
     }
 #endif
-    
+
 #ifdef HAL_PERIPH_ENABLE_BATTERY
     if (now - battery.last_read_ms >= 100) {
         // update battery at 10Hz

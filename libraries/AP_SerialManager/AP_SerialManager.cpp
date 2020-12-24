@@ -727,6 +727,14 @@ void AP_SerialManager::set_protocol_and_baud(uint8_t sernum, enum SerialProtocol
     }
 }
 
+// accessor for AP_Periph to get SerialProtocol of a port
+AP_SerialManager::SerialProtocol AP_SerialManager::get_protocol(uint8_t sernum) const
+{
+    if (sernum <= ARRAY_SIZE(state)) {
+        return (SerialProtocol)state[sernum].protocol.get();
+    }
+    return SerialProtocol_None;
+}
 
 namespace AP {
 
