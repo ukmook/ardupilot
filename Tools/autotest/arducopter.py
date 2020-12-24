@@ -163,7 +163,7 @@ class AutoTestCopter(AutoTest):
 
     def hover(self, hover_throttle=1500):
         self.set_rc(3, hover_throttle)
-    
+
     #Climb/descend to a given altitude
     def setAlt(self, desiredAlt=50):
         pos = self.mav.location(relative_alt=True)
@@ -174,7 +174,7 @@ class AutoTestCopter(AutoTest):
             self.set_rc(3, 1800)
             self.wait_altitude((desiredAlt-5), desiredAlt, relative=True)
         self.hover()
-    
+
     # Takeoff, climb to given altitude, and fly east for 10 seconds
     def takeoffAndMoveAway(self, dAlt=50, dDist=50):
         self.progress("Centering sticks")
@@ -300,7 +300,7 @@ class AutoTestCopter(AutoTest):
             self.set_parameter("SIM_SPEEDUP",4)
             self.set_parameter("FS_GCS_ENABLE", paramValue)
 
-        
+
 
 
     #################################################
@@ -526,7 +526,7 @@ class AutoTestCopter(AutoTest):
         self.wait_mode("CIRCLE")
         self.set_rc(5, 1950)
         self.wait_mode("STABILIZE")
-        self.end_subtest("Completed Radio failsafe recovery test")      
+        self.end_subtest("Completed Radio failsafe recovery test")
 
         # Trigger and RC failure, verify failsafe triggers and RTL completes
         self.start_subtest("Radio failsafe RTL with no options test: FS_THR_ENABLE=1 & FS_OPTIONS=0")
@@ -688,7 +688,7 @@ class AutoTestCopter(AutoTest):
         self.progress("All radio failsafe tests complete")
         self.set_parameter('FS_THR_ENABLE', 0)
         self.reboot_sitl()
-        
+
     # Tests all actions and logic behind the GCS failsafe
     def fly_gcs_failsafe(self, side=60, timeout=360):
         try:
@@ -1675,7 +1675,7 @@ class AutoTestCopter(AutoTest):
         self.progress("compass switch 0 OK")
 
         self.do_RTL()
-        
+
     def wait_attitude(self, desroll=None, despitch=None, timeout=2, tolerance=10):
         '''wait for an attitude (degrees)'''
         if desroll is None and despitch is None:
@@ -3290,7 +3290,7 @@ class AutoTestCopter(AutoTest):
             )
         m = self.mav.recv_match(type='POSITION_TARGET_LOCAL_NED', blocking=True, timeout=2)
         self.progress("Received local target: %s" % str(m))
-        
+
         if not (m.type_mask == 0xFFF8 or m.type_mask == 0x0FF8):
             raise NotAchievedException("Did not receive proper mask: expected=65528 or 4088, got=%u" % m.type_mask)
 
@@ -5729,7 +5729,7 @@ class AutoTestCopter(AutoTest):
              "Test GCS Failsafe",
              self.fly_gcs_failsafe), #239s
 
-            #this group has the smallest runtime right now at around 5mins, 
+            #this group has the smallest runtime right now at around 5mins,
             #  so add more tests here, till its around 9-10mins, then make a new group
         ])
         return ret
@@ -5754,12 +5754,21 @@ class AutoTestCopter(AutoTest):
              self.fly_fence_avoidance_test),
 
             ("AC_Avoidance_Beacon",
-             "Test beacon avoidance slide behaviour", 
+             "Test beacon avoidance slide behaviour",
              self.fly_beacon_avoidance_test),#28s
 
             ("BaroWindCorrection",
              "Test wind estimation and baro position error compensation",
              self.fly_wind_baro_compensation),
+
+            ("SetpointGlobalPos",
+             "Test setpoint global position",
+             lambda: self.test_set_position_global_int()),
+
+            ("SetpointGlobalVel",
+             "Test setpoint global velocity",
+             lambda: self.test_set_velocity_global_int()),
+
         ])
         return ret
 
@@ -5778,8 +5787,8 @@ class AutoTestCopter(AutoTest):
              "Test Max Alt Fence",
              self.fly_alt_max_fence_test), #26s
 
-            ("AutoTuneSwitch", 
-             "Fly AUTOTUNE on a switch", 
+            ("AutoTuneSwitch",
+             "Fly AUTOTUNE on a switch",
              self.fly_autotune_switch), #105s
 
             ("GPSGlitchLoiter",
@@ -5948,14 +5957,14 @@ class AutoTestCopter(AutoTest):
         '''return list of all tests'''
         ret = ([
             ("FixedYawCalibration",
-             "Test Fixed Yaw Calibration", #about 20 secs 
+             "Test Fixed Yaw Calibration", #about 20 secs
              self.test_fixed_yaw_calibration), # something about SITLCompassCalibration appears to fail this one, so we put it first
 
-            # we run this single 8min-and-40s test on its own, apart from 
+            # we run this single 8min-and-40s test on its own, apart from
             #   requiring FixedYawCalibration right before it because without it, it fails to calibrate
             ("SITLCompassCalibration", # this autotest appears to interfere with FixedYawCalibration, no idea why.
              "Test SITL onboard compass calibration",
-             self.test_mag_calibration),  
+             self.test_mag_calibration),
         ])
         return ret
 
@@ -5964,16 +5973,16 @@ class AutoTestCopter(AutoTest):
         ret = ([
             ("MotorVibration",
              "Fly motor vibration test",
-             self.fly_motor_vibration), 
+             self.fly_motor_vibration),
 
             ("DynamicNotches",
              "Fly Dynamic Notches",
-             self.fly_dynamic_notches), 
+             self.fly_dynamic_notches),
 
             ("GyroFFT",
              "Fly Gyro FFT",
              self.fly_gyro_fft),
- 
+
             ("GyroFFTHarmonic",
              "Fly Gyro FFT Harmonic Matching",
              self.fly_gyro_fft_harmonic),
