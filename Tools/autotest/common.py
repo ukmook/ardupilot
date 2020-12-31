@@ -1916,9 +1916,10 @@ class AutoTest(ABC):
     def reset_SITL_commandline(self):
         self.progress("Resetting SITL commandline to default")
         self.stop_SITL()
-        self.start_SITL(wipe=False)
+        self.start_SITL(wipe=True)
         self.set_streamrate(self.sitl_streamrate()+1)
         self.set_streamrate(self.sitl_streamrate())
+        self.apply_defaultfile_parameters()
         self.progress("Reset SITL commandline to default")
 
     def stop_SITL(self):
@@ -3248,6 +3249,7 @@ class AutoTest(ABC):
         self.cpufailsafe_wait_servo_channel_value(2, 1260)
         self.send_set_rc(2, 1700)
         self.cpufailsafe_wait_servo_channel_value(2, 1660)
+        self.reset_SITL_commandline()
 
     def mavproxy_arm_vehicle(self):
         """Arm vehicle with mavlink arm message send from MAVProxy."""
@@ -4219,7 +4221,7 @@ class AutoTest(ABC):
             if comparator(m_value, value):
                 return m_value
 
-    def wait_rc_channel_value(self, channel, value, timeout=2):
+    def get_rc_channel_value(self, channel, timeout=2):
         """wait for channel to hit value"""
         channel_field = "chan%u_raw" % channel
         tstart = self.get_sim_time()
@@ -4233,12 +4235,22 @@ class AutoTest(ABC):
             if m is None:
                 continue
             m_value = getattr(m, channel_field)
-            self.progress("RC_CHANNELS.%s=%u want=%u time_boot_ms=%u" %
-                          (channel_field, m_value, value, m.time_boot_ms))
             if m_value is None:
                 raise ValueError("message (%s) has no field %s" %
                                  (str(m), channel_field))
-            if m_value == value:
+            return m_value
+
+    def wait_rc_channel_value(self, channel, value, timeout=2):
+        channel_field = "chan%u_raw" % channel
+        tstart = self.get_sim_time()
+        while True:
+            remaining = timeout - (self.get_sim_time_cached() - tstart)
+            if remaining <= 0:
+                raise NotAchievedException("Channel never achieved value")
+            m_value = self.get_rc_channel_value(channel, timeout=timeout)
+            self.progress("RC_CHANNELS.%s=%u want=%u" %
+                          (channel_field, m_value, value))
+            if value == m_value:
                 return
 
     def wait_location(self,
@@ -4639,6 +4651,8 @@ Also, ignores heartbeats not from our target system'''
     def send_statustext(self, text):
         if sys.version_info.major >= 3 and not isinstance(text, bytes):
             text = bytes(text, "ascii")
+        elif type(text) == unicode:
+            text = text.encode('ascii')
         self.mav.mav.statustext_send(mavutil.mavlink.MAV_SEVERITY_WARNING, text)
 
     def get_exception_stacktrace(self, e):
@@ -4705,8 +4719,7 @@ Also, ignores heartbeats not from our target system'''
                           self.get_exception_stacktrace(e))
             ex = e
         self.test_timings[desc] = time.time() - start_time
-        if self.contexts[-1].sitl_commandline_customised:
-            self.reset_SITL_commandline()
+        reset_needed = self.contexts[-1].sitl_commandline_customised
         self.context_pop()
 
         passed = True
@@ -4751,6 +4764,9 @@ Also, ignores heartbeats not from our target system'''
             if interact:
                 self.progress("Starting MAVProxy interaction as directed")
                 self.mavproxy.interact()
+
+        if reset_needed:
+            self.reset_SITL_commandline()
 
         self.clear_mission_using_mavproxy()
 

@@ -1,17 +1,14 @@
 # hw definition file for processing by chibios_hwdef.py for the
-# mRo Pixracer board. This is a fmuv4 board
+# mRo Pixracer board as a CANBUS Node AP_Periph.
 
 # MCU class and specific type
 MCU STM32F4xx STM32F427xx
 
 # board ID for firmware load
-APJ_BOARD_ID 2006
+APJ_BOARD_ID 1402
 
 # crystal frequency
 OSCILLATOR_HZ 24000000
-
-# ChibiOS system timer
-STM32_ST_USE_TIMER 5
 
 # flash size
 FLASH_SIZE_KB 2048
@@ -64,4 +61,4 @@ define HAL_CAN_DEFAULT_NODE_ID 0
 # reserve 256 bytes for comms between app and bootloader
 RAM_RESERVE_START 256
 
-PB8 STAY_IN_BOOTLOADER INPUT FLOATING
+PB8 STAY_IN_BOOTLOADER INPUT FLOATING # if pulled low stay in bootloader
