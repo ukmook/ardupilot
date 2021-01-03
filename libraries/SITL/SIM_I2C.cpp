@@ -55,11 +55,11 @@ struct i2c_device_at_address {
     uint8_t addr;
     I2CDevice &device;
 } i2c_devices[] {
+    { 0, 0x70, maxsonari2cxl },
     { 1, 0x55, toshibaled },
     { 1, 0x38, ignored }, // NCP5623
     { 1, 0x39, ignored }, // NCP5623C
     { 1, 0x40, ignored }, // KellerLD
-    { 1, 0x70, maxsonari2cxl },
     { 1, 0x76, ignored }, // MS56XX
     { 2, 0x0B, rotoye },
     { 2, 0x28, airspeed_dlvr },
@@ -69,6 +69,19 @@ void I2C::init()
 {
     for (auto &i : i2c_devices) {
         i.device.init();
+    }
+
+    // sanity check the i2c_devices structure to ensure we don't have
+    // two devices at the same address on the same bus:
+    for (uint8_t i=0; i<ARRAY_SIZE(i2c_devices)-1; i++) {
+        const auto &dev_i = i2c_devices[i];
+        for (uint8_t j=i+1; j<ARRAY_SIZE(i2c_devices); j++) {
+            const auto &dev_j = i2c_devices[j];
+            if (dev_i.bus == dev_j.bus &&
+                dev_i.addr == dev_j.addr) {
+                AP_HAL::panic("Two devices at the same address on the same bus");
+            }
+        }
     }
 }
 
@@ -85,16 +98,18 @@ int I2C::ioctl_rdwr(i2c_rdwr_ioctl_data *data)
     for (uint8_t i=0; i<data->nmsgs; i++) {
         const i2c_msg &msg = data->msgs[i];
         const uint8_t addr = msg.addr;
+        const uint8_t bus = msg.bus;
         bool handled = false;
-        for (auto dev_at_address : i2c_devices) {
-            // where's the bus check?!
-            if (dev_at_address.addr == addr) {
-                ret = dev_at_address.device.rdwr(data);
+        for (auto &dev_at_address : i2c_devices) {
+            if (dev_at_address.addr == addr &&
+                dev_at_address.bus == bus) {
                 handled = true;
+                ret = dev_at_address.device.rdwr(data);
+                break;  // uniqueness of addr/bus device is ensured in init()
             }
         }
         if (!handled) {
-            ::fprintf(stderr, "Unhandled i2c message: bus=%u addr=0x%02x flags=%u len=%u\n", msg.bus, msg.addr, msg.flags, msg.len);
+//            ::fprintf(stderr, "Unhandled i2c message: bus=%u addr=0x%02x flags=%u len=%u\n", msg.bus, msg.addr, msg.flags, msg.len);
             return -1;  // ?!
         }
     }
