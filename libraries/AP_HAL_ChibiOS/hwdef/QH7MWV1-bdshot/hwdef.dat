@@ -72,7 +72,7 @@ PD1 CAN1_TX CAN1
 
 # order of UARTs (and USB)
 # Order      USB   sr1    sr2    sr3    sr4    sr5  sr6
-# AP Name    USB   GPS1  TELM1  TELM2   GPS2   BLH  PIXEL
+# AP Name    USB   GPS1  TELM1  TELM2   GPS2   BLH  SLCAN
 SERIAL_ORDER OTG1 USART1 USART2 USART3 USART6 UART8 OTG2
 
 # USB
