@@ -32,7 +32,7 @@ SERIAL_ORDER
 # this has a hw pullup, so if we set it as input floating
 # and look for it low then we know user has pulled it down and
 # want to stay in the bootloader
-PB3 STAY_IN_BOOTLOADER INPUT FLOATING
+PB6 STAY_IN_BOOTLOADER INPUT FLOATING
 
 PC15 LED_BOOTLOADER OUTPUT LOW
 define HAL_LED_ON 1
