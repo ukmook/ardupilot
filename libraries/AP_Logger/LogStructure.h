@@ -525,6 +525,7 @@ struct PACKED log_Attitude {
     uint16_t yaw;
     uint16_t error_rp;
     uint16_t error_yaw;
+    uint8_t  active;
 };
 
 struct PACKED log_PID {
@@ -538,6 +539,7 @@ struct PACKED log_PID {
     float   D;
     float   FF;
     float   Dmod;
+    uint8_t limit;
 };
 
 struct PACKED log_Current {
@@ -1069,10 +1071,10 @@ struct PACKED log_PSC {
 #define ISBD_UNITS  "s--ooo"
 #define ISBD_MULTS  "F--???"
 
-#define PID_LABELS "TimeUS,Tar,Act,Err,P,I,D,FF,Dmod"
-#define PID_FMT    "Qffffffff"
-#define PID_UNITS  "s--------"
-#define PID_MULTS  "F--------"
+#define PID_LABELS "TimeUS,Tar,Act,Err,P,I,D,FF,Dmod,Limit"
+#define PID_FMT    "QffffffffB"
+#define PID_UNITS  "s---------"
+#define PID_MULTS  "F---------"
 
 // @LoggerMessage: ACC
 // @Description: IMU accelerometer data
@@ -1142,6 +1144,7 @@ struct PACKED log_PSC {
 // @Field: Yaw: achieved vehicle yaw
 // @Field: ErrRP: lowest estimated gyro drift error
 // @Field: ErrYaw: difference between measured yaw and DCM yaw estimate
+// @Field: AEKF: active EKF type
 
 // @LoggerMessage: BARO
 // @Description: Gathered Barometer data
@@ -1575,6 +1578,7 @@ struct PACKED log_PSC {
 // @Field: D: derivative part of PID
 // @Field: FF: controller feed-forward portion of response
 // @Field: Dmod: scaler applied to D gain to reduce limit cycling
+// @Field: Limit: 1 if I term is limited due to output saturation 
 
 // @LoggerMessage: PM
 // @Description: autopilot system performance and general data dumping ground
@@ -1933,7 +1937,7 @@ struct PACKED log_PSC {
     { LOG_CURRENT_CELLS_MSG, sizeof(log_Current_Cells), \
       "BCL", "QBfHHHHHHHHHHHH", "TimeUS,Instance,Volt,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,V11,V12", "s#vvvvvvvvvvvvv", "F-0CCCCCCCCCCCC" }, \
 	{ LOG_ATTITUDE_MSG, sizeof(log_Attitude),\
-      "ATT", "QccccCCCC", "TimeUS,DesRoll,Roll,DesPitch,Pitch,DesYaw,Yaw,ErrRP,ErrYaw", "sddddhhdh", "FBBBBBBBB" }, \
+      "ATT", "QccccCCCCB", "TimeUS,DesRoll,Roll,DesPitch,Pitch,DesYaw,Yaw,ErrRP,ErrYaw,AEKF", "sddddhhdh-", "FBBBBBBBB-" }, \
     { LOG_MAG_MSG, sizeof(log_MAG), \
       "MAG", "QBhhhhhhhhhBI",    "TimeUS,I,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOX,MOY,MOZ,Health,S", "s#GGGGGGGGG-s", "F-CCCCCCCCC-F" }, \
     { LOG_MODE_MSG, sizeof(log_Mode), \
@@ -1943,7 +1947,7 @@ struct PACKED log_PSC {
     { LOG_MAV_STATS, sizeof(log_MAV_Stats), \
       "DMS", "QIIIIBBBBBBBBB",         "TimeUS,N,Dp,RT,RS,Fa,Fmn,Fmx,Pa,Pmn,Pmx,Sa,Smn,Smx", "s-------------", "F-------------" }, \
     { LOG_BEACON_MSG, sizeof(log_Beacon), \
-      "BCN", "QBBfffffff",  "TimeUS,Health,Cnt,D0,D1,D2,D3,PosX,PosY,PosZ", "s--mmmmmmm", "F--BBBBBBB" }, \
+      "BCN", "QBBfffffff",  "TimeUS,Health,Cnt,D0,D1,D2,D3,PosX,PosY,PosZ", "s--mmmmmmm", "F--0000000" }, \
     { LOG_PROXIMITY_MSG, sizeof(log_Proximity), \
       "PRX", "QBfffffffffff", "TimeUS,Health,D0,D45,D90,D135,D180,D225,D270,D315,DUp,CAn,CDis", "s-mmmmmmmmmhm", "F-00000000000" }, \
     { LOG_PERFORMANCE_MSG, sizeof(log_Performance),                     \

@@ -1529,14 +1529,26 @@ class AutoTest(ABC):
         if required_bootcount is None:
             required_bootcount = old_bootcount + 1
         while True:
+            # get_parameter calls get_sim_time.... streamrates may
+            # be zero so we need to prompt for one of these...
+            self.send_cmd(mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE,
+                          mavutil.mavlink.MAVLINK_MSG_ID_SYSTEM_TIME,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0)
             if time.time() - tstart > timeout:
                 raise AutoTestTimeoutException("Did not detect reboot")
             try:
-                current_bootcount = self.get_parameter('STAT_BOOTCNT', timeout=1, attempts=3)
+                current_bootcount = self.get_parameter('STAT_BOOTCNT', timeout=1, attempts=1)
                 self.progress("current=%s required=%u" % (str(current_bootcount), required_bootcount))
                 if current_bootcount == required_bootcount:
                     break
             except NotAchievedException:
+                pass
+            except AutoTestTimeoutException:
                 pass
 
         # empty mav to avoid getting old timestamps:
@@ -3168,11 +3180,13 @@ class AutoTest(ABC):
             0)
 
     def set_analog_rangefinder_parameters(self):
-        self.set_parameter("RNGFND1_TYPE", 1)
-        self.set_parameter("RNGFND1_MIN_CM", 0)
-        self.set_parameter("RNGFND1_MAX_CM", 4000)
-        self.set_parameter("RNGFND1_SCALING", 12.12)
-        self.set_parameter("RNGFND1_PIN", 0)
+        self.set_parameters({
+            "RNGFND1_TYPE": 1,
+            "RNGFND1_MIN_CM": 0,
+            "RNGFND1_MAX_CM": 4000,
+            "RNGFND1_SCALING": 12.12,
+            "RNGFND1_PIN": 0,
+        })
 
     def send_debug_trap(self, timeout=6000):
         self.progress("Sending trap to autopilot")
@@ -3532,7 +3546,7 @@ class AutoTest(ABC):
             # we MUST parse here or collections fail where we need
             # them to work!
             self.drain_mav(quiet=True)
-            tstart = self.get_sim_time()
+            tstart = self.get_sim_time(timeout=timeout)
             encname = name
             if sys.version_info.major >= 3 and type(encname) != bytes:
                 encname = bytes(encname, 'ascii')
@@ -5335,6 +5349,11 @@ Also, ignores heartbeats not from our target system'''
             # tracker starts armed...
             self.disarm_vehicle(force=True)
         self.reboot_sitl()
+
+    def set_parameters(self, parameters):
+        '''set parameters from the supplied dict'''
+        for (name, value) in parameters.items():
+            self.set_parameter(name, value)
 
     def zero_mag_offset_parameters(self, compass_count=3):
         self.progress("Zeroing Mag OFS parameters")

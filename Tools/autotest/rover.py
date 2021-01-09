@@ -4,6 +4,7 @@
 from __future__ import print_function
 
 import copy
+import math
 import os
 import shutil
 import sys
@@ -18,6 +19,7 @@ from common import MsgRcvTimeoutException
 from common import NotAchievedException
 from common import PreconditionFailedException
 
+from pymavlink import mavextra
 from pymavlink import mavutil
 
 # get location of scripts
@@ -5347,6 +5349,84 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
         self.disarm_vehicle()
         self.context_pop()
 
+    def SET_ATTITUDE_TARGET(self, target_sysid=None, target_compid=1):
+        if target_sysid is None:
+            target_sysid = self.sysid_thismav()
+        self.change_mode('GUIDED')
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        tstart = self.get_sim_time()
+        while True:
+            now = self.get_sim_time_cached()
+            if now - tstart > 10:
+                raise AutoTestTimeoutException("Didn't get to speed")
+            self.mav.mav.set_attitude_target_send(
+                0, # time_boot_ms
+                target_sysid,
+                target_compid,
+                mavutil.mavlink.ATTITUDE_TARGET_TYPEMASK_BODY_ROLL_RATE_IGNORE |
+                mavutil.mavlink.ATTITUDE_TARGET_TYPEMASK_BODY_PITCH_RATE_IGNORE |
+                mavutil.mavlink.ATTITUDE_TARGET_TYPEMASK_ATTITUDE_IGNORE,
+                mavextra.euler_to_quat([0,
+                                        math.radians(0),
+                                        math.radians(0)]), # att
+                0, # yaw rate (rad/s)
+                0, # pitch rate
+                0, # yaw rate
+                1) # thrust
+
+            msg = self.mav.recv_match(type='VFR_HUD', blocking=True, timeout=1)
+            if msg is None:
+                raise NotAchievedException("No VFR_HUD message")
+            if msg.groundspeed > 5:
+                break
+        self.disarm_vehicle()
+
+    def SET_POSITION_TARGET_LOCAL_NED(self, target_sysid=None, target_compid=1):
+        if target_sysid is None:
+            target_sysid = self.sysid_thismav()
+        self.change_mode('GUIDED')
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        tstart = self.get_sim_time()
+        while True:
+            now = self.get_sim_time_cached()
+            if now - tstart > 10:
+                raise AutoTestTimeoutException("Didn't get to speed")
+            self.mav.mav.set_position_target_local_ned_send(
+                0, # time_boot_ms
+                target_sysid,
+                target_compid,
+                mavutil.mavlink.MAV_FRAME_LOCAL_NED,
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE,
+                30.0,  # pos-x
+                30.0,  # pos-y
+                0,     # pos-z
+                0,     # vel-x
+                0,     # vel-y
+                0,     # vel-z
+                0,     # acc-x
+                0,     # acc-y
+                0,     # acc-z
+                0,     # yaw
+                0,     # yaw rate
+            )
+
+            msg = self.mav.recv_match(type='VFR_HUD', blocking=True, timeout=1)
+            if msg is None:
+                raise NotAchievedException("No VFR_HUD message")
+            self.progress("speed=%f" % msg.groundspeed)
+            if msg.groundspeed > 5:
+                break
+        self.disarm_vehicle()
+
     def tests(self):
         '''return list of all tests'''
         ret = super(AutoTestRover, self).tests()
@@ -5440,6 +5520,14 @@ Brakes have negligible effect (with=%0.2fm without=%0.2fm delta=%0.2fm)
             ("SYSID_ENFORCE",
              "Test enforcement of SYSID_MYGCS",
              self.test_sysid_enforce),
+
+            ("SET_ATTITUDE_TARGET",
+             "Test handling of SET_ATTITUDE_TARGET",
+             self.SET_ATTITUDE_TARGET),
+
+            ("SET_POSITION_TARGET_LOCAL_NED",
+             "Test handling of SET_POSITION_TARGET_LOCAL_NED",
+             self.SET_POSITION_TARGET_LOCAL_NED),
 
             ("Button",
              "Test Buttons",

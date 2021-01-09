@@ -577,7 +577,8 @@ void AP_Logger::Write_Attitude(const Vector3f &targets)
         control_yaw     : (uint16_t)wrap_360_cd(targets.z),
         yaw             : (uint16_t)wrap_360_cd(ahrs.yaw_sensor),
         error_rp        : (uint16_t)(ahrs.get_error_rp() * 100),
-        error_yaw       : (uint16_t)(ahrs.get_error_yaw() * 100)
+        error_yaw       : (uint16_t)(ahrs.get_error_yaw() * 100),
+        active          : ahrs.get_active_AHRS_type(),
     };
     WriteBlock(&pkt, sizeof(pkt));
 }
@@ -654,10 +655,13 @@ void AP_Logger::Write_Current_instance(const uint64_t time_us,
 // Write an Current data packet
 void AP_Logger::Write_Current()
 {
+    AP_BattMonitor &battery = AP::battery();
     const uint64_t time_us = AP_HAL::micros64();
     const uint8_t num_instances = AP::battery().num_instances();
     for (uint8_t i = 0; i < num_instances; i++) {
-        Write_Current_instance(time_us, i);
+        if (battery.get_type(i) != AP_BattMonitor::Type::NONE) {
+            Write_Current_instance(time_us, i);
+        }
     }
 }
 
@@ -785,7 +789,8 @@ void AP_Logger::Write_PID(uint8_t msg_type, const PID_Info &info)
         I               : info.I,
         D               : info.D,
         FF              : info.FF,
-        Dmod            : info.Dmod
+        Dmod            : info.Dmod,
+        limit           : info.limit
     };
     WriteBlock(&pkt, sizeof(pkt));
 }

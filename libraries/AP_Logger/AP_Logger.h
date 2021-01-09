@@ -3,6 +3,66 @@
 /* ************************************************************ */
 #pragma once
 
+#include <AP_Filesystem/AP_Filesystem_Available.h>
+
+// set default for HAL_LOGGING_DATAFLASH_ENABLED
+#ifndef HAL_LOGGING_DATAFLASH_ENABLED
+    #ifdef HAL_LOGGING_DATAFLASH
+        #define HAL_LOGGING_DATAFLASH_ENABLED 1
+    #else
+        #define HAL_LOGGING_DATAFLASH_ENABLED 0
+    #endif
+#endif
+
+#ifndef HAL_LOGGING_MAVLINK_ENABLED
+    #define HAL_LOGGING_MAVLINK_ENABLED 1
+#endif
+
+#ifndef HAL_LOGGING_FILESYSTEM_ENABLED
+    #if HAVE_FILESYSTEM_SUPPORT
+        #define HAL_LOGGING_FILESYSTEM_ENABLED 1
+    #else
+        #define HAL_LOGGING_FILESYSTEM_ENABLED 0
+    #endif
+#endif
+
+#ifndef HAL_LOGGING_SITL_ENABLED
+    #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+        #define HAL_LOGGING_SITL_ENABLED 1
+    #else
+        #define HAL_LOGGING_SITL_ENABLED 0
+    #endif
+#endif
+
+#if HAL_LOGGING_SITL_ENABLED || HAL_LOGGING_DATAFLASH_ENABLED
+    #define HAL_LOGGING_BLOCK_ENABLED 1
+#else
+    #define HAL_LOGGING_BLOCK_ENABLED 0
+#endif
+
+// sanity checks:
+#if defined(HAL_LOGGING_DATAFLASH) && !HAL_LOGGING_DATAFLASH_ENABLED
+#error Can not default to dataflash if it is not enabled
+#endif
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+    #if HAL_LOGGING_DATAFLASH_ENABLED
+        #error DATAFLASH not supported on SITL; you probably mean SITL
+    #endif
+#endif
+
+#if HAL_LOGGING_FILESYSTEM_ENABLED
+
+#if !defined (HAL_BOARD_LOG_DIRECTORY)
+#error Need HAL_BOARD_LOG_DIRECTORY for filesystem backend support
+#endif
+
+#if !defined (HAVE_FILESYSTEM_SUPPORT)
+#error Need HAVE_FILESYSTEM_SUPPORT for filesystem backend support
+#endif
+
+#endif
+
 #include <AP_HAL/AP_HAL.h>
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_AHRS/AP_AHRS_DCM.h>
@@ -23,6 +83,7 @@
 #include <stdint.h>
 
 #include "LoggerMessageWriter.h"
+
 
 class AP_Logger_Backend;
 class AP_AHRS;
@@ -309,6 +370,7 @@ public:
         float D;
         float FF;
         float Dmod;
+        bool  limit;
     };
 
     void Write_PID(uint8_t msg_type, const PID_Info &info);
@@ -488,9 +550,6 @@ private:
     bool seen_ids[256] = { };
     bool labels_string_is_good(const char *labels) const;
 #endif
-
-    // possibly expensive calls to start log system:
-    void Prep();
 
     bool _writes_enabled:1;
     bool _force_log_disarmed:1;
