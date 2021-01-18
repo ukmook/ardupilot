@@ -163,7 +163,7 @@ class AutoTestCopter(AutoTest):
 
     def hover(self, hover_throttle=1500):
         self.set_rc(3, hover_throttle)
-
+    
     #Climb/descend to a given altitude
     def setAlt(self, desiredAlt=50):
         pos = self.mav.location(relative_alt=True)
@@ -174,7 +174,7 @@ class AutoTestCopter(AutoTest):
             self.set_rc(3, 1800)
             self.wait_altitude((desiredAlt-5), desiredAlt, relative=True)
         self.hover()
-
+    
     # Takeoff, climb to given altitude, and fly east for 10 seconds
     def takeoffAndMoveAway(self, dAlt=50, dDist=50):
         self.progress("Centering sticks")
@@ -306,7 +306,7 @@ class AutoTestCopter(AutoTest):
             self.set_parameter("SIM_SPEEDUP",4)
             self.set_parameter("FS_GCS_ENABLE", paramValue)
 
-
+        
 
 
     #################################################
@@ -533,7 +533,7 @@ class AutoTestCopter(AutoTest):
         self.wait_mode("CIRCLE")
         self.set_rc(5, 1950)
         self.wait_mode("STABILIZE")
-        self.end_subtest("Completed Radio failsafe recovery test")
+        self.end_subtest("Completed Radio failsafe recovery test")      
 
         # Trigger and RC failure, verify failsafe triggers and RTL completes
         self.start_subtest("Radio failsafe RTL with no options test: FS_THR_ENABLE=1 & FS_OPTIONS=0")
@@ -695,7 +695,7 @@ class AutoTestCopter(AutoTest):
         self.progress("All radio failsafe tests complete")
         self.set_parameter('FS_THR_ENABLE', 0)
         self.reboot_sitl()
-
+        
     # Tests all actions and logic behind the GCS failsafe
     def fly_gcs_failsafe(self, side=60, timeout=360):
         try:
@@ -703,6 +703,7 @@ class AutoTestCopter(AutoTest):
         except Exception as ex:
             self.setGCSfailsafe(0)
             self.set_parameter('FS_OPTIONS', 0)
+            self.disarm_vehicle(force=True)
             self.reboot_sitl()
             raise ex
 
@@ -1687,7 +1688,7 @@ class AutoTestCopter(AutoTest):
         self.progress("compass switch 0 OK")
 
         self.do_RTL()
-
+        
     def wait_attitude(self, desroll=None, despitch=None, timeout=2, tolerance=10):
         '''wait for an attitude (degrees)'''
         if desroll is None and despitch is None:
@@ -1764,6 +1765,15 @@ class AutoTestCopter(AutoTest):
             self.set_parameter("SIM_FLOW_ENABLE", 1)
             self.set_parameter("FLOW_TYPE", 10)
 
+            # configure EKF to use optical flow instead of GPS
+            ahrs_ekf_type = self.get_parameter("AHRS_EKF_TYPE")
+            if ahrs_ekf_type == 2:
+                self.set_parameter("EK2_GPS_TYPE", 3)
+            if ahrs_ekf_type == 3:
+                self.set_parameter("EK3_SRC1_POSXY", 0)
+                self.set_parameter("EK3_SRC1_VELXY", 5)
+                self.set_parameter("EK3_SRC1_VELZ", 0)
+
             self.set_analog_rangefinder_parameters()
 
             self.set_parameter("SIM_GPS_DISABLE", 1)
@@ -1780,6 +1790,7 @@ class AutoTestCopter(AutoTest):
 
             tstart = self.get_sim_time()
             timeout = 60
+            started_climb = False
             while self.get_sim_time_cached() - tstart < timeout:
                 m = self.mav.recv_match(type='GLOBAL_POSITION_INT', blocking=True)
                 spd = math.sqrt(m.vx**2 + m.vy**2) * 0.01
@@ -1796,10 +1807,16 @@ class AutoTestCopter(AutoTest):
                     raise NotAchievedException(("Speed should be limited by"
                                                 "EKF optical flow limits"))
 
-            self.progress("Moving higher")
-            self.change_alt(60)
+                # after 30 seconds start climbing                
+                if not started_climb and self.get_sim_time_cached() - tstart > 30:
+                    started_climb = True
+                    self.set_rc(3, 1900)
+                    self.progress("Moving higher")
 
-            self.wait_groundspeed(10, 100, timeout=60)
+                # check altitude is not climbing above 35m
+                if alt > 35:
+                    raise NotAchievedException("Alt should be limited by EKF optical flow limits")
+
         except Exception as e:
             self.progress("Caught exception: %s" %
                           self.get_exception_stacktrace(e))
@@ -2127,6 +2144,9 @@ class AutoTestCopter(AutoTest):
                 attitude = self.mav.recv_match(type='ATTITUDE', blocking=True)
             tend = self.get_sim_time()
 
+            # if we don't reduce vibes here then the landing detector
+            # may not trigger
+            self.set_parameter("SIM_VIB_MOT_MAX", 0)
             self.do_RTL()
             psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
             # ignore the first 20Hz and look for a peak at -15dB or more
@@ -2144,6 +2164,7 @@ class AutoTestCopter(AutoTest):
                 "INS_NOTCH_FREQ": freq,
                 "INS_NOTCH_ATT": 50,
                 "INS_NOTCH_BW": freq/2,
+                "SIM_VIB_MOT_MAX": 350,
             })
             self.reboot_sitl()
 
@@ -2154,6 +2175,7 @@ class AutoTestCopter(AutoTest):
             while self.get_sim_time_cached() < tstart + hover_time:
                 attitude = self.mav.recv_match(type='ATTITUDE', blocking=True)
             tend = self.get_sim_time()
+            self.set_parameter("SIM_VIB_MOT_MAX", 0)
             self.do_RTL()
             psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
             freq = psd["F"][numpy.argmax(psd["X"][ignore_bins:]) + ignore_bins]
@@ -2191,8 +2213,16 @@ class AutoTestCopter(AutoTest):
 
         ex = None
         try:
+            # configure EKF to use external nav instead of GPS
+            ahrs_ekf_type = self.get_parameter("AHRS_EKF_TYPE")
+            if ahrs_ekf_type == 2:
+                self.set_parameter("EK2_GPS_TYPE", 3)
+            if ahrs_ekf_type == 3:
+                self.set_parameter("EK3_SRC1_POSXY", 6)
+                self.set_parameter("EK3_SRC1_VELXY", 6)
+                self.set_parameter("EK3_SRC1_POSZ", 6)
+                self.set_parameter("EK3_SRC1_VELZ", 6)
             self.set_parameter("GPS_TYPE", 0)
-            self.set_parameter("EK2_GPS_TYPE", 3)
             self.set_parameter("VISO_TYPE", 1)
             self.set_parameter("SERIAL5_PROTOCOL", 1)
             self.reboot_sitl()
@@ -2567,11 +2597,15 @@ class AutoTestCopter(AutoTest):
             self.set_analog_rangefinder_parameters()
 
             self.set_parameters({
-                "RNGFND1_MAX_CM": 1500,
-                "EK2_RNG_USE_HGT": 70,
-                "EK2_ENABLE": 1,
-                "AHRS_EKF_TYPE": 2,
+                "RNGFND1_MAX_CM": 1500
             })
+
+            # configure EKF to use rangefinder for altitude at low altitudes
+            ahrs_ekf_type = self.get_parameter("AHRS_EKF_TYPE")
+            if ahrs_ekf_type == 2:
+                self.set_parameter("EK2_RNG_USE_HGT", 70)
+            if ahrs_ekf_type == 3:
+                self.set_parameter("EK3_RNG_USE_HGT", 70)
 
             self.reboot_sitl() # needed for both rangefinder and initial position
             self.assert_vehicle_location_is_at_startup_location()
@@ -3310,7 +3344,7 @@ class AutoTestCopter(AutoTest):
             )
         m = self.mav.recv_match(type='POSITION_TARGET_LOCAL_NED', blocking=True, timeout=2)
         self.progress("Received local target: %s" % str(m))
-
+        
         if not (m.type_mask == 0xFFF8 or m.type_mask == 0x0FF8):
             raise NotAchievedException("Did not receive proper mask: expected=65528 or 4088, got=%u" % m.type_mask)
 
@@ -4256,6 +4290,7 @@ class AutoTestCopter(AutoTest):
                 # magic tridge EKF type that dramatically speeds up the test
                 self.set_parameter("AHRS_EKF_TYPE", 10)
                 self.set_parameter("EK2_ENABLE", 0)
+                self.set_parameter("EK3_ENABLE", 0)
                 self.set_parameter("INS_LOG_BAT_MASK", 3)
                 self.set_parameter("INS_LOG_BAT_OPT", 0)
                 self.set_parameter("INS_GYRO_FILTER", 100)
@@ -4391,6 +4426,7 @@ class AutoTestCopter(AutoTest):
                 # magic tridge EKF type that dramatically speeds up the test
                 self.set_parameter("AHRS_EKF_TYPE", 10)
                 self.set_parameter("EK2_ENABLE", 0)
+                self.set_parameter("EK3_ENABLE", 0)
                 self.set_parameter("INS_LOG_BAT_MASK", 3)
                 self.set_parameter("INS_LOG_BAT_OPT", 0)
                 self.set_parameter("INS_GYRO_FILTER", 100)
@@ -4521,6 +4557,9 @@ class AutoTestCopter(AutoTest):
             break
 
         self.context_pop()
+
+        # must reboot after we move away from EKF type 10 to EKF2 or EKF3
+        self.reboot_sitl()
 
         if ex is not None:
             raise ex
@@ -4711,16 +4750,22 @@ class AutoTestCopter(AutoTest):
         # ensure we can't switch to LOITER without position
         self.progress("Ensure we can't enter LOITER without position")
         self.context_push()
-        self.set_parameter("GPS_TYPE", 0)
+        self.set_parameter("GPS_TYPE", 2)
+        self.set_parameter("SIM_GPS_DISABLE", 1)
         self.reboot_sitl()
-        self.change_mode('STABILIZE')
-        self.wait_ekf_flags((mavutil.mavlink.ESTIMATOR_ATTITUDE |
+
+        # check for expected EKF flags
+        ahrs_ekf_type = self.get_parameter("AHRS_EKF_TYPE")
+        expected_ekf_flags = (mavutil.mavlink.ESTIMATOR_ATTITUDE |
                              mavutil.mavlink.ESTIMATOR_VELOCITY_VERT |
                              mavutil.mavlink.ESTIMATOR_POS_VERT_ABS |
-                             mavutil.mavlink.ESTIMATOR_CONST_POS_MODE |
-                             mavutil.mavlink.ESTIMATOR_PRED_POS_HORIZ_REL),
-                            0,
-                            timeout=120)
+                             mavutil.mavlink.ESTIMATOR_CONST_POS_MODE)
+        if ahrs_ekf_type == 2:
+            expected_ekf_flags = expected_ekf_flags | mavutil.mavlink.ESTIMATOR_PRED_POS_HORIZ_REL
+        self.wait_ekf_flags(expected_ekf_flags, 0, timeout=120)
+
+        # arm in Stabilize and attempt to switch to Loiter
+        self.change_mode('STABILIZE')
         self.arm_vehicle()
         self.mavproxy.send("mode LOITER\n")
         self.mavproxy.expect("requires position")
@@ -5628,6 +5673,8 @@ class AutoTestCopter(AutoTest):
         self.wait_groundspeed(0, 2)
 
     def test_parameter_validation(self):
+        # wait 10 seconds for initialisation
+        self.delay_sim_time(10)
         self.progress("invalid; min must be less than max:")
         self.set_parameter("MOT_PWM_MIN", 100)
         self.set_parameter("MOT_PWM_MAX", 50)
@@ -5653,17 +5700,33 @@ class AutoTestCopter(AutoTest):
         self.context_push()
         ex = None
         try:
-            self.set_parameter("EK2_ALT_SOURCE", 2)
+            # disable barometer so there is no altitude source
+            self.set_parameter("SIM_BARO_DISABLE", 1)
+            self.set_parameter("SIM_BARO2_DISABL", 1)
             self.wait_gps_disable(position_vertical=True)
+
+            # turn off arming checks (mandatory arming checks will still be run)
+            self.set_parameter("ARMING_CHECK", 0)
+
+            # delay 12 sec to allow EKF to lose altitude estimate
+            self.delay_sim_time(12)
+
             self.change_mode("ALT_HOLD")
             self.assert_prearm_failure("Need Alt Estimate")
+
+            # force arm vehicle in stabilize to bypass barometer pre-arm checks
             self.change_mode("STABILIZE")
             self.arm_vehicle()
-            self.takeoff()
+            self.set_rc(3, 1700)
             try:
                 self.change_mode("ALT_HOLD", timeout=10)
             except AutoTestTimeoutException:
                 self.progress("PASS not able to set mode without Position : %s" % "ALT_HOLD")
+
+            # check that mode change to ALT_HOLD has failed (it should)
+            if self.mode_is("ALT_HOLD"):
+                raise NotAchievedException("Changed to ALT_HOLD with no altitude estimate")
+
         except Exception as e:
             self.progress("Exception caught: %s" % (
                 self.get_exception_stacktrace(e)))
@@ -5895,7 +5958,7 @@ class AutoTestCopter(AutoTest):
              "Test GCS Failsafe",
              self.fly_gcs_failsafe), #239s
 
-            #this group has the smallest runtime right now at around 5mins,
+            #this group has the smallest runtime right now at around 5mins, 
             #  so add more tests here, till its around 9-10mins, then make a new group
         ])
         return ret
@@ -5920,7 +5983,7 @@ class AutoTestCopter(AutoTest):
              self.fly_fence_avoidance_test),
 
             ("AC_Avoidance_Beacon",
-             "Test beacon avoidance slide behaviour",
+             "Test beacon avoidance slide behaviour", 
              self.fly_beacon_avoidance_test),#28s
 
             ("BaroWindCorrection",
@@ -5953,8 +6016,8 @@ class AutoTestCopter(AutoTest):
              "Test Max Alt Fence",
              self.fly_alt_max_fence_test), #26s
 
-            ("AutoTuneSwitch",
-             "Fly AUTOTUNE on a switch",
+            ("AutoTuneSwitch", 
+             "Fly AUTOTUNE on a switch", 
              self.fly_autotune_switch), #105s
 
             ("GPSGlitchLoiter",
@@ -6123,14 +6186,14 @@ class AutoTestCopter(AutoTest):
         '''return list of all tests'''
         ret = ([
             ("FixedYawCalibration",
-             "Test Fixed Yaw Calibration", #about 20 secs
+             "Test Fixed Yaw Calibration", #about 20 secs 
              self.test_fixed_yaw_calibration), # something about SITLCompassCalibration appears to fail this one, so we put it first
 
-            # we run this single 8min-and-40s test on its own, apart from
+            # we run this single 8min-and-40s test on its own, apart from 
             #   requiring FixedYawCalibration right before it because without it, it fails to calibrate
             ("SITLCompassCalibration", # this autotest appears to interfere with FixedYawCalibration, no idea why.
              "Test SITL onboard compass calibration",
-             self.test_mag_calibration),
+             self.test_mag_calibration),  
         ])
         return ret
 
@@ -6139,16 +6202,16 @@ class AutoTestCopter(AutoTest):
         ret = ([
             ("MotorVibration",
              "Fly motor vibration test",
-             self.fly_motor_vibration),
+             self.fly_motor_vibration), 
 
             ("DynamicNotches",
              "Fly Dynamic Notches",
-             self.fly_dynamic_notches),
+             self.fly_dynamic_notches), 
 
             ("GyroFFT",
              "Fly Gyro FFT",
              self.fly_gyro_fft),
-
+ 
             ("GyroFFTHarmonic",
              "Fly Gyro FFT Harmonic Matching",
              self.fly_gyro_fft_harmonic),

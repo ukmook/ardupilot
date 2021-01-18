@@ -3519,7 +3519,7 @@ class AutoTest(ABC):
         """Set parameters from vehicle."""
         want = copy.copy(parameters)
         self.progress("set_parameters: (%s)" % str(want))
-        self.drain_mav_unparsed()
+        self.drain_mav()
         if len(want) == 0:
             return
 
@@ -4310,7 +4310,7 @@ class AutoTest(ABC):
                 else:
                     sum_of_achieved_values = 0.0
                 count_of_achieved_values = 0
-        raise AutoTestTimeoutException("Failed to attain %s want %s, reach %s" % (value_name, str(target), str(sum_of_achieved_values * (1.0 / count_of_achieved_values)) if count_of_achieved_values != 0 else str(last_value)))
+        raise AutoTestTimeoutException("Failed to attain %s want %s, reached %s" % (value_name, str(target), str(sum_of_achieved_values * (1.0 / count_of_achieved_values)) if count_of_achieved_values != 0 else str(last_value)))
 
     def wait_heading(self, heading, accuracy=5, timeout=30, **kwargs):
         """Wait for a given heading."""
@@ -4582,8 +4582,8 @@ class AutoTest(ABC):
             self.progress("GPS healthy")
             return
 
-    def assert_sensor_state(self, sensor, present=True, enabled=True, healthy=True):
-        return self.sensor_has_state(sensor, present, enabled, healthy, do_assert=True)
+    def assert_sensor_state(self, sensor, present=True, enabled=True, healthy=True, verbose=False):
+        return self.sensor_has_state(sensor, present, enabled, healthy, do_assert=True, verbose=verbose)
 
     def sensor_has_state(self, sensor, present=True, enabled=True, healthy=True, do_assert=False, verbose=False):
         m = self.mav.recv_match(type='SYS_STATUS', blocking=True, timeout=5)

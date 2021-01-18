@@ -692,7 +692,7 @@ class AutoTestPlane(AutoTest):
             self.progress("groundspeed and airspeed should be different (have=%f want=%f)" % (delta, want_delta))
             if delta > want_delta:
                 break
-        self.fly_home_land_and_disarm()
+        self.fly_home_land_and_disarm(timeout=240)
 
     def fly_home_land_and_disarm(self, timeout=120):
         filename = "flaps.txt"
@@ -1152,9 +1152,9 @@ class AutoTestPlane(AutoTest):
             self.assert_fence_sys_status(True, True, True)
             self.mavproxy.send("fence clear\n")
             self.mavproxy.expect("fence removed")
+            self.wait_sensor_state(mavutil.mavlink.MAV_SYS_STATUS_GEOFENCE, False, False, True)
             if self.get_parameter("FENCE_TOTAL") != 0:
                 raise NotAchievedException("Expected zero points remaining")
-            self.assert_fence_sys_status(False, False, True)
 
         except Exception as e:
             self.progress("Exception caught:")
@@ -1357,6 +1357,7 @@ class AutoTestPlane(AutoTest):
         self.wait_disarmed(timeout=120)
 
     def deadreckoning_main(self, disable_airspeed_sensor=False):
+        self.wait_ready_to_arm()
         self.gpi = None
         self.simstate = None
         self.last_print = 0
@@ -1896,18 +1897,20 @@ class AutoTestPlane(AutoTest):
         ex = None
 
         # new lane swtich available only with EK3
-        self.set_parameter("EK3_ENABLE", 1)
-        self.set_parameter("EK2_ENABLE", 0)
-        self.set_parameter("AHRS_EKF_TYPE", 3)
-        self.set_parameter("EK3_AFFINITY", 15) # enable affinity for all sensors
-        self.set_parameter("EK3_IMU_MASK", 3) # use only 2 IMUs
-        self.set_parameter("GPS_TYPE2", 1)
-        self.set_parameter("SIM_GPS2_DISABLE", 0)
-        self.set_parameter("SIM_BARO_COUNT", 2)
-        self.set_parameter("SIM_BAR2_DISABLE", 0)
-        self.set_parameter("ARSPD2_TYPE", 2)
-        self.set_parameter("ARSPD2_USE", 1)
-        self.set_parameter("ARSPD2_PIN", 2)
+        self.set_parameters({
+            "EK3_ENABLE": 1,
+            "EK2_ENABLE": 0,
+            "AHRS_EKF_TYPE": 3,
+            "EK3_AFFINITY": 15, # enable affinity for all sensors
+            "EK3_IMU_MASK": 3, # use only 2 IMUs
+            "GPS_TYPE2": 1,
+            "SIM_GPS2_DISABLE": 0,
+            "SIM_BARO_COUNT": 2,
+            "SIM_BAR2_DISABLE": 0,
+            "ARSPD2_TYPE": 2,
+            "ARSPD2_USE": 1,
+            "ARSPD2_PIN": 2,
+        })
 
         # some parameters need reboot to take effect
         self.reboot_sitl()
@@ -1965,10 +1968,12 @@ class AutoTestPlane(AutoTest):
             self.context_collect("STATUSTEXT")
             # create a GPS velocity error by adding a random 2m/s noise on each axis
             def sim_gps_verr():
-                self.set_parameter("SIM_GPS_VERR_X", self.get_parameter("SIM_GPS_VERR_X") + 2)
-                self.set_parameter("SIM_GPS_VERR_Y", self.get_parameter("SIM_GPS_VERR_Y") + 2)
-                self.set_parameter("SIM_GPS_VERR_Z", self.get_parameter("SIM_GPS_VERR_Z") + 2)
-            self.wait_statustext(text="EKF3 lane switch", timeout=30, the_function=sim_gps_verr(), check_context=True)
+                self.set_parameters({
+                    "SIM_GPS_VERR_X": self.get_parameter("SIM_GPS_VERR_X") + 2,
+                    "SIM_GPS_VERR_Y": self.get_parameter("SIM_GPS_VERR_Y") + 2,
+                    "SIM_GPS_VERR_Z": self.get_parameter("SIM_GPS_VERR_Z") + 2,
+                })
+            self.wait_statustext(text="EKF3 lane switch", timeout=30, the_function=sim_gps_verr, check_context=True)
             if self.lane_switches != [1, 0, 1]:
                 raise NotAchievedException("Expected lane switch 1, got %s" % str(self.lane_switches[-1]))
             # Cleanup
@@ -2021,7 +2026,7 @@ class AutoTestPlane(AutoTest):
                     0,
                     0
                 )
-            self.wait_statustext(text="EKF3 lane switch", timeout=30, the_function=change_speed(), check_context=True)
+            self.wait_statustext(text="EKF3 lane switch", timeout=30, the_function=change_speed, check_context=True)
             if self.lane_switches != [1, 0, 1, 0, 1]:
                 raise NotAchievedException("Expected lane switch 1, got %s" % str(self.lane_switches[-1]))
             # Cleanup
