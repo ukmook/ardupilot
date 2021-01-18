@@ -44,7 +44,7 @@
  *
  * You should have received a copy of the GNU General Public License along
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
- * 
+ *
  * Modified for use in AP_HAL by Andrew Tridgell and Siddharth Bharat Purohit
  */
 
@@ -84,6 +84,12 @@
 #define STM32_FLASH_NPAGES  8
 static const uint32_t flash_memmap[STM32_FLASH_NPAGES] = { KB(16), KB(16), KB(16), KB(16), KB(64),
                                                            KB(128), KB(128), KB(128) };
+
+#elif BOARD_FLASH_SIZE == 1536
+#define STM32_FLASH_NPAGES  16
+static const uint32_t flash_memmap[STM32_FLASH_NPAGES] = { KB(16), KB(16), KB(16), KB(16), KB(64),
+                                                           KB(128), KB(128), KB(128), KB(128), KB(128), KB(128), KB(128),
+                                                           KB(128), KB(128), KB(128), KB(128)};
 
 #elif BOARD_FLASH_SIZE == 1024
 #define STM32_FLASH_NPAGES  12
@@ -506,7 +512,7 @@ static bool stm32_flash_write_f4f7(uint32_t addr, const void *buf, uint32_t coun
 #if STM32_FLASH_DISABLE_ISR
     syssts_t sts = chSysGetStatusAndLockX();
 #endif
-    
+
     stm32_flash_unlock();
 
     // clear previous errors
@@ -524,7 +530,7 @@ static bool stm32_flash_write_f4f7(uint32_t addr, const void *buf, uint32_t coun
 
         // ensure write ordering with cache
         __DSB();
-        
+
         stm32_flash_wait_idle();
 
         const uint32_t v2 = getreg32(addr);
@@ -547,7 +553,7 @@ static bool stm32_flash_write_f4f7(uint32_t addr, const void *buf, uint32_t coun
 
         // ensure write ordering with cache
         __DSB();
-        
+
         stm32_flash_wait_idle();
 
         if (getreg16(addr) != *(uint16_t *)b) {
@@ -602,7 +608,7 @@ static bool stm32_flash_write_f1(uint32_t addr, const void *buf, uint32_t count)
 #if STM32_FLASH_DISABLE_ISR
     syssts_t sts = chSysGetStatusAndLockX();
 #endif
-    
+
     stm32_flash_unlock();
 
     stm32_flash_wait_idle();
@@ -665,7 +671,7 @@ void stm32_flash_keep_unlocked(bool set)
         flash_keep_unlocked = true;
     } else if (!set && flash_keep_unlocked) {
         flash_keep_unlocked = false;
-        stm32_flash_lock();        
+        stm32_flash_lock();
     }
 }
 
@@ -680,4 +686,3 @@ bool stm32_flash_recent_erase(void)
 #endif
 
 #endif // HAL_NO_FLASH_SUPPORT
-
