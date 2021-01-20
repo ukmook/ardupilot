@@ -598,7 +598,7 @@ class chibios(Board):
             '-mno-thumb-interwork',
             '-mthumb',
             '--specs=nano.specs',
-            '-specs=nosys.specs',
+            '--specs=nosys.specs',
             '-DCHIBIOS_BOARD_NAME="%s"' % self.name,
             '-D__USE_CMSIS',
             '-Werror=deprecated-declarations'
@@ -641,8 +641,8 @@ class chibios(Board):
             '-nostartfiles',
             '-mno-thumb-interwork',
             '-mthumb',
-            '-specs=nano.specs',
-            '-specs=nosys.specs',
+            '--specs=nano.specs',
+            '--specs=nosys.specs',
             '-L%s' % env.BUILDROOT,
             '-L%s' % cfg.srcnode.make_node('modules/ChibiOS/os/common/startup/ARMCMx/compilers/GCC/ld/').abspath(),
             '-L%s' % cfg.srcnode.make_node('libraries/AP_HAL_ChibiOS/hwdef/common/').abspath(),
@@ -893,6 +893,16 @@ class bebop(linux):
             CONFIG_HAL_BOARD_SUBTYPE = 'HAL_BOARD_SUBTYPE_LINUX_BEBOP',
         )
 
+class vnav(linux):
+    toolchain = 'arm-linux-gnueabihf'
+
+    def configure_env(self, cfg, env):
+        super(vnav, self).configure_env(cfg, env)
+
+        env.DEFINES.update(
+            CONFIG_HAL_BOARD_SUBTYPE = 'HAL_BOARD_SUBTYPE_LINUX_VNAV',
+        )
+        
 class disco(linux):
     toolchain = 'arm-linux-gnueabihf'
 

@@ -1298,10 +1298,8 @@ class AutoTest(ABC):
         # setup test parameters
         vinfo = vehicleinfo.VehicleInfo()
         if self.params is None:
-            frames = vinfo.options[self.vehicleinfo_key()]["frames"]
-            self.params = frames[self.frame]["default_params_filename"]
-        if not isinstance(self.params, list):
-            self.params = [self.params]
+            self.params = self.model_defaults_filepath(self.vehicleinfo_key(),
+                                                       self.frame)
         for x in self.params:
             self.repeatedly_apply_parameter_file(os.path.join(testdir, x))
         self.set_parameter('LOG_DISARMED', 1)
@@ -3610,6 +3608,7 @@ class AutoTest(ABC):
 
     def get_parameter_direct(self, name, attempts=1, timeout=60, verbose=True, timeout_in_wallclock=False):
         while attempts > 0:
+            attempts -= 1
             if verbose:
                 self.progress("Sending param_request_read for (%s)" % name)
             # we MUST parse here or collections fail where we need
@@ -3643,7 +3642,6 @@ class AutoTest(ABC):
                     return m.param_value
                 if verbose:
                     self.progress("(%s) != (%s)" % (m.param_id, name,))
-            attempts -= 1
         raise NotAchievedException("Failed to retrieve parameter (%s)" % name)
 
     def get_parameter_mavproxy(self, name, attempts=1, timeout=60):
@@ -9161,4 +9159,4 @@ switch value'''
         defaults_list = []
         for d in defaults_filepath:
             defaults_list.append(os.path.join(testdir, d))
-        return ','.join(defaults_list)
+        return defaults_list
