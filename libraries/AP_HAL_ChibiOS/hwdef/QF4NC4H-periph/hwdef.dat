@@ -17,7 +17,7 @@ define STORAGE_FLASH_PAGE 2
 --------------------------------------
 
 # board ID for firmware load
-APJ_BOARD_ID 2004
+APJ_BOARD_ID 8001
 
 # setup build for a peripheral firmware
 env AP_PERIPH 1

@@ -13,7 +13,7 @@ STM32_VDD 330U
 # ------ ID ----------------
 
 # board ID for firmware load
-APJ_BOARD_ID 767
+APJ_BOARD_ID 7011
 
 # ------------ Clocks ----------
 

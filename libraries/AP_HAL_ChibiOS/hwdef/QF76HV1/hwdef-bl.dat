@@ -2,7 +2,7 @@
 MCU STM32F7xx STM32F767xx
 
 # board ID for firmware load
-APJ_BOARD_ID 767
+APJ_BOARD_ID 7011
 
 # crystal frequency
 OSCILLATOR_HZ 16000000
