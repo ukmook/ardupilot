@@ -14,7 +14,7 @@ OSCILLATOR_HZ 8000000
 # ------ ID ----------------
 
 # board ID for firmware load
-APJ_BOARD_ID 7013
+APJ_BOARD_ID 7001
 
 # ---------- Storage -----------
 
@@ -233,6 +233,12 @@ DMA_NOSHARE TIM4* TIM3* USART3_TX USART1_TX USART2_TX SPI4* SPI2*
 
 define OSD_ENABLED 1
 define HAL_OSD_TYPE_DEFAULT 3
+
+# -------------CROSSFIRE---------------
+# define HAL_MSP_ENABLED 1
+# define HAL_CRSF_ENABLED 1
+# define HAL_CRSF_TELEM_ENABLED 1
+# define HAL_CRSF_TELEM_TEXT_SELECTION_ENABLED 1
 
 # -----------Debug---------------
 
