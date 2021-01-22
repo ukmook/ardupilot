@@ -1170,14 +1170,6 @@ float NavEKF3::getPosDownDerivative(int8_t instance) const
     return 0.0f;
 }
 
-// This returns the specific forces in the NED frame
-void NavEKF3::getAccelNED(Vector3f &accelNED) const
-{
-    if (core) {
-        core[primary].getAccelNED(accelNED);
-    }
-}
-
 // return body axis gyro bias estimates in rad/sec
 void NavEKF3::getGyroBias(int8_t instance, Vector3f &gyroBias) const
 {
@@ -1193,15 +1185,6 @@ void NavEKF3::getAccelBias(int8_t instance, Vector3f &accelBias) const
     if (instance < 0 || instance >= num_cores) instance = primary;
     if (core) {
         core[instance].getAccelBias(accelBias);
-    }
-}
-
-// return estimated 1-sigma tilt error for the specified instance in radians
-void NavEKF3::getTiltError(int8_t instance, float &ang) const
-{
-    if (instance < 0 || instance >= num_cores) instance = primary;
-    if (core) {
-        core[instance].getTiltError(ang);
     }
 }
 
@@ -1763,27 +1746,6 @@ void NavEKF3::getFilterFaults(int8_t instance, uint16_t &faults) const
         core[instance].getFilterFaults(faults);
     } else {
         faults = 0;
-    }
-}
-
-/*
-  return filter timeout status as a bitmasked integer
-  0 = position measurement timeout
-  1 = velocity measurement timeout
-  2 = height measurement timeout
-  3 = magnetometer measurement timeout
-  4 = unassigned
-  5 = unassigned
-  6 = unassigned
-  7 = unassigned
-*/
-void NavEKF3::getFilterTimeouts(int8_t instance, uint8_t &timeouts) const
-{
-    if (instance < 0 || instance >= num_cores) instance = primary;
-    if (core) {
-        core[instance].getFilterTimeouts(timeouts);
-    } else {
-        timeouts = 0;
     }
 }
 

@@ -123,12 +123,6 @@ void NavEKF3_core::getAccelBias(Vector3f &accelBias) const
     accelBias = stateStruct.accel_bias / dtEkfAvg;
 }
 
-// return estimated 1-sigma tilt error in radians
-void NavEKF3_core::getTiltError(float &ang) const
-{
-    ang = sqrtf(MAX(tiltErrorVariance,0.0f));
-}
-
 // return the transformation matrix from XYZ (body) to NED axes
 void NavEKF3_core::getRotationBodyToNED(Matrix3f &mat) const
 {
@@ -214,12 +208,6 @@ float NavEKF3_core::getPosDownDerivative(void) const
     // return the value calculated from a complementary filter applied to the EKF height and vertical acceleration
     // correct for the IMU offset (EKF calculations are at the IMU)
     return vertCompFiltState.vel + velOffsetNED.z;
-}
-
-// This returns the specific forces in the NED frame
-void NavEKF3_core::getAccelNED(Vector3f &accelNED) const {
-    accelNED = velDotNED;
-    accelNED.z -= GRAVITY_MSS;
 }
 
 // Write the last estimated NE position of the body frame origin relative to the reference point (m).
@@ -522,26 +510,6 @@ void  NavEKF3_core::getFilterFaults(uint16_t &faults) const
               faultStatus.bad_airspeed<<5 |
               faultStatus.bad_sideslip<<6 |
               !statesInitialised<<7);
-}
-
-/*
-return filter timeout status as a bitmasked integer
- 0 = position measurement timeout
- 1 = velocity measurement timeout
- 2 = height measurement timeout
- 3 = magnetometer measurement timeout
- 4 = true airspeed measurement timeout
- 5 = unassigned
- 6 = unassigned
- 7 = unassigned
-*/
-void  NavEKF3_core::getFilterTimeouts(uint8_t &timeouts) const
-{
-    timeouts = (posTimeout<<0 |
-                velTimeout<<1 |
-                hgtTimeout<<2 |
-                magTimeout<<3 |
-                tasTimeout<<4);
 }
 
 // Return the navigation filter status message

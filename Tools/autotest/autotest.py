@@ -360,6 +360,7 @@ suplementary_test_binary_map = {
     "test.CAN": "sitl_periph_gps.AP_Periph",
 }
 
+from common import Test
 def run_specific_test(step, *args, **kwargs):
     t = split_specific_test_step(step)
     if t is None:
@@ -372,8 +373,10 @@ def run_specific_test(step, *args, **kwargs):
 
     print("Got %s" % str(tester))
     for a in tester.tests():
-        print("Got %s" % (a[0]))
-        if a[0] == test:
+        if not hasattr(a, 'name'):
+            a = Test(a[0], a[1], a[2])
+        print("Got %s" % (a.name))
+        if a.name == test:
             return tester.run_tests([a])
     print("Failed to find test %s on %s" % (test, testname))
     sys.exit(1)

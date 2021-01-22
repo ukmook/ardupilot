@@ -2650,7 +2650,7 @@ void GCS_MAVLINK::send_vfr_hud()
     AP_AHRS &ahrs = AP::ahrs();
 
     // return values ignored; we send stale data
-    ahrs.get_position(global_position_current_loc);
+    UNUSED_RESULT(ahrs.get_position(global_position_current_loc));
 
     mavlink_msg_vfr_hud_send(
         chan,
@@ -2711,6 +2711,15 @@ MAV_RESULT GCS_MAVLINK::handle_preflight_reboot(const mavlink_command_long_t &pa
             uint8_t zeros[40] {};
             param_storage.write_block(0, zeros, sizeof(zeros));
             return MAV_RESULT_FAILED;
+        }
+        if (is_equal(packet.param4, 97.0f)) {
+            // create a really long loop
+            send_text(MAV_SEVERITY_WARNING,"Creating long loop");
+            // 250ms:
+            for (uint8_t i=0; i<250; i++) {
+                hal.scheduler->delay_microseconds(1000);
+            }
+            return MAV_RESULT_ACCEPTED;
         }
     }
 
@@ -4435,7 +4444,7 @@ void GCS_MAVLINK::send_global_position_int()
 {
     AP_AHRS &ahrs = AP::ahrs();
 
-    ahrs.get_position(global_position_current_loc); // return value ignored; we send stale data
+    UNUSED_RESULT(ahrs.get_position(global_position_current_loc)); // return value ignored; we send stale data
 
     Vector3f vel;
     if (!ahrs.get_velocity_NED(vel)) {

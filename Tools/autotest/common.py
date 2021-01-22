@@ -1104,6 +1104,14 @@ class LocationInt(object):
         self.alt = alt
         self.yaw = yaw
 
+class Test(object):
+    '''a test definition - information about a test'''
+    def __init__(self, name, description, function, attempts=1):
+        self.name = name
+        self.description = description
+        self.function = function
+        self.attempts = attempts
+
 class AutoTest(ABC):
     """Base abstract class.
     It implements the common function for all vehicle types.
@@ -2502,6 +2510,27 @@ class AutoTest(ABC):
                                        (parameter, required, got))
         self.progress("%s has value %f" % (parameter, required))
 
+    def assert_reach_imu_temperature(self, target, timeout):
+        '''wait to reach a target temperature'''
+        tstart = self.get_sim_time()
+        temp_ok = False
+        last_print_temp = -100
+        while self.get_sim_time_cached() - tstart < timeout:
+            m = self.mav.recv_match(type='RAW_IMU', blocking=True, timeout=2)
+            if m is None:
+                raise NotAchievedException("RAW_IMU")
+            temperature = m.temperature*0.01
+            if temperature >= target:
+                self.progress("Reached temperature %.1f" % temperature)
+                temp_ok = True
+                break
+            if temperature - last_print_temp > 1:
+                self.progress("temperature %.1f" % temperature)
+                last_print_temp = temperature
+
+        if not temp_ok:
+            raise NotAchievedException("target temperature")
+        
     def onboard_logging_not_log_disarmed(self):
         self.set_parameter("LOG_DISARMED", 0)
         self.set_parameter("LOG_FILE_DSRMROT", 0)
@@ -3404,22 +3433,31 @@ class AutoTest(ABC):
         self.set_output_to_trim(self.get_stick_arming_channel())
         return False
 
-    def disarm_motors_with_rc_input(self, timeout=20):
+    def disarm_motors_with_rc_input(self, timeout=20, watch_for_disabled=False):
         """Disarm motors with radio."""
         self.progress("Disarm motors with radio")
+        self.do_timesync_roundtrip()
+        self.context_push()
+        self.context_collect('STATUSTEXT')
         self.set_output_to_min(self.get_stick_arming_channel())
         tstart = self.get_sim_time()
+        ret = False
         while self.get_sim_time_cached() < tstart + timeout:
             self.wait_heartbeat()
             if not self.mav.motors_armed():
                 disarm_delay = self.get_sim_time_cached() - tstart
-                self.progress("MOTORS DISARMED OK WITH RADIO")
-                self.set_output_to_trim(self.get_stick_arming_channel())
-                self.progress("Disarm in %ss" % disarm_delay)  # TODO check disarming time
-                return True
-        self.progress("Failed to DISARM with radio")
+                self.progress("MOTORS DISARMED OK WITH RADIO (in %ss)" % disarm_delay)
+                ret = True
+                break
+            if self.statustext_in_collections("Rudder disarm: disabled"):
+                self.progress("Found 'Rudder disarm: disabled' in statustext")
+                break
+            self.context_clear_collection('STATUSTEXT')
+        if not ret:
+            self.progress("Failed to DISARM with RC input")
         self.set_output_to_trim(self.get_stick_arming_channel())
-        return False
+        self.context_pop()
+        return ret
 
     def arm_motors_with_switch(self, switch_chan, timeout=20):
         """Arm motors with switch."""
@@ -3513,7 +3551,7 @@ class AutoTest(ABC):
         self.set_parameters({name: value }, **kwargs)
 
 
-    def set_parameters(self, parameters, add_to_context=True, epsilon=0.000012, retries=None, verbose=True):
+    def set_parameters(self, parameters, add_to_context=True, epsilon_pct=0.00001, retries=None, verbose=True):
         """Set parameters from vehicle."""
         want = copy.copy(parameters)
         self.progress("set_parameters: (%s)" % str(want))
@@ -3548,7 +3586,7 @@ class AutoTest(ABC):
 #                    self.progress("Requesting (%s) (retry=%u)" % (name, i))
                     continue
                 delta = abs(autopilot_values[name] - value)
-                if delta <= epsilon:
+                if delta <= epsilon_pct*0.01*abs(value):
                     # correct value
                     self.progress("%s is now %f" % (name, autopilot_values[name]))
                     if add_to_context:
@@ -4764,6 +4802,18 @@ Also, ignores heartbeats not from our target system'''
     def wait_text(self, *args, **kwargs):
         self.wait_statustext(*args, **kwargs)
 
+    def statustext_in_collections(self, text, regex=False):
+        c = self.context_get()
+        if "STATUSTEXT" not in c.collections:
+            raise NotAchievedException("Asked to check context but it isn't collecting!")
+        for statustext in [x.text for x in c.collections["STATUSTEXT"]]:
+            if regex:
+                if re.match(text, statustext):
+                    return True
+            elif text.lower() in statustext.lower():
+                return True
+        return False
+
     def wait_statustext(self, text, timeout=20, the_function=None, check_context=False, regex=False):
         """Wait for a specific STATUSTEXT."""
 
@@ -4775,17 +4825,9 @@ Also, ignores heartbeats not from our target system'''
         # which checks all incoming messages.
         self.progress("Waiting for text : %s" % text.lower())
         if check_context:
-            c = self.context_get()
-            if "STATUSTEXT" not in c.collections:
-                raise NotAchievedException("Asked to check context but it isn't collecting!")
-            for statustext in [x.text for x in c.collections["STATUSTEXT"]]:
-                if regex:
-                    if re.match(text, statustext):
-                        self.progress("Found expected text in collection: %s" % text.lower())
-                        return
-                elif text.lower() in statustext.lower():
-                    self.progress("Found expected text in collection: %s" % text.lower())
-                    return
+            if self.statustext_in_collections(text, regex=regex):
+                self.progress("Found expected text in collection: %s" % text.lower())
+                return
 
         global statustext_found
         statustext_found = False
@@ -4890,10 +4932,27 @@ Also, ignores heartbeats not from our target system'''
             util.run_cmd('/bin/cp build/sitl/bin/* %s' % to_dir,
                          directory=util.reltopdir('.'))
 
-    def run_one_test(self, name, desc, test_function, interact=False):
+    def run_one_test(self, test, interact=False):
         '''new-style run-one-test used by run_tests'''
-        test_output_filename = self.buildlogs_path("%s-%s.txt" %
-                                                   (self.log_name(), name))
+        for i in range(0, test.attempts-1):
+            if self.run_one_test_attempt(test, interact=interact, attempt=i+2, do_fail_list=False):
+                return
+            self.progress("Run attempt failed.  Retrying")
+        self.run_one_test_attempt(test, interact=interact, attempt=1)
+
+    def run_one_test_attempt(self, test, interact=False, attempt=1, do_fail_list=True):
+        '''called by run_one_test to actually run the test in a retry loop'''
+        name = test.name
+        desc = test.description
+        test_function = test.function
+        if attempt != 1:
+            self.progress("RETRYING %s" % name)
+            test_output_filename = self.buildlogs_path("%s-%s-retry-%u.txt" %
+                                                       (self.log_name(), name, attempt-1))
+        else:
+            test_output_filename = self.buildlogs_path("%s-%s.txt" %
+                                                       (self.log_name(), name))
+
         tee = TeeBoth(test_output_filename, 'w', self.mavproxy_logfile)
 
         prettyname = "%s (%s)" % (name, desc)
@@ -4958,7 +5017,8 @@ Also, ignores heartbeats not from our target system'''
         else:
             self.progress('FAILED: "%s": %s (see %s)' %
                           (prettyname, repr(ex), test_output_filename))
-            self.fail_list.append((prettyname, ex, test_output_filename))
+            if do_fail_list:
+                self.fail_list.append((prettyname, ex, test_output_filename))
             if interact:
                 self.progress("Starting MAVProxy interaction as directed")
                 self.mavproxy.interact()
@@ -4969,6 +5029,8 @@ Also, ignores heartbeats not from our target system'''
         self.clear_mission_using_mavproxy()
 
         tee.close()
+
+        return passed
 
     def check_test_syntax(self, test_file):
         """Check mistake on autotest function syntax."""
@@ -6383,7 +6445,7 @@ Also, ignores heartbeats not from our target system'''
                     "Armed with rudder when ARMING_RUDDER=0")
             self.start_subtest("Test disarming failure with ARMING_RUDDER=0")
             self.arm_vehicle()
-            if self.disarm_motors_with_rc_input():
+            if self.disarm_motors_with_rc_input(watch_for_disabled=True):
                 raise NotAchievedException(
                     "Disarmed with rudder when ARMING_RUDDER=0")
             self.disarm_vehicle()
@@ -6523,21 +6585,25 @@ Also, ignores heartbeats not from our target system'''
 
         # we should find at least one Armed event and one disarmed
         # event, and at least one ARM message for arm and disarm
+        self.progress("Checking for an arm event")
         dfreader = self.dfreader_for_current_onboard_log()
         m = dfreader.recv_match(type="EV", condition="EV.Id==10") # armed
         if m is None:
             raise NotAchievedException("Did not find an Armed EV message")
 
+        self.progress("Checking for a disarm event")
         dfreader = self.dfreader_for_current_onboard_log()
         m = dfreader.recv_match(type="EV", condition="EV.Id==11") # disarmed
         if m is None:
             raise NotAchievedException("Did not find a disarmed EV message")
 
+        self.progress("Checking for ARM.ArmState==1")
         dfreader = self.dfreader_for_current_onboard_log()
         m = dfreader.recv_match(type="ARM", condition="ARM.ArmState==1")
         if m is None:
             raise NotAchievedException("Did not find a armed ARM message")
 
+        self.progress("Checking for ARM.ArmState==0")
         dfreader = self.dfreader_for_current_onboard_log()
         m = dfreader.recv_match(type="ARM", condition="ARM.ArmState==0")
         if m is None:
@@ -7591,8 +7657,7 @@ switch value'''
         pass
 
     def test_skipped(self, test, reason):
-        (name, desc, func) = test
-        self.progress("##### %s is skipped: %s" % (name, reason))
+        self.progress("##### %s is skipped: %s" % (test, reason))
         self.skip_list.append((test, reason))
 
     def last_onboard_log(self):
@@ -7652,8 +7717,7 @@ switch value'''
                 self.clear_mission(mavutil.mavlink.MAV_MISSION_TYPE_ALL)
 
             for test in tests:
-                (name, desc, func) = test
-                self.run_one_test(name, desc, func)
+                self.run_one_test(test)
 
         except pexpect.TIMEOUT:
             self.progress("Failed with timeout")
@@ -7673,8 +7737,7 @@ switch value'''
             self.progress("Skipped tests:")
             for skipped in self.skip_list:
                 (test, reason) = skipped
-                (name, desc, func) = test
-                print("  %s (see %s)" % (name, reason))
+                print("  %s (see %s)" % (test.name, reason))
 
         if len(self.fail_list):
             self.progress("Failing tests:")
@@ -7989,6 +8052,29 @@ switch value'''
     def accelcal(self):
         ex = None
         try:
+            # setup with pre-existing accel offsets, to show that existing offsets don't
+            # adversely affect a new cal
+            pre_aofs = [Vector3(2.8, 1.2, 1.7),
+                        Vector3(0.2, -0.9, 2.9)]
+            pre_ascale = [Vector3(0.95, 1.2, 0.98),
+                          Vector3(1.1, 1.0, 0.93)]
+            aofs = [Vector3(0.7, -0.3, 1.8),
+                    Vector3(-2.1, 1.9, 2.3)]
+            ascale = [Vector3(0.98, 1.12, 1.05),
+                      Vector3(1.11, 0.98, 0.96)]
+            param_map = [("INS_ACCOFFS",  "SIM_ACC1_BIAS", pre_aofs[0], aofs[0]),
+                         ("INS_ACC2OFFS", "SIM_ACC2_BIAS", pre_aofs[1], aofs[1]),
+                         ("INS_ACCSCAL",  "SIM_ACC1_SCAL", pre_ascale[0], ascale[0]),
+                         ("INS_ACC2SCAL", "SIM_ACC2_SCAL", pre_ascale[1], ascale[1])]
+            axes = ['X','Y','Z']
+
+            # form the pre-calibration params
+            initial_params = {}
+            for (ins_prefix, sim_prefix, pre_value, post_value) in param_map:
+                for axis in axes:
+                    initial_params[ins_prefix+"_"+axis] = getattr(pre_value,axis.lower())
+                    initial_params[sim_prefix+"_"+axis] = getattr(post_value,axis.lower())
+            self.set_parameters(initial_params)
             self.customise_SITL_commandline(["-M", "calibration"])
             self.mavproxy_load_module("sitl_calibration")
             self.mavproxy_load_module("calibration")
@@ -8003,13 +8089,26 @@ switch value'''
                             "nose DOWN",
                             "nose UP",
                             "on its BACK",
-            ]:
+                            ]:
                 timeout = 2
                 self.mavproxy.expect("Place vehicle %s and press any key." % wanted, timeout=timeout)
                 self.mavproxy.expect("sitl_accelcal: sending attitude, please wait..", timeout=timeout)
                 self.mavproxy.expect("sitl_accelcal: attitude detected, please press any key..", timeout=timeout)
                 self.mavproxy.send("\n")
             self.mavproxy.expect("APM: Calibration successful", timeout=timeout)
+            self.fetch_parameters()
+            self.drain_mav()
+
+            self.progress("Checking results")
+            accuracy_pct = 1.0
+            for (ins_prefix, sim_prefix, pre_value, post_value) in param_map:
+                for axis in axes:
+                    pname = ins_prefix+"_"+axis
+                    v = self.mav.param(pname)
+                    expected_v = getattr(post_value,axis.lower())
+                    error_pct = 100.0 * abs(v - expected_v) / abs(expected_v)
+                    if error_pct > accuracy_pct:
+                        raise NotAchievedException("Incorrect value %.4f for %s should be %.4f" % (v, pname, expected_v))
         except Exception as e:
             self.progress("Caught exception: %s" %
                           self.get_exception_stacktrace(e))
@@ -8985,43 +9084,43 @@ switch value'''
 
     def tests(self):
         return [
-            ("PIDTuning",
-             "Test PID Tuning",
-             self.test_pid_tuning),
+            Test("PIDTuning",
+                 "Test PID Tuning",
+                 self.test_pid_tuning),
 
-            ("ArmFeatures", "Arm features", self.test_arm_feature),
+            Test("ArmFeatures", "Arm features", self.test_arm_feature),
 
-            ("SetHome",
-            "Test Set Home",
-             self.fly_test_set_home),
+            Test("SetHome",
+                 "Test Set Home",
+                 self.fly_test_set_home),
 
-            ("ConfigErrorLoop",
-             "Test Config Error Loop",
-             self.test_config_error_loop),
+            Test("ConfigErrorLoop",
+                 "Test Config Error Loop",
+                 self.test_config_error_loop),
 
-            ("CPUFailsafe",
-             "Ensure we do something appropriate when the main loop stops",
-             self.CPUFailsafe),
+            Test("CPUFailsafe",
+                 "Ensure we do something appropriate when the main loop stops",
+                 self.CPUFailsafe),
 
-            ("Parameters",
-             "Test Parameter Set/Get",
-             self.test_parameters),
+            Test("Parameters",
+                 "Test Parameter Set/Get",
+                 self.test_parameters),
 
-            ("LoggerDocumentation",
-             "Test Onboard Logging Generation",
-             self.test_onboard_logging_generation),
+            Test("LoggerDocumentation",
+                 "Test Onboard Logging Generation",
+                 self.test_onboard_logging_generation),
 
-            ("Logging",
-             "Test Onboard Logging",
-             self.test_onboard_logging),
+            Test("Logging",
+                 "Teqst Onboard Logging",
+                 self.test_onboard_logging),
 
-            ("GetCapabilities",
-             "Get Capabilities",
-             self.test_get_autopilot_capabilities),
+            Test("GetCapabilities",
+                 "Get Capabilities",
+                 self.test_get_autopilot_capabilities),
 
-            ("InitialMode",
-             "Test initial mode switching",
-             self.test_initial_mode),
+            Test("InitialMode",
+                 "Test initial mode switching",
+                 self.test_initial_mode),
         ]
 
     def post_tests_announcements(self):
@@ -9041,13 +9140,20 @@ switch value'''
 
     def autotest(self):
         """Autotest used by ArduPilot autotest CI."""
-        all_tests = self.tests()
+        all_tests = []
+        for test in self.tests():
+            if type(test) == Test:
+                all_tests.append(test)
+                continue
+            (name, desc, func) = test
+            actual_test = Test(name, desc, func)
+            all_tests.append(actual_test)
+
         disabled = self.disabled_tests()
         tests = []
         for test in all_tests:
-            (name, desc, func) = test
-            if name in disabled:
-                self.test_skipped(test, disabled[name])
+            if test.name in disabled:
+                self.test_skipped(test, disabled[test.name])
                 continue
             tests.append(test)
 
