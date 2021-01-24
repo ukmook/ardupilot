@@ -9,12 +9,12 @@ MCU STM32H7xx STM32H743xx
 # ------------ Clocks ----------
 
 # crystal frequency
-OSCILLATOR_HZ 8000000
+OSCILLATOR_HZ 16000000
 
 # ------ ID ----------------
 
 # board ID for firmware load
-APJ_BOARD_ID 7001
+APJ_BOARD_ID 7013
 
 # ---------- Storage -----------
 
@@ -45,7 +45,7 @@ PB8 I2C4_SCL I2C4
 PB9 I2C4_SDA I2C4
 
 
------# RCIN-----------
+# ----- RCIN -----------
 PA1 TIM2_CH2 TIM2 RCININT PULLDOWN LOW
 
 # --------BUZZ-----------
@@ -101,7 +101,8 @@ PC7 USART6_RX USART6 NODMA
 # PE8 UART7_TX UART7
 # PE7 UART7_RX UART7
 
-# BLH
+# BLH center pin on pwm 1-4
+# unused for bidir
 # PE1 UART8_TX UART8 NODMA
 # PE0 UART8_RX UART8 NODMA
 
@@ -136,20 +137,9 @@ PC5 BMI088_GYRO_CS CS
 PE9 BMI088_ACCEL_CS CS
 
 # --------PWM------------
+# PWM pins change for bdshot
+# bidir pwm 1,2,5,6
 
-# PWM out pins 1 - 4 blheli telem capable via uart8
-# PD12 TIM4_CH1 TIM4 PWM(1) GPIO(50) BIDIR
-# PD13 TIM4_CH2 TIM4 PWM(2) GPIO(51) BIDIR
-# PD14 TIM4_CH3 TIM4 PWM(3) GPIO(52) NODMA
-# PD15 TIM4_CH4 TIM4 PWM(4) GPIO(53) NODMA
-
-# PWM out pins 5 - 8
-# PB1 TIM3_CH4 TIM3 PWM(5) GPIO(54) BIDIR
-# PB0 TIM3_CH3 TIM3 PWM(6) GPIO(55) BIDIR
-# PE6 TIM15_CH2 TIM15 PWM(7) GPIO(56) NODMA
-# PE5 TIM15_CH1 TIM15 PWM(8) GPIO(57) NODMA
-
-# PWM pins change for bdshot on scout frame
 PD12 TIM4_CH1 TIM4 PWM(1) GPIO(50) # PWM_OUT 1
 PD13 TIM4_CH2 TIM4 PWM(2) GPIO(51) BIDIR # shared automatically with TIM4_CH1 # PWM_OUT 2
 PB1 TIM3_CH4 TIM3 PWM(3) GPIO(52) BIDIR # shared automatically with TIM3_CH3 PWM_OUT 5
@@ -185,10 +175,6 @@ define HAL_GPIO_C_LED_PIN 2
 IMU BMI088 SPI:bmi088_a SPI:bmi088_g ROTATION_PITCH_180
 IMU Invensense SPI:mpu6000 ROTATION_NONE
 
-# ------IMU fast sampling -----------
-
-define HAL_DEFAULT_INS_FAST_SAMPLE 1
-
 # Two Baros BMP280
 BARO DPS280 SPI:dps310
 BARO BMP388 SPI:bmp388
@@ -200,6 +186,10 @@ define HAL_PROBE_EXTERNAL_I2C_COMPASSES
 define HAL_I2C_INTERNAL_MASK 0
 define HAL_COMPASS_AUTO_ROT_DEFAULT 2
 
+define HAL_DEFAULT_INS_FAST_SAMPLE 1
+
+# ------SPI DEVICES -----------
+
 # SPI devices
 SPIDEV mpu6000     SPI4 DEVID1  MPU6000_CS  MODE3 1*MHZ 8*MHZ
 SPIDEV bmp388      SPI2 DEVID4  BMP388_CS   MODE3 1*MHZ 8*MHZ
@@ -207,7 +197,6 @@ SPIDEV bmi088_g    SPI6 DEVID3  BMI088_GYRO_CS      MODE3 10*MHZ 10*MHZ
 SPIDEV bmi088_a    SPI6 DEVID4  BMI088_ACCEL_CS     MODE3 10*MHZ 10*MHZ
 SPIDEV lis3mdl     SPI2 DEVID5  MAG_CS              MODE3 500*KHZ 500*KHZ
 SPIDEV dps310      SPI4 DEVID3  DPS310_CS   MODE0 20*MHZ 20*MHZ
-
 
 # --------SD CARD-----------
 
