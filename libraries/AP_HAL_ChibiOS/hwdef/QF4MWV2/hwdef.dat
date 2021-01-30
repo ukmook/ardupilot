@@ -2,7 +2,7 @@
 # for qUarkMini_Wing_V1 hardware
 # This is the qUarkMini_Wing_V2 variant
 
-include ../qUarkMini_Wing_V1/hwdef.dat
+include ../QF4MWV1/hwdef.dat
 
 
 # Change pin order

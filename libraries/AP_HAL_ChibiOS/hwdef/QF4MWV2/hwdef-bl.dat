@@ -2,7 +2,7 @@
 # for qUarkMini_Wing_V1 bootloader
 # This is the qUarkMini_Wing_V2 variant
 
-include ../qUarkMini_Wing_V1/hwdef-bl.dat
+include ../QF4MWV1/hwdef-bl.dat
 
 undef PC13
 undef PC14
