@@ -33,6 +33,8 @@ FLASH_RESERVE_START_KB 96
 
 define HAL_STORAGE_SIZE 16384
 
+env OPTIMIZE -O2
+
 # --------- Board Timer ---------
 
 define STM32_ST_USE_TIMER 5
