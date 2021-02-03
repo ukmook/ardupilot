@@ -39,7 +39,7 @@ define HAL_BATT_CURR_SCALE 27.27
 
 # ---------UARTS-----------
 # order of UARTs (and USB)
-# Order    USB   sr3    sr1    sr2    sr4     sr5
+# Order    USB   sr1    sr2    sr3    sr4     sr5
 # AP Name  USB   GPS1  TELM1  TELM2  GPS2   DEBUG
 SERIAL_ORDER OTG1 USART1 USART2 UART4 USART6
 
@@ -141,6 +141,5 @@ SPIDEV osd         SPI1 DEVID4  OSD_CS     MODE0 10*MHZ 10*MHZ
 
 define BOARD_PWM_COUNT_DEFAULT 4
 
-define OSD_ENABLED ENABLED
 #font for the osd
 ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
