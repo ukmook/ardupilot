@@ -121,8 +121,9 @@ const struct MultiplierStructure log_Multipliers[] = {
 #include <AP_NavEKF2/LogStructure.h>
 #include <AP_NavEKF3/LogStructure.h>
 #include <AP_BattMonitor/LogStructure.h>
-
 #include <AP_AHRS/LogStructure.h>
+#include <AP_Camera/LogStructure.h>
+#include <AP_Baro/LogStructure.h>
 
 // structure used to define logging format
 struct LogStructure {
@@ -353,20 +354,6 @@ struct PACKED log_RSSI {
     float RXRSSI;
 };
 
-struct PACKED log_BARO {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    uint8_t instance;
-    float   altitude;
-    float   pressure;
-    int16_t temperature;
-    float   climbrate;
-    uint32_t sample_time_ms;
-    float   drift_offset;
-    float   ground_temp;
-    uint8_t healthy;
-};
-
 struct PACKED log_Optflow {
     LOG_PACKET_HEADER;
     uint64_t time_us;
@@ -478,21 +465,6 @@ struct PACKED log_Radio {
     uint8_t remnoise;
     uint16_t rxerrors;
     uint16_t fixed;
-};
-
-struct PACKED log_Camera {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    uint32_t gps_time;
-    uint16_t gps_week;
-    int32_t  latitude;
-    int32_t  longitude;
-    int32_t  altitude;
-    int32_t  altitude_rel;
-    int32_t  altitude_gps;
-    int16_t  roll;
-    int16_t  pitch;
-    uint16_t yaw;
 };
 
 struct PACKED log_PID {
@@ -1032,45 +1004,18 @@ struct PACKED log_PSC {
 // @Field: Hfp: Probability sensor has failed
 // @Field: Pri: True if sensor is the primary sensor
 
-// @LoggerMessage: BARO
-// @Description: Gathered Barometer data
-// @Field: TimeUS: Time since system startup
-// @Field: I: barometer sensor instance number
-// @Field: Alt: calculated altitude
-// @Field: Press: measured atmospheric pressure
-// @Field: Temp: measured atmospheric temperature
-// @Field: CRt: derived climb rate from primary barometer
-// @Field: SMS: time last sample was taken
-// @Field: Offset: raw adjustment of barometer altitude, zeroed on calibration, possibly set by GCS
-// @Field: GndTemp: temperature on ground, specified by parameter or measured while on ground
-// @Field: Health: true if barometer is considered healthy
-
 // @LoggerMessage: BCN
-// @Description: Beacon informtaion
+// @Description: Beacon information
 // @Field: TimeUS: Time since system startup
 // @Field: Health: True if beacon sensor is healthy
 // @Field: Cnt: Number of beacons being used
 // @Field: D0: Distance to first beacon
 // @Field: D1: Distance to second beacon
 // @Field: D2: Distance to third beacon
-// @Field: D3: Distance to fouth beacon
+// @Field: D3: Distance to fourth beacon
 // @Field: PosX: Calculated beacon position, x-axis
 // @Field: PosY: Calculated beacon position, y-axis
 // @Field: PosZ: Calculated beacon position, z-axis
-
-// @LoggerMessage: CAM,TRIG
-// @Description: Camera shutter information
-// @Field: TimeUS: Time since system startup
-// @Field: GPSTime: milliseconds since start of GPS week
-// @Field: GPSWeek: weeks since 5 Jan 1980
-// @Field: Lat: current latitude
-// @Field: Lng: current longitude
-// @Field: Alt: current altitude
-// @Field: RelAlt: current altitude relative to home
-// @Field: GPSAlt: altitude as reported by GPS
-// @Field: Roll: current vehicle roll
-// @Field: Pitch: current vehicle pitch
-// @Field: Yaw: current vehicle yaw
 
 // @LoggerMessage: CESC
 // @Description: CAN ESC data
@@ -1413,7 +1358,7 @@ struct PACKED log_PSC {
 // @Description: parameter value
 // @Field: TimeUS: Time since system startup
 // @Field: Name: parameter name
-// @Field: Value: parameter vlaue
+// @Field: Value: parameter value
 
 // @LoggerMessage: PIDR,PIDP,PIDY,PIDA,PIDS
 // @Description: Proportional/Integral/Derivative gain values for Roll/Pitch/Yaw/Altitude/Steering
@@ -1738,8 +1683,7 @@ struct PACKED log_PSC {
       "RCOU",  "QHHHHHHHHHHHHHH",     "TimeUS,C1,C2,C3,C4,C5,C6,C7,C8,C9,C10,C11,C12,C13,C14", "sYYYYYYYYYYYYYY", "F--------------"  }, \
     { LOG_RSSI_MSG, sizeof(log_RSSI), \
       "RSSI",  "Qf",     "TimeUS,RXRSSI", "s-", "F-"  }, \
-    { LOG_BARO_MSG, sizeof(log_BARO), \
-      "BARO",  "QBffcfIffB", "TimeUS,I,Alt,Press,Temp,CRt,SMS,Offset,GndTemp,Health", "s#mPOnsmO-", "F-00B0C?0-" }, \
+LOG_STRUCTURE_FROM_BARO \
     { LOG_POWR_MSG, sizeof(log_POWR), \
       "POWR","QffHHB","TimeUS,Vcc,VServo,Flags,AccFlags,Safety", "svv---", "F00---" },  \
     { LOG_CMD_MSG, sizeof(log_Cmd), \
@@ -1748,10 +1692,7 @@ struct PACKED log_PSC {
       "MAVC", "QBBBHBBffffiifBB","TimeUS,TS,TC,Fr,Cmd,Cur,AC,P1,P2,P3,P4,X,Y,Z,Res,WL", "s---------------", "F---------------" }, \
     { LOG_RADIO_MSG, sizeof(log_Radio), \
       "RAD", "QBBBBBHH", "TimeUS,RSSI,RemRSSI,TxBuf,Noise,RemNoise,RxErrors,Fixed", "s-------", "F-------" }, \
-    { LOG_CAMERA_MSG, sizeof(log_Camera), \
-      "CAM", "QIHLLeeeccC","TimeUS,GPSTime,GPSWeek,Lat,Lng,Alt,RelAlt,GPSAlt,Roll,Pitch,Yaw", "s--DUmmmddd", "F--GGBBBBBB" }, \
-    { LOG_TRIGGER_MSG, sizeof(log_Camera), \
-      "TRIG", "QIHLLeeeccC","TimeUS,GPSTime,GPSWeek,Lat,Lng,Alt,RelAlt,GPSAlt,Roll,Pitch,Yaw", "s--DUmmmddd", "F--GGBBBBBB" }, \
+LOG_STRUCTURE_FROM_CAMERA \
     { LOG_ARSP_MSG, sizeof(log_ARSP), "ARSP",  "QBffcffBBfB", "TimeUS,I,Airspeed,DiffPress,Temp,RawPress,Offset,U,H,Hfp,Pri", "s#nPOPP----", "F-00B00----" }, \
     LOG_STRUCTURE_FROM_BATTMONITOR \
     { LOG_MAG_MSG, sizeof(log_MAG), \
@@ -1897,7 +1838,7 @@ enum LogMessages : uint8_t {
     LOG_RCIN2_MSG,
     LOG_RCOUT_MSG,
     LOG_RSSI_MSG,
-    LOG_BARO_MSG,
+    LOG_IDS_FROM_BARO,
     LOG_POWR_MSG,
     LOG_IDS_FROM_AHRS,
     LOG_SIMSTATE_MSG,
@@ -1905,7 +1846,7 @@ enum LogMessages : uint8_t {
     LOG_MAVLINK_COMMAND_MSG,
     LOG_RADIO_MSG,
     LOG_ATRP_MSG,
-    LOG_CAMERA_MSG,
+    LOG_IDS_FROM_CAMERA,
     LOG_TERRAIN_MSG,
     LOG_GPS_UBX1_MSG,
     LOG_GPS_UBX2_MSG,
@@ -1951,7 +1892,6 @@ enum LogMessages : uint8_t {
     LOG_MSG_SBPRAWH,
     LOG_MSG_SBPRAWM,
     LOG_MSG_SBPEVENT,
-    LOG_TRIGGER_MSG,
 
     LOG_RALLY_MSG,
     LOG_VISUALODOM_MSG,

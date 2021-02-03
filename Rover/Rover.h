@@ -199,7 +199,6 @@ private:
     // This is the state of the flight control system
     // There are multiple states defined such as MANUAL, AUTO, ...
     Mode *control_mode;
-    ModeReason control_mode_reason = ModeReason::UNKNOWN;
 
     // Used to maintain the state of the previous control switch position
     // This is set to -1 when we need to re-read the switch
@@ -305,7 +304,7 @@ private:
     void cruise_learn_start();
     void cruise_learn_update();
     void cruise_learn_complete();
-    void log_write_cruise_learn();
+    void log_write_cruise_learn() const;
 
     // ekf_check.cpp
     void ekf_check();
@@ -427,7 +426,7 @@ public:
     void motor_test_stop();
 
     // frame type
-    uint8_t get_frame_type() { return g2.frame_type.get(); }
+    uint8_t get_frame_type() const { return g2.frame_type.get(); }
     AP_WheelRateControl& get_wheel_rate_control() { return g2.wheel_rate_control; }
 
     // Simple mode

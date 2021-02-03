@@ -1,7 +1,6 @@
 #include <stdlib.h>
 
 #include <AP_AHRS/AP_AHRS.h>
-#include <AP_Baro/AP_Baro.h>
 #include <AP_Compass/AP_Compass.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
@@ -261,38 +260,6 @@ void AP_Logger::Write_RSSI()
     WriteBlock(&pkt, sizeof(pkt));
 }
 
-void AP_Logger::Write_Baro_instance(uint64_t time_us, uint8_t baro_instance)
-{
-    AP_Baro &baro = AP::baro();
-    float climbrate = baro.get_climb_rate();
-    float drift_offset = baro.get_baro_drift_offset();
-    float ground_temp = baro.get_ground_temperature();
-    const struct log_BARO pkt{
-        LOG_PACKET_HEADER_INIT(LOG_BARO_MSG),
-        time_us       : time_us,
-        instance      : baro_instance,
-        altitude      : baro.get_altitude(baro_instance),
-        pressure      : baro.get_pressure(baro_instance),
-        temperature   : (int16_t)(baro.get_temperature(baro_instance) * 100 + 0.5f),
-        climbrate     : climbrate,
-        sample_time_ms: baro.get_last_update(baro_instance),
-        drift_offset  : drift_offset,
-        ground_temp   : ground_temp,
-        healthy       : (uint8_t)baro.healthy(baro_instance)
-    };
-    WriteBlock(&pkt, sizeof(pkt));
-}
-
-// Write a BARO packet
-void AP_Logger::Write_Baro()
-{
-    const uint64_t time_us = AP_HAL::micros64();
-    const AP_Baro &baro = AP::baro();
-    for (uint8_t i=0; i< baro.num_instances(); i++) {
-        Write_Baro_instance(time_us, i);
-    }
-}
-
 void AP_Logger::Write_IMU_instance(const uint64_t time_us, const uint8_t imu_instance)
 {
     const AP_InertialSensor &ins = AP::ins();
@@ -457,55 +424,6 @@ void AP_Logger::Write_Radio(const mavlink_radio_t &packet)
         fixed        : packet.fixed
     };
     WriteBlock(&pkt, sizeof(pkt));
-}
-
-// Write a Camera packet
-void AP_Logger::Write_CameraInfo(enum LogMessages msg, const Location &current_loc, uint64_t timestamp_us)
-{
-    const AP_AHRS &ahrs = AP::ahrs();
-
-    int32_t altitude, altitude_rel, altitude_gps;
-    if (current_loc.relative_alt) {
-        altitude = current_loc.alt+ahrs.get_home().alt;
-        altitude_rel = current_loc.alt;
-    } else {
-        altitude = current_loc.alt;
-        altitude_rel = current_loc.alt - ahrs.get_home().alt;
-    }
-    const AP_GPS &gps = AP::gps();
-    if (gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
-        altitude_gps = gps.location().alt;
-    } else {
-        altitude_gps = 0;
-    }
-
-    const struct log_Camera pkt{
-        LOG_PACKET_HEADER_INIT(static_cast<uint8_t>(msg)),
-        time_us     : timestamp_us?timestamp_us:AP_HAL::micros64(),
-        gps_time    : gps.time_week_ms(),
-        gps_week    : gps.time_week(),
-        latitude    : current_loc.lat,
-        longitude   : current_loc.lng,
-        altitude    : altitude,
-        altitude_rel: altitude_rel,
-        altitude_gps: altitude_gps,
-        roll        : (int16_t)ahrs.roll_sensor,
-        pitch       : (int16_t)ahrs.pitch_sensor,
-        yaw         : (uint16_t)ahrs.yaw_sensor
-    };
-    WriteCriticalBlock(&pkt, sizeof(pkt));
-}
-
-// Write a Camera packet
-void AP_Logger::Write_Camera(const Location &current_loc, uint64_t timestamp_us)
-{
-    Write_CameraInfo(LOG_CAMERA_MSG, current_loc, timestamp_us);
-}
-
-// Write a Trigger packet
-void AP_Logger::Write_Trigger(const Location &current_loc)
-{
-    Write_CameraInfo(LOG_TRIGGER_MSG, current_loc, 0);
 }
 
 void AP_Logger::Write_Compass_instance(const uint64_t time_us, const uint8_t mag_instance)
