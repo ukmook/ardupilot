@@ -13,6 +13,7 @@ import shutil
 
 from pymavlink import mavutil
 from pymavlink import mavextra
+from pymavlink import rotmat as pymavlink_rotmat
 
 from pysim import util, rotmat
 from pysim import vehicleinfo
@@ -4912,6 +4913,82 @@ class AutoTestCopter(AutoTest):
             self.set_rc(2, 1500)
             self.do_RTL()
 
+    def OBSTACLE_DISTANCE_3D_test_angle(self, angle):
+        now = self.get_sim_time_cached()
+
+        distance = 15
+        right = distance * math.sin(math.radians(angle))
+        front = distance * math.cos(math.radians(angle))
+        down = 0
+
+        expected_distance_cm = distance * 100
+        # expected orientation
+        expected_orientation = int((angle+22.5)/45) % 8
+        self.progress("Angle %f expected orient %u" %
+                      (angle, expected_orientation))
+
+        tstart = self.get_sim_time()
+        last_send = 0
+        while True:
+            now = self.get_sim_time_cached()
+            if now - tstart > 10:
+                raise NotAchievedException("Did not get correct angle back")
+
+            if now - last_send > 0.1:
+                self.progress("ang=%f sending front=%f right=%f" %
+                              (angle, front, right))
+                self.mav.mav.obstacle_distance_3d_send(
+                    int(now*1000),  # time_boot_ms
+                    mavutil.mavlink.MAV_DISTANCE_SENSOR_LASER,
+                    mavutil.mavlink.MAV_FRAME_BODY_FRD,
+                    65535,
+                    front,  # x (m)
+                    right,  # y (m)
+                    down,  # z (m)
+                    0,  # min_distance (m)
+                    20  # max_distance (m)
+                )
+                last_send = now
+            m = self.mav.recv_match(type="DISTANCE_SENSOR",
+                                    blocking=True,
+                                    timeout=1)
+            if m is None:
+                continue
+#            self.progress("Got (%s)" % str(m))
+            if m.orientation != expected_orientation:
+#                self.progress("Wrong orientation (want=%u got=%u)" %
+#                              (expected_orientation, m.orientation))
+                continue
+            if abs(m.current_distance - expected_distance_cm) > 1:
+#                self.progress("Wrong distance (want=%f got=%f)" %
+#                              (expected_distance_cm, m.current_distance))
+                continue
+            self.progress("distance-at-angle good")
+            break
+
+    def OBSTACLE_DISTANCE_3D(self):
+        self.context_push()
+        ex = None
+        try:
+            self.set_parameters({
+                "SERIAL5_PROTOCOL": 1,
+                "PRX_TYPE": 2,
+            })
+            self.reboot_sitl()
+
+            for angle in range(0, 360):
+                self.OBSTACLE_DISTANCE_3D_test_angle(angle)
+
+        except Exception as e:
+            self.progress("Caught exception: %s" %
+                          self.get_exception_stacktrace(e))
+            ex = e
+        self.context_pop()
+        self.disarm_vehicle(force=True)
+        self.reboot_sitl()
+        if ex is not None:
+            raise ex
+
     def fly_proximity_avoidance_test(self):
         self.context_push()
         ex = None
@@ -5437,6 +5514,105 @@ class AutoTestCopter(AutoTest):
         self.progress("Ensure RFND messages in log")
         if not self.current_onboard_log_contains_message("RFND"):
             raise NotAchievedException("No RFND messages in log")
+
+    def fly_proximity_mavlink_distance_sensor(self):
+        self.start_subtest("Test mavlink proximity sensor using DISTANCE_SENSOR messages")  # noqa
+        self.context_push()
+        ex = None
+        try:
+            self.set_parameter("SERIAL5_PROTOCOL", 1)
+            self.set_parameter("PRX_TYPE", 2)  # mavlink
+            self.reboot_sitl()
+
+            self.progress("Should be unhealthy while we don't send messages")
+            self.assert_sensor_state(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_PROXIMITY, True, True, False)
+
+            self.progress("Should be healthy while we're sending good messages")
+            tstart = self.get_sim_time()
+            while True:
+                if self.get_sim_time() - tstart > 5:
+                    raise NotAchievedException("Sensor did not come good")
+                self.mav.mav.distance_sensor_send(
+                    0,  # time_boot_ms
+                    10, # min_distance cm
+                    50, # max_distance cm
+                    20, # current_distance cm
+                    mavutil.mavlink.MAV_DISTANCE_SENSOR_LASER, #  type
+                    21, #  id
+                    mavutil.mavlink.MAV_SENSOR_ROTATION_NONE, #  orientation
+                    255  # covariance
+                )
+                if self.sensor_has_state(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_PROXIMITY, True, True, True):
+                    self.progress("Sensor has good state")
+                    break
+                self.delay_sim_time(0.1)
+
+            self.progress("Should be unhealthy again if we stop sending messages")
+            self.delay_sim_time(1)
+            self.assert_sensor_state(mavutil.mavlink.MAV_SYS_STATUS_SENSOR_PROXIMITY, True, True, False)
+
+            # now make sure we get echoed back the same sorts of things we send:
+            # distances are in cm
+            distance_map = {
+                mavutil.mavlink.MAV_SENSOR_ROTATION_NONE: 30,
+                mavutil.mavlink.MAV_SENSOR_ROTATION_YAW_45: 35,
+                mavutil.mavlink.MAV_SENSOR_ROTATION_YAW_90: 20,
+                mavutil.mavlink.MAV_SENSOR_ROTATION_YAW_135: 15,
+                mavutil.mavlink.MAV_SENSOR_ROTATION_YAW_180: 70,
+                mavutil.mavlink.MAV_SENSOR_ROTATION_YAW_225: 80,
+                mavutil.mavlink.MAV_SENSOR_ROTATION_YAW_270: 10,
+                mavutil.mavlink.MAV_SENSOR_ROTATION_YAW_315: 90,
+            }
+
+            wanted_distances = copy.copy(distance_map)
+            sensor_enum = mavutil.mavlink.enums["MAV_SENSOR_ORIENTATION"]
+            def my_message_hook(mav, m):
+                if m.get_type() != 'DISTANCE_SENSOR':
+                    return
+                self.progress("Got (%s)" % str(m))
+                want = distance_map[m.orientation]
+                got = m.current_distance
+                # ArduPilot's floating point conversions make it imprecise:
+                delta = abs(want-got)
+                if delta > 1:
+                    self.progress(
+                        "Wrong distance (%s): want=%f got=%f" %
+                        (sensor_enum[m.orientation].name, want, got))
+                    return
+                if m.orientation not in wanted_distances:
+                    return
+                self.progress(
+                    "Correct distance (%s): want=%f got=%f" %
+                    (sensor_enum[m.orientation].name, want, got))
+                del wanted_distances[m.orientation]
+
+            self.install_message_hook_context(my_message_hook)
+            tstart = self.get_sim_time()
+            while True:
+                if self.get_sim_time() - tstart > 5:
+                    raise NotAchievedException("Sensor did not give right distances")  # noqa
+                for (orient, dist) in distance_map.items():
+                    self.mav.mav.distance_sensor_send(
+                        0,  # time_boot_ms
+                        10, # min_distance cm
+                        90, # max_distance cm
+                        dist, # current_distance cm
+                        mavutil.mavlink.MAV_DISTANCE_SENSOR_LASER, #  type
+                        21, #  id
+                        orient, #  orientation
+                        255  # covariance
+                    )
+                self.wait_heartbeat()
+                if len(wanted_distances.keys()) == 0:
+                    break
+        except Exception as e:
+            self.progress("Caught exception: %s" %
+                          self.get_exception_stacktrace(e))
+            ex = e
+        self.context_pop()
+        self.reboot_sitl()
+        if ex is not None:
+            raise ex
 
     def fly_rangefinder_mavlink_distance_sensor(self):
         self.start_subtest("Test mavlink rangefinder using DISTANCE_SENSOR messages")
@@ -6046,6 +6222,10 @@ class AutoTestCopter(AutoTest):
              "Fly stability patch",
              lambda: self.fly_stability_patch(30)), #17s
 
+            ("OBSTACLE_DISTANCE_3D",
+             "Test proximity avoidance slide behaviour in 3D",
+             self.OBSTACLE_DISTANCE_3D), #??s
+
             ("AC_Avoidance_Proximity",
              "Test proximity avoidance slide behaviour",
              self.fly_proximity_avoidance_test), #41s
@@ -6228,6 +6408,11 @@ class AutoTestCopter(AutoTest):
             ("MaxBotixI2CXL",
              "Test maxbotix rangefinder drivers",
              self.fly_rangefinder_driver_maxbotix), #62s
+
+            ("MAVProximity",
+             "Test MAVLink proximity driver",
+             self.fly_proximity_mavlink_distance_sensor,
+             ),
 
             ("ParameterValidation",
              "Test parameters are checked for validity",
