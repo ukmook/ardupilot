@@ -124,6 +124,7 @@ const struct MultiplierStructure log_Multipliers[] = {
 #include <AP_AHRS/LogStructure.h>
 #include <AP_Camera/LogStructure.h>
 #include <AP_Baro/LogStructure.h>
+#include <AP_VisualOdom/LogStructure.h>
 
 // structure used to define logging format
 struct LogStructure {
@@ -372,51 +373,6 @@ struct PACKED log_POWR {
     uint16_t flags;
     uint16_t accumulated_flags;
     uint8_t safety_and_arm;
-};
-
-// visual odometry sensor data
-struct PACKED log_VisualOdom {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    float time_delta;
-    float angle_delta_x;
-    float angle_delta_y;
-    float angle_delta_z;
-    float position_delta_x;
-    float position_delta_y;
-    float position_delta_z;
-    float confidence;
-};
-
-// visual position data
-struct PACKED log_VisualPosition {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    uint64_t remote_time_us;
-    uint32_t time_ms;
-    float pos_x;
-    float pos_y;
-    float pos_z;
-    float roll;     // degrees
-    float pitch;    // degrees
-    float yaw;      // degrees
-    float pos_err;  // meters
-    float ang_err;  // radians
-    uint8_t reset_counter;
-    uint8_t ignored;
-};
-
-struct PACKED log_VisualVelocity {
-    LOG_PACKET_HEADER;
-    uint64_t time_us;
-    uint64_t remote_time_us;
-    uint32_t time_ms;
-    float vel_x;
-    float vel_y;
-    float vel_z;
-    float vel_err;
-    uint8_t reset_counter;
-    uint8_t ignored;
 };
 
 struct PACKED log_Cmd {
@@ -940,6 +896,21 @@ struct PACKED log_PSC {
     float accel_target_y;
     float accel_x;
     float accel_y;
+};
+
+// position controller z-axis logging
+struct PACKED log_PSCZ {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    float pos_target_z;
+    float pos_z;
+    float vel_desired_z;
+    float vel_target_z;
+    float vel_z;
+    float accel_desired_z;
+    float accel_target_z;
+    float accel_z;
+    float throttle_out;
 };
 
 // FMT messages define all message formats other than FMT
@@ -1576,46 +1547,6 @@ struct PACKED log_PSC {
 // @Field: VibeZ: Primary accelerometer filtered vibration, z-axis
 // @Field: Clip: Number of clipping events on 1st accelerometer
 
-// @LoggerMessage: VISO
-// @Description: Visual Odometry
-// @Field: TimeUS: System time
-// @Field: dt: Time period this data covers
-// @Field: AngDX: Angular change for body-frame roll axis
-// @Field: AngDY: Angular change for body-frame pitch axis
-// @Field: AngDZ: Angular change for body-frame z axis
-// @Field: PosDX: Position change for body-frame X axis (Forward-Back)
-// @Field: PosDY: Position change for body-frame Y axis (Right-Left)
-// @Field: PosDZ: Position change for body-frame Z axis (Down-Up)
-// @Field: conf: Confidence
-
-// @LoggerMessage: VISP
-// @Description: Vision Position
-// @Field: TimeUS: System time
-// @Field: RTimeUS: Remote system time
-// @Field: CTimeMS: Corrected system time
-// @Field: PX: Position X-axis (North-South)
-// @Field: PY: Position Y-axis (East-West)
-// @Field: PZ: Position Z-axis (Down-Up)
-// @Field: Roll: Roll lean angle
-// @Field: Pitch: Pitch lean angle
-// @Field: Yaw: Yaw angle
-// @Field: PErr: Position estimate error
-// @Field: AErr: Attitude estimate error
-// @Field: Rst: Position reset counter
-// @Field: Ign: Ignored
-
-// @LoggerMessage: VISV
-// @Description: Vision Velocity
-// @Field: TimeUS: System time
-// @Field: RTimeUS: Remote system time
-// @Field: CTimeMS: Corrected system time
-// @Field: VX: Velocity X-axis (North-South)
-// @Field: VY: Velocity Y-axis (East-West)
-// @Field: VZ: Velocity Z-axis (Down-Up)
-// @Field: VErr: Velocity estimate error
-// @Field: Rst: Velocity reset counter
-// @Field: Ign: Ignored
-
 // @LoggerMessage: WENC
 // @Description: Wheel encoder measurements
 // @Field: TimeUS: Time since system startup
@@ -1654,6 +1585,19 @@ struct PACKED log_PSC {
 // @Field: TAY: Target acceleration, Y-axis
 // @Field: AX: Acceleration, X-axis
 // @Field: AY: Acceleration, Y-axis
+
+// @LoggerMessage: PSCZ
+// @Description: Position Control Z-axis
+// @Field: TimeUS: Time since system startup
+// @Field: TPZ: Target position above EKF origin
+// @Field: PZ: Position above EKF origin
+// @Field: DVZ: Desired velocity Z-axis
+// @Field: TVZ: Target velocity Z-axis
+// @Field: VZ: Velocity Z-axis
+// @Field: DAZ: Desired acceleration Z-axis
+// @Field: TAZ: Target acceleration Z-axis
+// @Field: AZ: Acceleration Z-axis
+// @Field: ThO: Throttle output
 
 // messages for all boards
 #define LOG_BASE_STRUCTURES \
@@ -1771,12 +1715,7 @@ LOG_STRUCTURE_FROM_AHRS \
       "RALY", "QBBLLh", "TimeUS,Tot,Seq,Lat,Lng,Alt", "s--DUm", "F--GGB" },  \
     { LOG_MAV_MSG, sizeof(log_MAV),   \
       "MAV", "QBHHHBHH",   "TimeUS,chan,txp,rxp,rxdp,flags,ss,tf", "s#----s-", "F-000-C-" },   \
-    { LOG_VISUALODOM_MSG, sizeof(log_VisualOdom), \
-      "VISO", "Qffffffff", "TimeUS,dt,AngDX,AngDY,AngDZ,PosDX,PosDY,PosDZ,conf", "ssrrrmmm-", "FF000000-" }, \
-    { LOG_VISUALPOS_MSG, sizeof(log_VisualPosition), \
-      "VISP", "QQIffffffffBB", "TimeUS,RTimeUS,CTimeMS,PX,PY,PZ,Roll,Pitch,Yaw,PErr,AErr,Rst,Ign", "sssmmmddhmd--", "FFC00000000--" }, \
-    { LOG_VISUALVEL_MSG, sizeof(log_VisualVelocity), \
-      "VISV", "QQIffffBB", "TimeUS,RTimeUS,CTimeMS,VX,VY,VZ,VErr,Rst,Ign", "sssnnnn--", "FFC0000--" }, \
+LOG_STRUCTURE_FROM_VISUALODOM \
     { LOG_OPTFLOW_MSG, sizeof(log_Optflow), \
       "OF",   "QBffff",   "TimeUS,Qual,flowX,flowY,bodyX,bodyY", "s-EEnn", "F-0000" }, \
     { LOG_WHEELENCODER_MSG, sizeof(log_WheelEncoder), \
@@ -1792,7 +1731,9 @@ LOG_STRUCTURE_FROM_AHRS \
     { LOG_WINCH_MSG, sizeof(log_Winch), \
       "WINC", "QBBBBBfffHfb", "TimeUS,Heal,ThEnd,Mov,Clut,Mode,DLen,Len,DRate,Tens,Vcc,Temp", "s-----mmn?vO", "F-----000000" }, \
     { LOG_PSC_MSG, sizeof(log_PSC), \
-      "PSC", "Qffffffffffff", "TimeUS,TPX,TPY,PX,PY,TVX,TVY,VX,VY,TAX,TAY,AX,AY", "smmmmnnnnoooo", "F000000000000" }
+      "PSC", "Qffffffffffff", "TimeUS,TPX,TPY,PX,PY,TVX,TVY,VX,VY,TAX,TAY,AX,AY", "smmmmnnnnoooo", "F000000000000" }, \
+    { LOG_PSCZ_MSG, sizeof(log_PSCZ), \
+      "PSCZ", "Qfffffffff", "TimeUS,TPZ,PZ,DVZ,TVZ,VZ,DAZ,TAZ,AZ,ThO", "smmnnnooo%", "F000000002" }
 
 // @LoggerMessage: SBPH
 // @Description: Swift Health Data
@@ -1894,8 +1835,7 @@ enum LogMessages : uint8_t {
     LOG_MSG_SBPEVENT,
 
     LOG_RALLY_MSG,
-    LOG_VISUALODOM_MSG,
-    LOG_VISUALPOS_MSG,
+    LOG_IDS_FROM_VISUALODOM,
     LOG_BEACON_MSG,
     LOG_PROXIMITY_MSG,
     LOG_DF_FILE_STATS,
@@ -1912,10 +1852,10 @@ enum LogMessages : uint8_t {
     LOG_ARM_DISARM_MSG,
     LOG_OA_BENDYRULER_MSG,
     LOG_OA_DIJKSTRA_MSG,
-    LOG_VISUALVEL_MSG,
     LOG_SIMPLE_AVOID_MSG,
     LOG_WINCH_MSG,
     LOG_PSC_MSG,
+    LOG_PSCZ_MSG,
 
     _LOG_LAST_MSG_
 };

@@ -4348,18 +4348,20 @@ class AutoTest(ABC):
         while tstart + seconds_to_wait > tnow:
             tnow = self.get_sim_time()
 
+    def get_altitude(self, relative=False, timeout=30):
+        '''returns vehicles altitude in metres, possibly relative-to-home'''
+        msg = self.mav.recv_match(type='GLOBAL_POSITION_INT',
+                                  blocking=True,
+                                  timeout=timeout)
+        if msg is None:
+            raise MsgRcvTimeoutException("Failed to get Global Position")
+        if relative:
+            return msg.relative_alt / 1000.0  # mm -> m
+        return msg.alt / 1000.0  # mm -> m
+
     def wait_altitude(self, altitude_min, altitude_max, relative=False, timeout=30, **kwargs):
         """Wait for a given altitude range."""
         assert altitude_min <= altitude_max, "Minimum altitude should be less than maximum altitude."
-
-        def get_altitude(alt_relative=False, timeout2=30):
-            msg = self.mav.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=timeout2)
-            if msg:
-                if alt_relative:
-                    return msg.relative_alt / 1000.0  # mm -> m
-                else:
-                    return msg.alt / 1000.0  # mm -> m
-            raise MsgRcvTimeoutException("Failed to get Global Position")
 
         def validator(value2, target2=None):
             if altitude_min <= value2 <= altitude_max:
@@ -4367,7 +4369,18 @@ class AutoTest(ABC):
             else:
                 return False
 
-        self.wait_and_maintain(value_name="Altitude", target=altitude_min, current_value_getter=lambda: get_altitude(relative, timeout), accuracy=(altitude_max - altitude_min), validator=lambda value2, target2: validator(value2, target2), timeout=timeout, **kwargs)
+        self.wait_and_maintain(
+            value_name="Altitude",
+            target=altitude_min,
+            current_value_getter=lambda: self.get_altitude(
+                relative=relative,
+                timeout=timeout,
+            ),
+            accuracy=(altitude_max - altitude_min),
+            validator=lambda value2, target2: validator(value2, target2),
+            timeout=timeout,
+            **kwargs
+        )
 
     def wait_groundspeed(self, speed_min, speed_max, timeout=30, **kwargs):
         """Wait for a given ground speed range."""
@@ -4512,6 +4525,35 @@ class AutoTest(ABC):
                     math.fabs(value2.z - target2.z) <= accuracy)
 
         self.wait_and_maintain(value_name="SpeedVector", target=speed_vector, current_value_getter=lambda: get_speed_vector(timeout), validator=lambda value2, target2: validator(value2, target2), accuracy=accuracy, timeout=timeout, **kwargs)
+
+    def get_body_frame_velocity(self):
+        gri = self.mav.recv_match(type='GPS_RAW_INT', blocking=True, timeout=1)
+        if gri is None:
+            raise NotAchievedException("No GPS_RAW_INT")
+        att = self.mav.recv_match(type='ATTITUDE', blocking=True, timeout=1)
+        if att is None:
+            raise NotAchievedException("No ATTITUDE")
+        return mavextra.gps_velocity_body(gri, att)
+
+    def wait_speed_vector_bf(self, speed_vector, accuracy=0.2, timeout=30, **kwargs):
+        """Wait for a given speed vector."""
+        def get_speed_vector(timeout2):
+            return self.get_body_frame_velocity()
+
+        def validator(value2, target2):
+            return (math.fabs(value2.x - target2.x) <= accuracy and
+                    math.fabs(value2.y - target2.y) <= accuracy and
+                    math.fabs(value2.z - target2.z) <= accuracy)
+
+        self.wait_and_maintain(
+            value_name="SpeedVectorBF",
+            target=speed_vector,
+            current_value_getter=lambda: get_speed_vector(timeout),
+            validator=lambda value2, target2: validator(value2, target2),
+            accuracy=accuracy,
+            timeout=timeout,
+            **kwargs
+        )
 
     def wait_distance(self, distance, accuracy=2, timeout=30, **kwargs):
         """Wait for flight of a given distance."""
@@ -5888,7 +5930,7 @@ Also, ignores heartbeats not from our target system'''
             while True:
                 if self.get_sim_time_cached() - tstart > timeout:
                     raise NotAchievedException("Cannot receive enough MAG_CAL_PROGRESS")
-                m = self.mav.recv_match(type=["MAG_CAL_PROGRESS", "MAG_CAL_REPORT"], blocking=True, timeout=5)
+                m = self.mav.recv_match(type=["MAG_CAL_PROGRESS", "MAG_CAL_REPORT"], blocking=True, timeout=10)
                 if m.get_type() == "MAG_CAL_REPORT":
                     if report_get[m.compass_id] == 0:
                         self.progress("Report: %s" % str(m))
@@ -8642,6 +8684,31 @@ switch value'''
             return False
         return True
 
+
+    def test_frsky_passthrough_do_wants(self, frsky, wants):
+
+        tstart = self.get_sim_time_cached()
+        while len(wants):
+            self.progress("Still wanting (%s)" % ",".join([ ("0x%02x" % x) for x in wants.keys()]))
+            wants_copy = copy.copy(wants)
+            t2 = self.get_sim_time_cached()
+            if t2 - tstart > 300:
+                self.progress("Failed to get frsky data")
+                self.progress("Counts of sensor_id polls sent:")
+                frsky.dump_sensor_id_poll_counts_as_progress_messages()
+                self.progress("Counts of dataids received:")
+                frsky.dump_dataid_counts_as_progress_messages()
+                raise AutoTestTimeoutException("Failed to get frsky data")
+            frsky.update()
+            for want in wants_copy:
+                data = frsky.get_data(want)
+                if data is None:
+                    continue
+                self.progress("Checking 0x%x" % (want,))
+                if wants[want](data):
+                    self.progress("  Fulfilled")
+                    del wants[want]
+
     def test_frsky_passthrough(self):
         self.set_parameter("SERIAL5_PROTOCOL", 10) # serial5 is FRSky passthrough
         self.set_parameter("RPM_TYPE", 1) # enable RPM output
@@ -8714,12 +8781,6 @@ switch value'''
         self.wait_ready_to_arm()
 
         # we need to start the engine to get some RPM readings, we do it for plane only
-        if self.is_plane():
-            self.set_autodisarm_delay(0)
-            if not self.arm_vehicle():
-                raise NotAchievedException("Failed to ARM")
-            self.set_rc(3,1050)
-
         self.drain_mav_unparsed()
         # anything with a lambda in here needs a proper test written.
         # This, at least makes sure we're getting some of each
@@ -8735,38 +8796,28 @@ switch value'''
             #0x5008: lambda x : True, # no second battery, so this doesn't arrive
             0x5003: self.tfp_validate_battery1,
             0x5007: self.tfp_validate_params,
-            0x500A: self.tfp_validate_rpm,
         }
-        tstart = self.get_sim_time_cached()
-        while len(wants):
-            self.progress("Still wanting (%s)" % ",".join([ ("0x%02x" % x) for x in wants.keys()]))
-            wants_copy = copy.copy(wants)
-            t2 = self.get_sim_time_cached()
-            if t2 - tstart > 300:
-                self.progress("Failed to get frsky data")
-                self.progress("Counts of sensor_id polls sent:")
-                frsky.dump_sensor_id_poll_counts_as_progress_messages()
-                self.progress("Counts of dataids received:")
-                frsky.dump_dataid_counts_as_progress_messages()
-                raise AutoTestTimeoutException("Failed to get frsky data")
-            frsky.update()
-            for want in wants_copy:
-                data = frsky.get_data(want)
-                if data is None:
-                    continue
-                self.progress("Checking 0x%x" % (want,))
-                if wants[want](data):
-                    self.progress("  Fulfilled")
-                    del wants[want]
+        self.test_frsky_passthrough_do_wants(frsky, wants)
+
+        # now check RPM:
+        if self.is_plane():
+            self.set_autodisarm_delay(0)
+            if not self.arm_vehicle():
+                raise NotAchievedException("Failed to ARM")
+            self.set_rc(3,1050)
+            wants = {
+                0x500A: self.tfp_validate_rpm,
+            }
+            self.test_frsky_passthrough_do_wants(frsky, wants)
+            self.zero_throttle()
+            if not self.disarm_vehicle():
+                raise NotAchievedException("Failed to DISARM")
+
+
         self.progress("Counts of sensor_id polls sent:")
         frsky.dump_sensor_id_poll_counts_as_progress_messages()
         self.progress("Counts of dataids received:")
         frsky.dump_dataid_counts_as_progress_messages()
-        # disarm
-        if self.is_plane():
-            self.zero_throttle()
-            if not self.disarm_vehicle():
-                raise NotAchievedException("Failed to DISARM")
 
     def decode_mavlite_param_value(self, message):
         '''returns a tuple of parameter name, value'''
