@@ -101,13 +101,17 @@ class AutoTestPlane(AutoTest):
         self.wait_groundspeed(6, 100)
 
         # a bit faster again, straighten rudder
-        self.set_rc(3, 1600)
-        self.set_rc(4, 1500)
+        self.set_rc_from_map({
+            3: 1600,
+            4: 1500,
+        })
         self.wait_groundspeed(12, 100)
 
         # hit the gas harder now, and give it some more elevator
-        self.set_rc(2, 1100)
-        self.set_rc(3, 2000)
+        self.set_rc_from_map({
+            2: 1100,
+            3: 2000,
+        })
 
         # gain a bit of altitude
         self.wait_altitude(alt, alt_max, timeout=30, relative=relative)
@@ -1427,6 +1431,49 @@ class AutoTestPlane(AutoTest):
         self.deadreckoning_main()
         self.deadreckoning_main(disable_airspeed_sensor=True)
 
+    def rtl_climb_min(self):
+        self.wait_ready_to_arm()
+        rtl_climb_min = 100
+        self.set_parameter("RTL_CLIMB_MIN", rtl_climb_min)
+        takeoff_alt = 50
+        self.takeoff(alt=takeoff_alt)
+        self.change_mode('CRUISE')
+        self.wait_distance_to_home(1000, 1500, timeout=60)
+        post_cruise_alt = self.get_altitude(relative=True)
+        self.change_mode('RTL')
+        expected_alt = self.get_parameter("ALT_HOLD_RTL")/100.0
+        if expected_alt == -1:
+            expected_alt = self.get_altitude(relative=True)
+
+        # ensure we're about half-way-down at the half-way-home stage:
+        self.wait_distance_to_nav_target(
+            0,
+            500,
+            timeout=120,
+        )
+        alt = self.get_altitude(relative=True)
+        expected_halfway_alt = expected_alt + (post_cruise_alt + rtl_climb_min - expected_alt)/2.0
+        if abs(alt - expected_halfway_alt) > 30:
+            raise NotAchievedException("Not half-way-down and half-way-home (want=%f got=%f" %
+                                       (expected_halfway_alt, alt))
+        self.progress("Half-way-down at half-way-home (want=%f vs got=%f)" %
+                      (expected_halfway_alt, alt))
+
+        rtl_radius = self.get_parameter("RTL_RADIUS")
+        if rtl_radius == 0:
+            rtl_radius = self.get_parameter("WP_LOITER_RAD")
+        self.wait_distance_to_nav_target(
+            0,
+            rtl_radius,
+            timeout=120,
+        )
+        alt = self.get_altitude(relative=True)
+        if abs(alt - expected_alt) > 10:
+            raise NotAchievedException(
+                "Expected to have %fm altitude at end of RTL (got %f)" %
+                (expected_alt, alt))
+        self.fly_home_land_and_disarm()
+
     def sample_enable_parameter(self):
         return "Q_ENABLE"
 
@@ -2371,6 +2418,10 @@ class AutoTestPlane(AutoTest):
             ("AirspeedDrivers",
              "Test AirSpeed drivers",
              self.test_airspeed_drivers),
+
+            ("RTL_CLIMB_MIN",
+             "Test RTL_CLIMB_MIN",
+             self.rtl_climb_min),
 
             ("IMUTempCal",
              "Test IMU temperature calibration",
