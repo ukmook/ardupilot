@@ -824,6 +824,10 @@ def write_mcu_config(f):
 #define HAL_USE_I2C FALSE
 #define HAL_USE_PWM FALSE
 #define CH_DBG_ENABLE_STACK_CHECK FALSE
+// avoid timer and RCIN threads to save memory
+#define HAL_NO_TIMER_THREAD
+#define HAL_NO_RCOUT_THREAD
+#define HAL_NO_RCIN_THREAD
 ''')
     if env_vars.get('ROMFS_UNCOMPRESSED', False):
         f.write('#define HAL_ROMFS_UNCOMPRESSED\n')
@@ -1214,6 +1218,7 @@ def write_UART_config(f):
         tx_line = make_line(dev + '_TX')
         rx_line = make_line(dev + '_RX')
         rts_line = make_line(dev + '_RTS')
+        cts_line = make_line(dev + '_CTS')
         if rts_line != "0":
             have_rts_cts = True
             f.write('#define HAL_HAVE_RTSCTS_SERIAL%u\n' % uart_serial_num[dev])
@@ -1234,10 +1239,10 @@ def write_UART_config(f):
                 "#define HAL_%s_CONFIG { (BaseSequentialStream*) &SD%u, %u, false, "
                 % (dev, n, n))
             if mcu_series.startswith("STM32F1"):
-                f.write("%s, %s, %s, " % (tx_line, rx_line, rts_line))
+                f.write("%s, %s, %s, %s, " % (tx_line, rx_line, rts_line, cts_line))
             else:
-                f.write("STM32_%s_RX_DMA_CONFIG, STM32_%s_TX_DMA_CONFIG, %s, %s, %s, " %
-                        (dev, dev, tx_line, rx_line, rts_line))
+                f.write("STM32_%s_RX_DMA_CONFIG, STM32_%s_TX_DMA_CONFIG, %s, %s, %s, %s, " %
+                        (dev, dev, tx_line, rx_line, rts_line, cts_line))
 
             # add inversion pins, if any
             f.write("%d, " % get_gpio_bylabel(dev + "_RXINV"))
