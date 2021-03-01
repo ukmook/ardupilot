@@ -1511,10 +1511,6 @@ class AutoTest(ABC):
                 locs
             ])
 
-    def fetch_parameters(self):
-        self.mavproxy.send("param fetch\n")
-        self.mavproxy.expect("Received [0-9]+ parameters")
-
     def send_reboot_command(self):
         self.mav.mav.command_long_send(self.sysid_thismav(),
                                        1,
@@ -1828,6 +1824,7 @@ class AutoTest(ABC):
                         continue
                     m = re.match(r"\s*{(.*)\\", line)
                     if m is None:
+                        state = state_outside
                         continue
                     partial_line = m.group(1)
                     linestate = linestate_within
@@ -5065,7 +5062,7 @@ Also, ignores heartbeats not from our target system'''
         x["timeout"] = 1
         tstart = time.time()
         while True:
-            if time.time() - tstart > orig_timeout:
+            if time.time() - tstart > orig_timeout and not self.gdb:
                 if not self.sitl_is_running():
                     self.progress("SITL is not running")
                 raise AutoTestTimeoutException("Did not receive heartbeat")
@@ -8574,7 +8571,6 @@ switch value'''
                 self.mavproxy.expect("sitl_accelcal: attitude detected, please press any key..", timeout=timeout)
                 self.mavproxy.send("\n")
             self.mavproxy.expect("APM: Calibration successful", timeout=timeout)
-            self.fetch_parameters()
             self.drain_mav()
 
             self.progress("Checking results")
@@ -8633,7 +8629,6 @@ switch value'''
                                        mavutil.mavlink.MAV_CMD_PREFLIGHT_CALIBRATION, 0,
                                        0, 0, 0, 0, 2, 0, 0)
         self.wait_statustext('Trim OK')
-        self.fetch_parameters()
         self.drain_mav()
 
         self.progress("Checking results")
@@ -9736,7 +9731,7 @@ switch value'''
                  self.test_onboard_logging_generation),
 
             Test("Logging",
-                 "Teqst Onboard Logging",
+                 "Test Onboard Logging",
                  self.test_onboard_logging),
 
             Test("GetCapabilities",
