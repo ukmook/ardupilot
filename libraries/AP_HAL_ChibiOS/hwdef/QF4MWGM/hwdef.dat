@@ -54,9 +54,9 @@ PA15 TIM2_CH1 TIM2 RCININT PULLDOWN LOW
 
 # ---------UARTS-----------
 # order of UARTs (and USB)
-# Order    USB   sr3    sr1    sr2    sr4     sr5
-# AP Name  USB   GPS1  TELM1  TELM2  GPS2   DEBUG
-SERIAL_ORDER OTG1 USART2 USART1 USART6 USART3
+# Order      sr0   sr1    sr2    sr3    sr4   sr5   sr6
+# AP Name    USB   GPS1  TELM1  TELM2  GPS2  DEBUG
+SERIAL_ORDER OTG1 USART1 USART2 USART3 EMPTY EMPTY USART6
 
 PA11 OTG_FS_DM OTG1 # 0) USB
 PA12 OTG_FS_DP OTG1
@@ -161,6 +161,11 @@ define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
 define OSD_ENABLED 1
 define HAL_OSD_TYPE_DEFAULT 1
+
+# -------------CROSSFIRE---------------
+define HAL_MSP_ENABLED 1
+define HAL_CRSF_ENABLED 1
+define HAL_CRSF_TELEM_ENABLED 1
 
 # ----------Memory save-----------------
 
