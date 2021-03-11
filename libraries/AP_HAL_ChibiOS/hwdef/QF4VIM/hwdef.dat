@@ -162,3 +162,8 @@ DMA_NOSHARE SPI1* SPI3*
 define OSD_ENABLED ENABLED
 #font for the osd
 ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
+
+# -------------CROSSFIRE---------------
+define HAL_MSP_ENABLED 1
+define HAL_CRSF_ENABLED 1
+define HAL_CRSF_TELEM_ENABLED 1

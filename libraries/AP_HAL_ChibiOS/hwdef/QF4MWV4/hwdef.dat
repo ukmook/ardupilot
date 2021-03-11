@@ -162,6 +162,11 @@ ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
 define OSD_ENABLED 1
 define HAL_OSD_TYPE_DEFAULT 1
 
+# -------------CROSSFIRE---------------
+define HAL_MSP_ENABLED 1
+define HAL_CRSF_ENABLED 1
+define HAL_CRSF_TELEM_ENABLED 1
+
 # ----------Memory save-----------------
 
 # disable SMBUS and fuel battery monitors to save flash

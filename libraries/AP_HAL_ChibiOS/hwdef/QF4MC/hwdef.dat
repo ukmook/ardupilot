@@ -156,6 +156,11 @@ define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 define OSD_ENABLED 1
 define HAL_OSD_TYPE_DEFAULT 3
 
+# -------------CROSSFIRE---------------
+define HAL_MSP_ENABLED 1
+define HAL_CRSF_ENABLED 1
+define HAL_CRSF_TELEM_ENABLED 1
+
 # ----------Memory save-----------------
 
 # disable SMBUS and fuel battery monitors to save flash
