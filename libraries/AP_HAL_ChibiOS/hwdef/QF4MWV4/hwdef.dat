@@ -157,10 +157,10 @@ define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
 define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
 # -----------OSD--------------------
-# font for the osd
-ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
 define OSD_ENABLED 1
+define OSD_PARAM_ENABLED 0
 define HAL_OSD_TYPE_DEFAULT 1
+ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
 
 # -------------CROSSFIRE---------------
 define HAL_MSP_ENABLED 1
@@ -168,6 +168,8 @@ define HAL_CRSF_ENABLED 1
 define HAL_CRSF_TELEM_ENABLED 1
 
 # ----------Memory save-----------------
+
+define HAL_MINIMIZE_FEATURES 1
 
 # disable SMBUS and fuel battery monitors to save flash
 define HAL_BATTMON_SMBUS_ENABLE 0
@@ -179,9 +181,18 @@ define HAL_SPRAYER_ENABLED 0
 
 # reduce max size of embedded params for apj_tool.py
 define AP_PARAM_MAX_EMBEDDED_PARAM 1024
-define HAL_WITH_DSP FALSE
 
-define HAL_MINIMIZE_FEATURES 1
+# save some flash
+define GENERATOR_ENABLED 0
+define AC_OAPATHPLANNER_ENABLED 0
+define PRECISION_LANDING 0
+
+# -------------EKF_TYPE---------------
+
+# define HAL_NAVEKF2_AVAILABLE 1
+# define HAL_NAVEKF3_AVAILABLE 0
+
+#---------DEBUG----------
 
 # STDOUT_SERIAL SD2
 # STDOUT_BAUDRATE 57600
