@@ -48,7 +48,8 @@ PB9 I2C4_SDA I2C4
 # -----# RCIN-----------
 
 # --------BUZZ-----------
-
+# needed by ap_periph to make buzzer sound on node
+PD12 TIM4_CH1 TIM4 GPIO(80) ALARM # no buzzer circuit
 
 # ---------ADC---------------
 
