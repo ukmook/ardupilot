@@ -1,0 +1,39 @@
+include ../QF103-periph/hwdef.dat
+
+# use DNA
+define HAL_CAN_DEFAULT_NODE_ID 0
+
+define CAN_APP_NODE_NAME "org.ardupilot.QF10NTF"
+
+# increase TX size for RTCM
+undef HAL_UART_MIN_TX_SIZE
+define HAL_UART_MIN_TX_SIZE 256
+
+undef PB0 MAG_CS CS
+
+# Alarm + LED
+define HAL_PERIPH_ENABLE_BUZZER_WITHOUT_NOTIFY
+define HAL_PERIPH_NEOPIXEL_WITHOUT_NOTIFY
+define HAL_PERIPH_NEOPIXEL_COUNT_WITHOUT_NOTIFY 8
+define HAL_PERIPH_NEOPIXEL_CHAN_WITHOUT_NOTIFY 0
+
+--------------- ALARM -----------------
+# PWM output for buzzer
+PB0 TIM3_CH3 TIM3 GPIO(77) LOW ALARM
+undef PB0 MAG_CS CS
+
+
+# --------LED-----------
+define HAL_HAVE_PIXRACER_LED
+
+define HAL_GPIO_LED_ON  0
+define HAL_GPIO_LED_OFF 1
+
+# LED setup for PixracerLED driver
+PB4 LED_RED   OUTPUT GPIO(0)
+PB3 LED_GREEN OUTPUT GPIO(1)
+PB5 LED_BLUE  OUTPUT GPIO(2)
+
+define HAL_GPIO_A_LED_PIN 0
+define HAL_GPIO_B_LED_PIN 1
+define HAL_GPIO_C_LED_PIN 2
