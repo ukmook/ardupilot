@@ -36,7 +36,7 @@ pincount = {
     'F': 16,
     'G': 16,
 }
-    
+
 # no DMA map as we will dynamically allocate DMA channels using the DMAMUX
 DMA_Map = None
 
@@ -369,6 +369,7 @@ AltFunction_map = {
     "PB15:TIM15_CH1N"       :    2,
     "PB15:TIM15_CH2"        :    1,
     "PB15:TIM1_CH3N"        :    4,
+    "PC4:I2C2_SCL"          :    4,
     "PC13:EVENTOUT"         :    15,
     "PC13:TIM1_BKIN"        :    2,
     "PC13:TIM1_CH1N"        :    4,
