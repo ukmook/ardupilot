@@ -63,8 +63,8 @@ PB11 USART3_RX USART3
 #---------------- I2C -----------------------------
 
 # only one I2C bus in normal config
-# PC4 I2C2_SCL I2C2
-# PA8 I2C2_SDA I2C2
+PC4 I2C2_SCL I2C2
+PA8 I2C2_SDA I2C2
 
 # define HAL_USE_I2C TRUE
 # define STM32_I2C_USE_I2C2 TRUE
