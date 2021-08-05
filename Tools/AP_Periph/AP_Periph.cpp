@@ -83,7 +83,7 @@ const struct LogStructure AP_Periph_FW::log_structure[] = {
 
 void AP_Periph_FW::init()
 {
-    
+
     // always run with watchdog enabled. This should have already been
     // setup by the bootloader, but if not then enable now
     stm32_watchdog_init();
@@ -109,6 +109,12 @@ void AP_Periph_FW::init()
     mapr &= ~AFIO_MAPR_SWJ_CFG;
     mapr |= AFIO_MAPR_SWJ_CFG_JTAGDISABLE;
     AFIO->MAPR = mapr | AFIO_MAPR_CAN_REMAP_REMAP2 | AFIO_MAPR_SPI3_REMAP;
+#endif
+
+#ifdef HAL_BOARD_AP_PERIPH_QF10GPS
+    // setup remapping JTAG for QF10GPS
+    RCC -> APB2ENR |= RCC_APB2ENR_AFIOEN | RCC_APB2ENR_IOPAEN; // Enable the clocks for GPIOA and AFIO
+    AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_JTAGDISABLE; // JTAG is disabled, SWD is enabled
 #endif
 
 #if HAL_LOGGING_ENABLED
@@ -197,7 +203,7 @@ void AP_Periph_FW::init()
         msp_init(hal.serial(g.msp_port));
     }
 #endif
-    
+
 #ifdef HAL_PERIPH_ENABLE_NOTIFY
     notify.init();
 #endif
@@ -350,7 +356,7 @@ void AP_Periph_FW::update()
         show_stack_free();
     }
 #endif
-    
+
 #ifdef HAL_PERIPH_ENABLE_BATTERY
     if (now - battery.last_read_ms >= 100) {
         // update battery at 10Hz
