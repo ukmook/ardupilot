@@ -68,6 +68,12 @@ int main(void)
     AFIO->MAPR = mapr | AFIO_MAPR_CAN_REMAP_REMAP2 | AFIO_MAPR_SPI3_REMAP;
 #endif
 
+#ifdef HAL_BOARD_AP_PERIPH_QF10GPS
+    // setup remapping JTAG for QF10GPS
+    RCC -> APB2ENR |= RCC_APB2ENR_AFIOEN | RCC_APB2ENR_IOPAEN; // Enable the clocks for GPIOA and AFIO
+    AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_JTAGDISABLE; // JTAG is disabled, SWD is enabled
+#endif
+
 #ifndef NO_FASTBOOT
     enum rtc_boot_magic m = check_fast_reboot();
     bool was_watchdog = stm32_was_watchdog_reset();
@@ -159,5 +165,3 @@ int main(void)
     }
 #endif
 }
-
-
