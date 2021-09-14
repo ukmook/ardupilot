@@ -266,8 +266,9 @@ private:
 
     class SurfaceTracking {
     public:
-        // get desired climb rate (in cm/s) to achieve surface tracking
-        float adjust_climb_rate(float target_rate);
+        // update_surface_offset - manages the vertical offset of the position controller to follow the
+        //   measured ground or ceiling level measured using the range finder.
+        void update_surface_offset();
 
         // get/set target altitude (in cm) above ground
         bool get_target_alt_cm(float &target_alt_cm) const;
@@ -289,7 +290,6 @@ private:
 
     private:
         Surface surface = Surface::GROUND;
-        float target_dist_cm;       // desired distance in cm from ground or ceiling
         uint32_t last_update_ms;    // system time of last update to target_alt_cm
         uint32_t last_glitch_cleared_ms;    // system time of last handle glitch recovery
         bool valid_for_logging;     // true if target_alt_cm is valid for logging
@@ -642,11 +642,18 @@ private:
                              uint8_t &task_count,
                              uint32_t &log_bit) override;
     void fast_loop() override;
+#ifdef ENABLE_SCRIPTING
     bool start_takeoff(float alt) override;
     bool set_target_location(const Location& target_loc) override;
+    bool set_target_pos_NED(const Vector3f& target_pos, bool use_yaw, float yaw_deg, bool use_yaw_rate, float yaw_rate_degs, bool yaw_relative, bool terrain_alt) override;
     bool set_target_posvel_NED(const Vector3f& target_pos, const Vector3f& target_vel) override;
+    bool set_target_posvelaccel_NED(const Vector3f& target_pos, const Vector3f& target_vel, const Vector3f& target_accel, bool use_yaw, float yaw_deg, bool use_yaw_rate, float yaw_rate_degs, bool yaw_relative) override;
     bool set_target_velocity_NED(const Vector3f& vel_ned) override;
+    bool set_target_velaccel_NED(const Vector3f& target_vel, const Vector3f& target_accel, bool use_yaw, float yaw_deg, bool use_yaw_rate, float yaw_rate_degs, bool relative_yaw) override;
     bool set_target_angle_and_climbrate(float roll_deg, float pitch_deg, float yaw_deg, float climb_rate_ms, bool use_yaw_rate, float yaw_rate_degs) override;
+    bool get_circle_radius(float &radius_m) override;
+    bool set_circle_rate(float rate_dps) override;
+#endif // ENABLE_SCRIPTING
     void rc_loop();
     void throttle_loop();
     void update_batt_compass(void);
