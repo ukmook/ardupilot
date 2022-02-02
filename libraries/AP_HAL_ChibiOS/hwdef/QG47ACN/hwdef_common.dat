@@ -1,0 +1,160 @@
+# MCU class and specific type
+MCU STM32G474 STM32G474xx
+
+#################################
+# low-level CPU setup
+
+# crystal frequency
+OSCILLATOR_HZ 16000000
+
+# board ID for firmware load
+APJ_BOARD_ID 7506
+
+# Reserved programming pins
+PA13 JTMS-SWDIO SWD
+PA14 JTCK-SWCLK SWD
+
+#################################
+# Memory and Storage
+
+# assume the 512k flash part
+FLASH_SIZE_KB 512
+
+# the location where the bootloader will put the firmware
+FLASH_RESERVE_START_KB 0
+FLASH_BOOTLOADER_LOAD_KB 26
+
+# store parameters in pages 13 and 14
+define STORAGE_FLASH_PAGE 13
+define HAL_STORAGE_SIZE 800
+
+# stack for fast interrupts
+define PORT_INT_REQUIRED_STACK 64
+
+# MAIN_STACK is stack for ISR handlers
+MAIN_STACK 0x300
+
+# PROCESS_STACK controls stack for main thread
+PROCESS_STACK 0x800
+
+define HAL_UART_MIN_TX_SIZE 256
+define HAL_UART_MIN_RX_SIZE 128
+
+define HAL_UART_STACK_SIZE 0x200
+
+define HAL_DEVICE_THREAD_STACK 0x200
+define STORAGE_THD_WA_SIZE 512
+define IO_THD_WA_SIZE      512
+
+define AP_PARAM_MAX_EMBEDDED_PARAM 512
+
+# reserve 256 bytes for comms between app and bootloader
+RAM_RESERVE_START 256
+
+#################################
+# Communications
+#---------------- SERIAL -----------------------------
+
+# order of UARTs
+#            ---------------------------------------
+#            | sr0 | sr1 | sr2 | sr3 | sr4 | sr5 | sr6
+# AP Name                        GPS
+#            ---------------------------------------
+SERIAL_ORDER EMPTY USART3 EMPTY USART1
+
+# USART1 GPS
+PA9 USART1_TX USART1
+PA10 USART1_RX USART1
+
+# USART3 serial1 AUX
+PB10 USART3_TX USART3
+PB11 USART3_RX USART3
+
+# STDOUT_SERIAL SD1
+# STDOUT_BAUDRATE 57600
+
+# allow for reboot command for faster development
+# define HAL_PERIPH_LISTEN_FOR_SERIAL_UART_REBOOT_CMD_PORT 0
+
+# ----------CAN------------
+# enable CAN support
+PB8 CAN1_RX CAN1
+PB9 CAN1_TX CAN1
+
+#################################
+# Multi-purpose pins like SPI, I2C, GPIO, PWMs, LEDs, ADC
+
+#---------------- I2C -----------------------------
+
+# only one I2C bus in normal config
+# PC4 I2C2_SCL I2C2
+# PA8 I2C2_SDA I2C2
+
+# define HAL_USE_I2C TRUE
+# define STM32_I2C_USE_I2C2 TRUE
+
+# define HAL_I2C_CLEAR_ON_TIMEOUT 0
+
+# define HAL_I2C_INTERNAL_MASK 0
+
+# only one I2C bus
+# I2C_ORDER I2C2
+
+# --------PWMS -----------
+# Now we start defining some PWM pins. We also map these pins to GPIO
+# values, so users can set BRD_PWM_COUNT to choose how many of the PWM
+# outputs on the primary MCU are setup as PWM and how many as
+# GPIOs. To match HAL_PX4 we number the GPIOs for the PWM outputs
+# starting at 50.
+PB3 TIM2_CH2 TIM2 PWM(1) GPIO(50)
+PB4 TIM3_CH1 TIM3 PWM(2) GPIO(51) # neopixel
+PB6 TIM4_CH1 TIM4 PWM(3) GPIO(52)
+PB7 TIM4_CH2 TIM4 PWM(4) GPIO(53)
+
+#define BOARD_PWM_COUNT_DEFAULT 4
+
+# --------- LED -----------
+PA6 LED_BOOTLOADER OUTPUT LOW
+define HAL_LED_ON 0
+
+# --------- ANALOG -----------
+# ADCs ADC1, ADC2, ADC3, ADC4
+# PA2 BATT_VOLTAGE_SENS ADC1
+# PA3 BATT_CURRENT_SENS ADC1
+# PA1 BATT2_VOLTAGE_SENS ADC1
+
+# define default battery setup
+# define HAL_BATT_VOLT_PIN 3
+# define HAL_BATT_CURR_PIN 4
+# define HAL_BATT_VOLT_SCALE 10.1
+# define HAL_BATT_CURR_SCALE 17.0
+
+# define HAL_BATT2_VOLT_PIN 2
+# define HAL_BATT2_VOLT_SCALE 10.1
+
+# This defines some input pins, currently unused.
+
+#################################
+
+
+
+# ---------------------------------------------------------------------------------------------
+# AP_Periph - boiler-plate configurations that all HW AP-Periph need
+# ---------------------------------------------------------------------------------------------
+env AP_PERIPH 1
+define PERIPH_FW TRUE
+define HAL_BUILD_AP_PERIPH
+env APP_DESCRIPTOR MissionPlanner
+define HAL_NO_GCS
+define HAL_NO_LOGGING
+define HAL_NO_MONITOR_THREAD
+define HAL_DISABLE_LOOP_DELAY
+define HAL_USE_RTC FALSE
+define DISABLE_SERIAL_ESC_COMM TRUE
+define NO_DATAFLASH TRUE
+define HAL_NO_RCIN_THREAD
+define HAL_BARO_ALLOW_INIT_NO_BARO
+
+define HAL_MINIMIZE_FEATURES 0
+
+env DISABLE_SCRIPTING 1
