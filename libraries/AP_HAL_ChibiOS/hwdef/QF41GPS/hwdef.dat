@@ -2,7 +2,7 @@
 # MCU class and specific type
 
 # MCU class and specific type
-MCU STM32F4xx STM32F413xx
+MCU STM32F4xx STM32F412Rx
 
 # crystal frequency
 OSCILLATOR_HZ 16000000
@@ -14,7 +14,8 @@ define STM32_PLLP_VALUE 2
 define CH_CFG_ST_FREQUENCY 1000000
 
 # flash size
-FLASH_SIZE_KB 1536
+# FLASH_SIZE_KB 1536
+FLASH_SIZE_KB 512
 
 STM32_ST_USE_TIMER 5
 
@@ -26,10 +27,13 @@ FLASH_RESERVE_START_KB 64
 
 # store parameters in pages 2 and 3
 define STORAGE_FLASH_PAGE 2
-define HAL_STORAGE_SIZE 16384
+define HAL_STORAGE_SIZE 8192
 
 # board ID for firmware load
 APJ_BOARD_ID 7503
+
+# setup build for a peripheral firmware
+env AP_PERIPH 1
 
 define CH_CFG_ST_FREQUENCY 1000000
 
