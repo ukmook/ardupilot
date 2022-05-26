@@ -811,7 +811,7 @@ void GCS_MAVLINK::handle_mission_item(const mavlink_message_t &msg)
             // add home alt if needed
             handle_change_alt_request(cmd);
 
-            // verify we recevied the command
+            // verify we received the command
             result = MAV_MISSION_ACCEPTED;
         }
         send_mission_ack(msg, MAV_MISSION_TYPE_MISSION, result);
@@ -3356,9 +3356,12 @@ void GCS_MAVLINK::handle_vision_speed_estimate(const mavlink_message_t &msg)
 void GCS_MAVLINK::handle_command_ack(const mavlink_message_t &msg)
 {
 #if HAL_INS_ACCELCAL_ENABLED
+    mavlink_command_ack_t packet;
+    mavlink_msg_command_ack_decode(&msg, &packet);
+
     AP_AccelCal *accelcal = AP::ins().get_acal();
     if (accelcal != nullptr) {
-        accelcal->handleMessage(msg);
+        accelcal->handle_command_ack(packet);
     }
 #endif
 }

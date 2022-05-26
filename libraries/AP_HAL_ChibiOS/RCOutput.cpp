@@ -471,6 +471,28 @@ void RCOutput::set_dshot_rate(uint8_t dshot_rate, uint16_t loop_rate_hz)
     _dshot_period_us = 1000000UL / drate;
 }
 
+#ifndef DISABLE_DSHOT
+/*
+ Set/get the dshot esc_type
+ */
+void RCOutput::set_dshot_esc_type(DshotEscType dshot_esc_type)
+{
+    _dshot_esc_type = dshot_esc_type;
+    switch (_dshot_esc_type) {
+        case DSHOT_ESC_BLHELI_S:
+            DSHOT_BIT_WIDTH_TICKS = DSHOT_BIT_WIDTH_TICKS_S;
+            DSHOT_BIT_0_TICKS = DSHOT_BIT_0_TICKS_S;
+            DSHOT_BIT_1_TICKS = DSHOT_BIT_1_TICKS_S;
+            break;
+        default:
+            DSHOT_BIT_WIDTH_TICKS = DSHOT_BIT_WIDTH_TICKS_DEFAULT;
+            DSHOT_BIT_0_TICKS = DSHOT_BIT_0_TICKS_DEFAULT;
+            DSHOT_BIT_1_TICKS = DSHOT_BIT_1_TICKS_DEFAULT;
+            break;
+    }
+}
+#endif
+
 /*
   find pwm_group and index in group given a channel number
  */
@@ -569,7 +591,9 @@ void RCOutput::write(uint8_t chan, uint16_t period_us)
 
 #if AP_SIM_ENABLED
     hal.simstate->pwm_output[chan] = period_us;
-    return;
+    if (!(AP::sitl()->on_hardware_output_enable_mask & (1U<<chan))) {
+        return;
+    }
 #endif
 
 #if HAL_WITH_IO_MCU
