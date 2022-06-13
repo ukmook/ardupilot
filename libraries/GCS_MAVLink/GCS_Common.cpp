@@ -79,7 +79,6 @@
   #if APM_BUILD_COPTER_OR_HELI || APM_BUILD_TYPE(APM_BUILD_ArduPlane) || APM_BUILD_TYPE(APM_BUILD_ArduSub)
     #include <AP_KDECAN/AP_KDECAN.h>
   #endif
-  #include <AP_ToshibaCAN/AP_ToshibaCAN.h>
   #include <AP_PiccoloCAN/AP_PiccoloCAN.h>
   #include <AP_UAVCAN/AP_UAVCAN.h>
 #endif
@@ -892,7 +891,6 @@ ap_message GCS_MAVLINK::mavlink_id_to_ap_message_id(const uint32_t mavlink_id) c
         { MAVLINK_MSG_ID_CAMERA_FEEDBACK,       MSG_CAMERA_FEEDBACK},
         { MAVLINK_MSG_ID_MOUNT_STATUS,          MSG_MOUNT_STATUS},
         { MAVLINK_MSG_ID_OPTICAL_FLOW,          MSG_OPTICAL_FLOW},
-        { MAVLINK_MSG_ID_GIMBAL_REPORT,         MSG_GIMBAL_REPORT},
         { MAVLINK_MSG_ID_MAG_CAL_PROGRESS,      MSG_MAG_CAL_PROGRESS},
         { MAVLINK_MSG_ID_MAG_CAL_REPORT,        MSG_MAG_CAL_REPORT},
         { MAVLINK_MSG_ID_EKF_STATUS_REPORT,     MSG_EKF_STATUS_REPORT},
@@ -5040,17 +5038,6 @@ void GCS_MAVLINK::send_global_position_int()
         ahrs.yaw_sensor);                // compass heading in 1/100 degree
 }
 
-void GCS_MAVLINK::send_gimbal_report() const
-{
-#if HAL_MOUNT_ENABLED
-    AP_Mount *mount = AP::mount();
-    if (mount == nullptr) {
-        return;
-    }
-    mount->send_gimbal_report(chan);
-#endif
-}
-
 void GCS_MAVLINK::send_mount_status() const
 {
 #if HAL_MOUNT_ENABLED
@@ -5199,11 +5186,6 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
     case MSG_NEXT_PARAM:
         CHECK_PAYLOAD_SIZE(PARAM_VALUE);
         queued_param_send();
-        break;
-
-    case MSG_GIMBAL_REPORT:
-        CHECK_PAYLOAD_SIZE(GIMBAL_REPORT);
-        send_gimbal_report();
         break;
 
     case MSG_HEARTBEAT:

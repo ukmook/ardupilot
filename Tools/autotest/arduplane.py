@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 '''
 Fly ArduPlane in SITL
 
@@ -55,6 +53,9 @@ class AutoTestPlane(AutoTest):
 
     def log_name(self):
         return "ArduPlane"
+
+    def default_speedup(self):
+        return 100
 
     def test_filepath(self):
         return os.path.realpath(__file__)
@@ -2511,8 +2512,13 @@ function'''
 
             # insert listener to compare airspeeds:
             airspeed = [None, None]
+            # don't start testing until we've seen real speed from
+            # both sensors.  This gets us out of the noise area.
+            global initial_airspeed_threshold_reached
+            initial_airspeed_threshold_reached = False
 
             def check_airspeeds(mav, m):
+                global initial_airspeed_threshold_reached
                 m_type = m.get_type()
                 if (m_type == 'NAMED_VALUE_FLOAT' and
                         m.name == 'AS2'):
@@ -2523,6 +2529,11 @@ function'''
                     return
                 if airspeed[0] is None or airspeed[1] is None:
                     return
+                if not initial_airspeed_threshold_reached:
+                    if (airspeed[0] < 2 or airspeed[1] < 2 and
+                            not (airspeed[0] > 10 or airspeed[1] > 10)):
+                        return
+                    initial_airspeed_threshold_reached = True
                 delta = abs(airspeed[0] - airspeed[1])
                 if delta > 2:
                     raise NotAchievedException("Airspeed mismatch (as1=%f as2=%f)" % (airspeed[0], airspeed[1]))
@@ -2557,8 +2568,10 @@ function'''
         # FIXME: once we have a pre-populated terrain cache this
         # should require an instantly correct report to pass
         tstart = self.get_sim_time_cached()
+        last_terrain_report_pending = -1
         while True:
-            if self.get_sim_time_cached() - tstart > 60:
+            now = self.get_sim_time_cached()
+            if now - tstart > 60:
                 raise NotAchievedException("Did not get correct terrain report")
 
             self.mav.mav.terrain_check_send(lat_int, lng_int)
@@ -2567,6 +2580,14 @@ function'''
             self.progress(self.dump_message_verbose(report))
             if report.spacing != 0:
                 break
+
+            # we will keep trying to long as the number of pending
+            # tiles is dropping:
+            if last_terrain_report_pending == -1:
+                last_terrain_report_pending = report.pending
+            elif report.pending < last_terrain_report_pending:
+                last_terrain_report_pending = report.pending
+                tstart = now
 
             self.delay_sim_time(1)
 

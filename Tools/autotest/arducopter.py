@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 '''
 Fly Copter in SITL
 
@@ -2629,6 +2627,18 @@ class AutoTestCopter(AutoTest):
 
         self.do_RTL()
 
+    def hover_for_interval(self, hover_time):
+        '''hovers for an interval of hover_time seconds.  Returns the bookend
+        times for that interval (in time-since-boot frame), and the
+        output throttle level at the end of the period.
+        '''
+        self.progress("Hovering for %u seconds" % hover_time)
+        tstart = self.get_sim_time()
+        self.delay_sim_time(hover_time)
+        vfr_hud = self.poll_message('VFR_HUD')
+        tend = self.get_sim_time()
+        return tstart, tend, vfr_hud.throttle
+
     def fly_motor_vibration(self):
         """Test flight with motor vibration"""
         self.context_push()
@@ -2652,19 +2662,14 @@ class AutoTestCopter(AutoTest):
             })
             self.reboot_sitl()
 
+            # do a simple up-and-down flight to gather data:
             self.takeoff(15, mode="ALT_HOLD")
-
-            hover_time = 15
-            tstart = self.get_sim_time()
-            self.progress("Hovering for %u seconds" % hover_time)
-            while self.get_sim_time_cached() < tstart + hover_time:
-                self.mav.recv_match(type='ATTITUDE', blocking=True)
-            tend = self.get_sim_time()
-
+            tstart, tend, hover_throttle = self.hover_for_interval(15)
             # if we don't reduce vibes here then the landing detector
             # may not trigger
             self.set_parameter("SIM_VIB_MOT_MAX", 0)
             self.do_RTL()
+
             psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
             # ignore the first 20Hz and look for a peak at -15dB or more
             ignore_bins = 20
@@ -2688,15 +2693,12 @@ class AutoTestCopter(AutoTest):
             })
             self.reboot_sitl()
 
+            # do a simple up-and-down flight to gather data:
             self.takeoff(15, mode="ALT_HOLD")
-
-            tstart = self.get_sim_time()
-            self.progress("Hovering for %u seconds" % hover_time)
-            while self.get_sim_time_cached() < tstart + hover_time:
-                self.mav.recv_match(type='ATTITUDE', blocking=True)
-            tend = self.get_sim_time()
+            tstart, tend, hover_throttle = self.hover_for_interval(15)
             self.set_parameter("SIM_VIB_MOT_MAX", 0)
             self.do_RTL()
+
             psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
             freq = psd["F"][numpy.argmax(psd["X"][ignore_bins:]) + ignore_bins]
             peakdB = numpy.amax(psd["X"][ignore_bins:])
@@ -5058,15 +5060,9 @@ class AutoTestCopter(AutoTest):
         if takeoff:
             self.takeoff(10, mode="ALT_HOLD")
 
-        hover_time = 15
-        tstart = self.get_sim_time()
-        self.progress("Hovering for %u seconds" % hover_time)
-        while self.get_sim_time_cached() < tstart + hover_time:
-            self.mav.recv_match(type='ATTITUDE', blocking=True)
-        vfr_hud = self.mav.recv_match(type='VFR_HUD', blocking=True)
-        tend = self.get_sim_time()
-
+        tstart, tend, hover_throttle = self.hover_for_interval(15)
         self.do_RTL()
+
         psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
 
         # batch sampler defaults give 1024 fft and sample rate of 1kz so roughly 1hz/bin
@@ -5081,11 +5077,12 @@ class AutoTestCopter(AutoTest):
             if reverse is not None:
                 raise NotAchievedException(
                     "Detected motor peak at %fHz, throttle %f%%, %fdB" %
-                    (freq, vfr_hud.throttle, peakdb))
+                    (freq, hover_throttle, peakdb))
             else:
-                self.progress("Detected motor peak at %fHz, throttle %f%%, %fdB" % (freq, vfr_hud.throttle, peakdb))
+                self.progress("Detected motor peak at %fHz, throttle %f%%, %fdB" %
+                              (freq, hover_throttle, peakdb))
 
-        return freq, vfr_hud, peakdb
+        return freq, hover_throttle, peakdb
 
     def fly_dynamic_notches(self):
         """Use dynamic harmonic notch to control motor noise."""
@@ -5109,27 +5106,27 @@ class AutoTestCopter(AutoTest):
             self.takeoff(10, mode="ALT_HOLD")
 
             # find a motor peak
-            freq, vfr_hud, peakdb = self.hover_and_check_matched_frequency_with_fft(-15, 200, 300)
+            freq, hover_throttle, peakdb = self.hover_and_check_matched_frequency_with_fft(-15, 200, 300)
 
             # now add a dynamic notch and check that the peak is squashed
             self.set_parameters({
                 "INS_LOG_BAT_OPT": 2,
                 "INS_HNTCH_ENABLE": 1,
                 "INS_HNTCH_FREQ": freq,
-                "INS_HNTCH_REF": vfr_hud.throttle/100.,
+                "INS_HNTCH_REF": hover_throttle/100.,
                 "INS_HNTCH_HMNCS": 5, # first and third harmonic
                 "INS_HNTCH_ATT": 50,
                 "INS_HNTCH_BW": freq/2,
             })
             self.reboot_sitl()
 
-            freq, vfr_hud, peakdb1 = self.hover_and_check_matched_frequency_with_fft(-10, 20, 350, reverse=True)
+            freq, hover_throttle, peakdb1 = self.hover_and_check_matched_frequency_with_fft(-10, 20, 350, reverse=True)
 
             # now add double dynamic notches and check that the peak is squashed
             self.set_parameter("INS_HNTCH_OPTS", 1)
             self.reboot_sitl()
 
-            freq, vfr_hud, peakdb2 = self.hover_and_check_matched_frequency_with_fft(-15, 20, 350, reverse=True)
+            freq, hover_throttle, peakdb2 = self.hover_and_check_matched_frequency_with_fft(-15, 20, 350, reverse=True)
 
             # double-notch should do better, but check for within 5%
             if peakdb2 * 1.05 > peakdb1:
@@ -5167,7 +5164,7 @@ class AutoTestCopter(AutoTest):
         self.takeoff(10, mode="ALT_HOLD")
 
         # find a motor peak
-        freq, vfr_hud, peakdb = self.hover_and_check_matched_frequency_with_fft(-15, 200, 300)
+        freq, hover_throttle, peakdb = self.hover_and_check_matched_frequency_with_fft(-15, 200, 300)
 
         # now add a dynamic notch and check that the peak is squashed
         self.set_parameters({
@@ -5182,13 +5179,13 @@ class AutoTestCopter(AutoTest):
         })
         self.reboot_sitl()
 
-        freq, vfr_hud, peakdb1 = self.hover_and_check_matched_frequency_with_fft(-10, 20, 350, reverse=True)
+        freq, hover_throttle, peakdb1 = self.hover_and_check_matched_frequency_with_fft(-10, 20, 350, reverse=True)
 
         # now add notch-per motor and check that the peak is squashed
         self.set_parameter("INS_HNTCH_OPTS", 2)
         self.reboot_sitl()
 
-        freq, vfr_hud, peakdb2 = self.hover_and_check_matched_frequency_with_fft(-15, 20, 350, reverse=True)
+        freq, hover_throttle, peakdb2 = self.hover_and_check_matched_frequency_with_fft(-15, 20, 350, reverse=True)
 
         # notch-per-motor should do better, but check for within 5%
         if peakdb2 * 1.05 > peakdb1:
@@ -5207,14 +5204,14 @@ class AutoTestCopter(AutoTest):
                 defaults_filepath=','.join(self.model_defaults_filepath("octa")),
                 model="octa"
             )
-            freq, vfr_hud, peakdb1 = self.hover_and_check_matched_frequency_with_fft(-10, 20, 350, reverse=True)
+            freq, hover_throttle, peakdb1 = self.hover_and_check_matched_frequency_with_fft(-10, 20, 350, reverse=True)
 
             # now add notch-per motor and check that the peak is squashed
             self.set_parameter("INS_HNTCH_HMNCS", 1)
             self.set_parameter("INS_HNTCH_OPTS", 2)
             self.reboot_sitl()
 
-            freq, vfr_hud, peakdb2 = self.hover_and_check_matched_frequency_with_fft(-15, 20, 350, reverse=True)
+            freq, hover_throttle, peakdb2 = self.hover_and_check_matched_frequency_with_fft(-15, 20, 350, reverse=True)
 
             # notch-per-motor should do better, but check for within 5%
             if peakdb2 * 1.05 > peakdb1:
@@ -5232,16 +5229,9 @@ class AutoTestCopter(AutoTest):
     def hover_and_check_matched_frequency(self, dblevel=-15, minhz=200, maxhz=300, fftLength=32, peakhz=None):
         # find a motor peak
         self.takeoff(10, mode="ALT_HOLD")
-
-        hover_time = 15
-        tstart = self.get_sim_time()
-        self.progress("Hovering for %u seconds" % hover_time)
-        while self.get_sim_time_cached() < tstart + hover_time:
-            self.mav.recv_match(type='ATTITUDE', blocking=True)
-        vfr_hud = self.mav.recv_match(type='VFR_HUD', blocking=True)
-        tend = self.get_sim_time()
-
+        tstart, tend, hover_throttle = self.hover_for_interval(15)
         self.do_RTL()
+
         psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
 
         # batch sampler defaults give 1024 fft and sample rate of 1kz so roughly 1hz/bin
@@ -5255,34 +5245,16 @@ class AutoTestCopter(AutoTest):
         elif peakhz is not None and abs(freq - peakhz) / peakhz > 0.05:
             raise NotAchievedException("Did not detect a motor peak at %fHz, found %fHz at %fdB" % (peakhz, freq, peakdb))
         else:
-            self.progress("Detected motor peak at %fHz, throttle %f%%, %fdB" % (freq, vfr_hud.throttle, peakdb))
+            self.progress("Detected motor peak at %fHz, throttle %f%%, %fdB" % (freq, hover_throttle, peakdb))
 
         # we have a peak make sure that the FFT detected something close
         # logging is at 10Hz
-        mlog = self.dfreader_for_current_onboard_log()
         # accuracy is determined by sample rate and fft length, given our use of quinn we could probably use half of this
         freqDelta = 1000. / fftLength
-        pkAvg = freq
-        nmessages = 1
-
-        m = mlog.recv_match(
-            type='FTN1',
-            blocking=False,
-            condition="FTN1.TimeUS>%u and FTN1.TimeUS<%u" % (tstart * 1.0e6, tend * 1.0e6)
-        )
-        freqs = []
-        while m is not None:
-            nmessages = nmessages + 1
-            freqs.append(m.PkAvg)
-            m = mlog.recv_match(
-                type='FTN1',
-                blocking=False,
-                condition="FTN1.TimeUS>%u and FTN1.TimeUS<%u" % (tstart * 1.0e6, tend * 1.0e6)
-            )
 
         # peak within resolution of FFT length
-        pkAvg = numpy.median(numpy.asarray(freqs))
-        self.progress("Detected motor peak at %fHz processing %d messages" % (pkAvg, nmessages))
+        pkAvg, nmessages = self.extract_median_FTN1_PkAvg_from_current_onboard_log(tstart, tend)
+        self.progress("Onboard-FFT detected motor peak at %fHz (processed %d FTN1 messages)" % (pkAvg, nmessages))
 
         # peak within 5%
         if abs(pkAvg - freq) > freqDelta:
@@ -5290,13 +5262,28 @@ class AutoTestCopter(AutoTest):
 
         return freq
 
-    def fly_gyro_fft_harmonic(self):
+    def extract_median_FTN1_PkAvg_from_current_onboard_log(self, tstart, tend):
+        '''extracts FTN1 messages from log, returns median of pkAvg values and
+        the number of samples'''
+        mlog = self.dfreader_for_current_onboard_log()
+        freqs = []
+        while True:
+            m = mlog.recv_match(
+                type='FTN1',
+                blocking=False,
+                condition="FTN1.TimeUS>%u and FTN1.TimeUS<%u" % (tstart * 1.0e6, tend * 1.0e6))
+            if m is None:
+                break
+            freqs.append(m.PkAvg)
+        return numpy.median(numpy.asarray(freqs)), len(freqs)
+
+    def test_gyro_fft_harmonic(self, averaging):
         """Use dynamic harmonic notch to control motor noise with harmonic matching of the first harmonic."""
         # basic gyro sample rate test
         self.progress("Flying with gyro FFT harmonic - Gyro sample rate")
         self.context_push()
         ex = None
-        # we are dealing with probabalistic scenarios involving threads, have two bites at the cherry
+        # we are dealing with probabalistic scenarios involving threads
         try:
             self.start_subtest("Hover to calculate approximate hover frequency")
             # magic tridge EKF type that dramatically speeds up the test
@@ -5315,6 +5302,7 @@ class AutoTestCopter(AutoTest):
                 "FFT_THR_REF": self.get_parameter("MOT_THST_HOVER"),
                 "SIM_GYR1_RND": 20,  # enable a noisy gyro
             })
+
             # motor peak enabling FFT will also enable the arming
             # check, self-testing the functionality
             self.set_parameters({
@@ -5323,6 +5311,8 @@ class AutoTestCopter(AutoTest):
                 "FFT_MAXHZ": 450,
                 "FFT_SNR_REF": 10,
             })
+            if averaging:
+                self.set_parameter("FFT_NUM_FRAMES", 8)
 
             # Step 1: inject actual motor noise and use the FFT to track it
             self.set_parameters({
@@ -5355,37 +5345,18 @@ class AutoTestCopter(AutoTest):
             self.takeoff(10, mode="ALT_HOLD")
 
             hover_time = 10
-            tstart = self.get_sim_time()
-            self.progress("Hovering for %u seconds" % hover_time)
-            while self.get_sim_time_cached() < tstart + hover_time:
-                self.mav.recv_match(type='ATTITUDE', blocking=True)
-            vfr_hud = self.mav.recv_match(type='VFR_HUD', blocking=True)
+            tstart, tend_unused, hover_throttle = self.hover_for_interval(hover_time)
 
+            self.progress("Switching motor vibration multiplier")
             self.set_parameter("SIM_VIB_MOT_MULT", 5.0)
 
-            self.progress("Hovering for %u seconds" % hover_time)
-            while self.get_sim_time_cached() < tstart + hover_time:
-                self.mav.recv_match(type='ATTITUDE', blocking=True)
-            vfr_hud = self.mav.recv_match(type='VFR_HUD', blocking=True)
-            tend = self.get_sim_time()
+            tstart_unused, tend, hover_throttle = self.hover_for_interval(hover_time)
 
             self.do_RTL()
 
-            mlog = self.dfreader_for_current_onboard_log()
-            m = mlog.recv_match(
-                type='FTN1',
-                blocking=False,
-                condition="FTN1.TimeUS>%u and FTN1.TimeUS<%u" % (tstart * 1.0e6, tend * 1.0e6))
-            freqs = []
-            while m is not None:
-                freqs.append(m.PkAvg)
-                m = mlog.recv_match(
-                    type='FTN1',
-                    blocking=False,
-                    condition="FTN1.TimeUS>%u and FTN1.TimeUS<%u" % (tstart * 1.0e6, tend * 1.0e6))
-
             # peak within resolution of FFT length, the highest energy peak switched but our detection should not
-            pkAvg = numpy.median(numpy.asarray(freqs))
+            pkAvg, nmessages = self.extract_median_FTN1_PkAvg_from_current_onboard_log(tstart, tend)
+
             freqDelta = 1000. / self.get_parameter("FFT_WINDOW_SIZE")
 
             if abs(pkAvg - freq) > freqDelta:
@@ -5394,7 +5365,7 @@ class AutoTestCopter(AutoTest):
             # Step 4: dynamic harmonic
             self.start_subtest("Enable dynamic harmonics and make sure both frequency peaks are attenuated")
             # find a motor peak
-            freq, vfr_hud, peakdb = self.hover_and_check_matched_frequency_with_fft(-15, 100, 350)
+            freq, hover_throttle, peakdb = self.hover_and_check_matched_frequency_with_fft(-15, 100, 350)
 
             # now add a dynamic notch and check that the peak is squashed
             self.set_parameters({
@@ -5403,7 +5374,7 @@ class AutoTestCopter(AutoTest):
                 "INS_HNTCH_HMNCS": 1,
                 "INS_HNTCH_MODE": 4,
                 "INS_HNTCH_FREQ": freq,
-                "INS_HNTCH_REF": vfr_hud.throttle/100.0,
+                "INS_HNTCH_REF": hover_throttle/100.0,
                 "INS_HNTCH_ATT": 100,
                 "INS_HNTCH_BW": freq/2,
                 "INS_HNTCH_OPTS": 3,
@@ -5436,6 +5407,15 @@ class AutoTestCopter(AutoTest):
 
         if ex is not None:
             raise ex
+
+    def fly_gyro_fft_harmonic(self):
+        """Use dynamic harmonic notch to control motor noise with harmonic matching of the first harmonic."""
+        self.test_gyro_fft_harmonic(False)
+
+    def fly_gyro_fft_continuous_averaging(self):
+        """Use dynamic harmonic notch with FFT averaging to control motor noise
+           with harmonic matching of the first harmonic."""
+        self.test_gyro_fft_harmonic(True)
 
     def fly_gyro_fft(self):
         """Use dynamic harmonic notch to control motor noise."""
@@ -5527,22 +5507,17 @@ class AutoTestCopter(AutoTest):
             })
             self.reboot_sitl()
 
+            # do test flight:
             self.takeoff(10, mode="ALT_HOLD")
-            hover_time = 15
-            self.progress("Hovering for %u seconds" % hover_time)
-            tstart = self.get_sim_time()
-            while self.get_sim_time_cached() < tstart + hover_time:
-                self.mav.recv_match(type='ATTITUDE', blocking=True)
-            tend = self.get_sim_time()
-
+            tstart, tend, hover_throttle = self.hover_for_interval(15)
             # fly fast forrest!
             self.set_rc(3, 1900)
             self.set_rc(2, 1200)
             self.wait_groundspeed(5, 1000)
             self.set_rc(3, 1500)
             self.set_rc(2, 1500)
-
             self.do_RTL()
+
             psd = self.mavfft_fttd(1, 0, tstart * 1.0e6, tend * 1.0e6)
 
             # batch sampler defaults give 1024 fft and sample rate of 1kz so roughly 1hz/bin
@@ -5569,16 +5544,15 @@ class AutoTestCopter(AutoTest):
             })
             self.reboot_sitl()
 
+            # do test flight:
             self.takeoff(10, mode="ALT_HOLD")
-
-            self.progress("Hovering for %u seconds" % hover_time)
-            tstart = self.get_sim_time()
-            while self.get_sim_time_cached() < tstart + hover_time:
-                self.mav.recv_match(type='ATTITUDE', blocking=True)
-            tend = self.get_sim_time()
-
+            tstart, tend, hover_throttle = self.hover_for_interval(15)
             self.do_RTL()
-            # prevent update parameters from messing with the settings when we pop the context
+
+            # why are we not checking the results from that flight? -pb20220613
+
+            # prevent update parameters from messing with the settings
+            # when we pop the context
             self.set_parameter("FFT_ENABLE", 0)
             self.reboot_sitl()
 
@@ -5639,16 +5613,11 @@ class AutoTestCopter(AutoTest):
             self.takeoff(10, mode="ALT_HOLD")
 
             hover_time = 60
-            tstart = self.get_sim_time()
-            self.progress("Hovering for %u seconds" % hover_time)
 
             # start the tune
             self.set_rc(7, 2000)
 
-            while self.get_sim_time_cached() < tstart + hover_time:
-                self.mav.recv_match(type='ATTITUDE', blocking=True)
-            vfr_hud = self.mav.recv_match(type='VFR_HUD', blocking=True)
-            tend = self.get_sim_time()
+            tstart, tend, hover_throttle = self.hover_for_interval(hover_time)
 
             # finish the tune
             self.set_rc(7, 1000)
@@ -5663,7 +5632,7 @@ class AutoTestCopter(AutoTest):
             self.progress("FFT detected parameters were %fHz, ref %f" % (detected_freq, detected_ref))
 
             # approximate the scaled frequency
-            scaled_freq_at_hover = math.sqrt((vfr_hud.throttle / 100.) / detected_ref) * detected_freq
+            scaled_freq_at_hover = math.sqrt((hover_throttle / 100.) / detected_ref) * detected_freq
 
             # Check we matched
             if abs(scaled_freq_at_hover - freq) / scaled_freq_at_hover > 0.05:
@@ -5692,16 +5661,11 @@ class AutoTestCopter(AutoTest):
             self.takeoff(10, mode="ALT_HOLD")
 
             hover_time = 60
-            tstart = self.get_sim_time()
-            self.progress("Hovering for %u seconds" % hover_time)
 
             # start the tune
             self.set_rc(7, 2000)
 
-            while self.get_sim_time_cached() < tstart + hover_time:
-                self.mav.recv_match(type='ATTITUDE', blocking=True)
-            vfr_hud = self.mav.recv_match(type='VFR_HUD', blocking=True)
-            tend = self.get_sim_time()
+            tstart, tend, hover_throttle = self.hover_for_interval(hover_time)
 
             # finish the tune
             self.set_rc(7, 1000)
@@ -5713,7 +5677,7 @@ class AutoTestCopter(AutoTest):
             self.progress("FFT detected parameters were %fHz, ref %f" % (detected_freq, detected_ref))
 
             # approximate the scaled frequency
-            scaled_freq_at_hover = math.sqrt((vfr_hud.throttle / 100.) / detected_ref) * detected_freq
+            scaled_freq_at_hover = math.sqrt((hover_throttle / 100.) / detected_ref) * detected_freq
 
             # Check we matched
             if abs(scaled_freq_at_hover - freq) / scaled_freq_at_hover > 0.05:
@@ -8590,7 +8554,7 @@ class AutoTestCopter(AutoTest):
 
     def FETtecESC_btw_mask_checks(self):
         '''ensure prearm checks work as expected'''
-        for bad_mask in [0b1000000000000, 0b10100000000000]:
+        for bad_mask in [0b1000000000000000, 0b10100000000000000]:
             self.fettec_assert_bad_mask(bad_mask)
         for good_mask in [0b00001, 0b00101, 0b110000000000]:
             self.fettec_assert_good_mask(good_mask)
@@ -9082,6 +9046,11 @@ class AutoTestCopter(AutoTest):
                  "Fly Gyro FFT Averaging",
                  self.fly_gyro_fft_average,
                  attempts=1),
+
+            Test("GyroFFTContinuousAveraging",
+                 "Fly Gyro FFT Continuous averaging",
+                 self.fly_gyro_fft_continuous_averaging,
+                 attempts=8),
 
             Test("CompassReordering",
                  "Test Compass reordering when priorities are changed",
