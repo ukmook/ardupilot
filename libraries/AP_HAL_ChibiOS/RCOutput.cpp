@@ -59,18 +59,6 @@ static const eventmask_t EVT_PWM_SYNTHETIC_SEND  = EVENT_MASK(13);
 static const eventmask_t EVT_PWM_SEND_NEXT  = EVENT_MASK(14);
 static const eventmask_t EVT_LED_SEND  = EVENT_MASK(15);
 
-static const uint32_t DSHOT_BIT_WIDTH_TICKS = 8;
-static const uint32_t DSHOT_BIT_0_TICKS = 3;
-static const uint32_t DSHOT_BIT_1_TICKS = 6;
-
-// See WS2812B spec for expected pulse widths
-static const uint32_t NEOP_BIT_WIDTH_TICKS = 11;
-static const uint32_t NEOP_BIT_0_TICKS = 4;
-static const uint32_t NEOP_BIT_1_TICKS = 9;
-// neopixel does not use pulse widths at all
-static const uint32_t PROFI_BIT_0_TICKS = 4;
-static const uint32_t PROFI_BIT_1_TICKS = 9;
-
 // #pragma GCC optimize("Og")
 
 /*
@@ -478,6 +466,28 @@ void RCOutput::set_dshot_rate(uint8_t dshot_rate, uint16_t loop_rate_hz)
     }
     _dshot_period_us = 1000000UL / drate;
 }
+
+#ifndef DISABLE_DSHOT
+/*
+ Set/get the dshot esc_type
+ */
+void RCOutput::set_dshot_esc_type(DshotEscType dshot_esc_type)
+{
+    _dshot_esc_type = dshot_esc_type;
+    switch (_dshot_esc_type) {
+        case DSHOT_ESC_BLHELI_S:
+            DSHOT_BIT_WIDTH_TICKS = DSHOT_BIT_WIDTH_TICKS_S;
+            DSHOT_BIT_0_TICKS = DSHOT_BIT_0_TICKS_S;
+            DSHOT_BIT_1_TICKS = DSHOT_BIT_1_TICKS_S;
+            break;
+        default:
+            DSHOT_BIT_WIDTH_TICKS = DSHOT_BIT_WIDTH_TICKS_DEFAULT;
+            DSHOT_BIT_0_TICKS = DSHOT_BIT_0_TICKS_DEFAULT;
+            DSHOT_BIT_1_TICKS = DSHOT_BIT_1_TICKS_DEFAULT;
+            break;
+    }
+}
+#endif
 
 /*
   find pwm_group and index in group given a channel number
