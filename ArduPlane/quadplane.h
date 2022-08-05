@@ -11,12 +11,12 @@
 #include <AP_Motors/AP_Motors.h>
 #include <AC_PID/AC_PID.h>
 #include <AC_AttitudeControl/AC_AttitudeControl_Multi.h> // Attitude control library
+#include <AC_AttitudeControl/AC_CommandModel.h>
 #include <AP_InertialNav/AP_InertialNav.h>
 #include <AC_AttitudeControl/AC_PosControl.h>
 #include <AC_AttitudeControl/AC_WeatherVane.h>
 #include <AC_WPNav/AC_WPNav.h>
 #include <AC_WPNav/AC_Loiter.h>
-#include <AC_Fence/AC_Fence.h>
 #include <AC_Avoidance/AC_Avoid.h>
 #include <AP_Logger/LogStructure.h>
 #include <AP_Proximity/AP_Proximity.h>
@@ -196,6 +196,13 @@ private:
     // air mode state: OFF, ON, ASSISTED_FLIGHT_ONLY
     AirMode air_mode;
 
+    // Command model parameter class
+    // Default max rate, default expo, default time constant
+    AC_CommandModel command_model_pilot{100.0, 0.25, 0.25};
+    // helper functions to set and disable time constant from command model
+    void set_pilot_yaw_rate_time_constant();
+    void disable_yaw_rate_time_constant();
+
     // return true if airmode should be active
     bool air_mode_active() const;
 
@@ -318,9 +325,6 @@ private:
     AP_Int16 assist_alt;
     uint32_t alt_error_start_ms;
     bool in_alt_assist;
-
-    // maximum yaw rate in degrees/second
-    AP_Float yaw_rate_max;
 
     // landing speed in cm/s
     AP_Int16 land_speed_cms;
@@ -479,6 +483,7 @@ private:
         float target_speed;
         float target_accel;
         uint32_t last_pos_reset_ms;
+        bool overshoot;
     private:
         uint32_t last_state_change_ms;
         enum position_control_state state;

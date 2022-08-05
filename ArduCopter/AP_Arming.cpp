@@ -169,7 +169,7 @@ bool AP_Arming_Copter::parameter_checks(bool display_failure)
         }
 
         char fail_msg[50];
-        // check input mangager parameters
+        // check input manager parameters
         if (!copter.input_manager.parameter_check(fail_msg, ARRAY_SIZE(fail_msg))) {
             check_failed(ARMING_CHECK_PARAMETERS, display_failure, "%s", fail_msg);
             return false;
@@ -254,7 +254,7 @@ bool AP_Arming_Copter::parameter_checks(bool display_failure)
 #endif
 
         // ensure controllers are OK with us arming:
-        char failure_msg[50];
+        char failure_msg[50] = {};
         if (!copter.pos_control->pre_arm_checks("PSC", failure_msg, ARRAY_SIZE(failure_msg))) {
             check_failed(ARMING_CHECK_PARAMETERS, display_failure, "Bad parameter: %s", failure_msg);
             return false;
@@ -295,7 +295,7 @@ bool AP_Arming_Copter::motor_checks(bool display_failure)
 bool AP_Arming_Copter::oa_checks(bool display_failure)
 {
 #if AC_OAPATHPLANNER_ENABLED == ENABLED
-    char failure_msg[50];
+    char failure_msg[50] = {};
     if (copter.g2.oa.pre_arm_check(failure_msg, ARRAY_SIZE(failure_msg))) {
         return true;
     }
@@ -331,7 +331,7 @@ bool AP_Arming_Copter::gps_checks(bool display_failure)
 {
     // check if fence requires GPS
     bool fence_requires_gps = false;
-    #if AC_FENCE == ENABLED
+    #if AP_FENCE_ENABLED
     // if circular or polygon fence is enabled we need GPS
     fence_requires_gps = (copter.fence.get_enabled_fences() & (AC_FENCE_TYPE_CIRCLE | AC_FENCE_TYPE_POLYGON)) > 0;
     #endif
@@ -433,7 +433,7 @@ bool AP_Arming_Copter::mandatory_gps_checks(bool display_failure)
 
     // check if fence requires GPS
     bool fence_requires_gps = false;
-    #if AC_FENCE == ENABLED
+    #if AP_FENCE_ENABLED
     // if circular or polygon fence is enabled we need GPS
     fence_requires_gps = (copter.fence.get_enabled_fences() & (AC_FENCE_TYPE_CIRCLE | AC_FENCE_TYPE_POLYGON)) > 0;
     #endif

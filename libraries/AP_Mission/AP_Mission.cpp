@@ -167,6 +167,7 @@ bool AP_Mission::is_takeoff_next(uint16_t cmd_index)
             return true;
         // any of these are considered "skippable" when determining if
         // we "start with a takeoff command"
+        case MAV_CMD_DO_AUX_FUNCTION:
         case MAV_CMD_NAV_DELAY:
             continue;
         default:
@@ -326,6 +327,7 @@ bool AP_Mission::verify_command(const Mission_Command& cmd)
     case MAV_CMD_DO_SPRAYER:
     case MAV_CMD_DO_AUX_FUNCTION:
     case MAV_CMD_DO_SET_RESUME_REPEAT_DIST:
+    case MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW:
         return true;
     default:
         return _cmd_verify_fn(cmd);
@@ -337,6 +339,8 @@ bool AP_Mission::start_command(const Mission_Command& cmd)
     // check for landing related commands and set in_landing_sequence flag
     if (is_landing_type_cmd(cmd.id) || cmd.id == MAV_CMD_DO_LAND_START) {
         set_in_landing_sequence_flag(true);
+    } else if (is_takeoff_type_cmd(cmd.id)) {
+        set_in_landing_sequence_flag(false);
     }
 
     gcs().send_text(MAV_SEVERITY_INFO, "Mission: %u %s", cmd.index, cmd.type());
@@ -363,6 +367,8 @@ bool AP_Mission::start_command(const Mission_Command& cmd)
         return start_command_do_sprayer(cmd);
     case MAV_CMD_DO_SET_RESUME_REPEAT_DIST:
         return command_do_set_repeat_dist(cmd);
+    case MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW:
+        return start_command_do_gimbal_manager_pitchyaw(cmd);
     default:
         return _cmd_start_fn(cmd);
     }
@@ -1201,7 +1207,16 @@ MAV_MISSION_RESULT AP_Mission::mavlink_int_to_mission_cmd(const mavlink_mission_
     case MAV_CMD_DO_PAUSE_CONTINUE:
         cmd.p1 = packet.param1;
         break;
-        
+
+    case MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW:
+        cmd.content.gimbal_manager_pitchyaw.pitch_angle_deg = packet.param1;
+        cmd.content.gimbal_manager_pitchyaw.yaw_angle_deg = packet.param2;
+        cmd.content.gimbal_manager_pitchyaw.pitch_rate_degs = packet.param3;
+        cmd.content.gimbal_manager_pitchyaw.yaw_rate_degs = packet.param4;
+        cmd.content.gimbal_manager_pitchyaw.flags = packet.x;
+        cmd.content.gimbal_manager_pitchyaw.gimbal_id = packet.z;
+        break;
+
     default:
         // unrecognised command
         return MAV_MISSION_UNSUPPORTED;
@@ -1289,6 +1304,7 @@ MAV_MISSION_RESULT AP_Mission::convert_MISSION_ITEM_to_MISSION_ITEM_INT(const ma
     case MAV_CMD_DO_DIGICAM_CONTROL:
     case MAV_CMD_DO_DIGICAM_CONFIGURE:
     case MAV_CMD_NAV_ATTITUDE_TIME:
+    case MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW:
         mav_cmd.x = packet.x;
         mav_cmd.y = packet.y;
         break;
@@ -1331,6 +1347,7 @@ MAV_MISSION_RESULT AP_Mission::convert_MISSION_ITEM_INT_to_MISSION_ITEM(const ma
     case MAV_CMD_DO_DIGICAM_CONTROL:
     case MAV_CMD_DO_DIGICAM_CONFIGURE:
     case MAV_CMD_NAV_ATTITUDE_TIME:
+    case MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW:
         item.x = item_int.x;
         item.y = item_int.y;
         break;
@@ -1677,7 +1694,16 @@ bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& c
     case MAV_CMD_DO_PAUSE_CONTINUE:
         packet.param1 = cmd.p1;
         break;
-        
+
+    case MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW:
+        packet.param1 = cmd.content.gimbal_manager_pitchyaw.pitch_angle_deg;
+        packet.param2 = cmd.content.gimbal_manager_pitchyaw.yaw_angle_deg;
+        packet.param3 = cmd.content.gimbal_manager_pitchyaw.pitch_rate_degs;
+        packet.param4 = cmd.content.gimbal_manager_pitchyaw.yaw_rate_degs;
+        packet.x = cmd.content.gimbal_manager_pitchyaw.flags;
+        packet.z = cmd.content.gimbal_manager_pitchyaw.gimbal_id;
+        break;
+
     default:
         // unrecognised command
         return false;
@@ -2295,6 +2321,18 @@ bool AP_Mission::is_landing_type_cmd(uint16_t id) const
     }
 }
 
+// check if command is a takeoff type command.
+bool AP_Mission::is_takeoff_type_cmd(uint16_t id) const
+{
+    switch (id) {
+    case MAV_CMD_NAV_TAKEOFF:
+    case MAV_CMD_NAV_VTOL_TAKEOFF:
+        return true;
+    default:
+        return false;
+    }
+}
+
 const char *AP_Mission::Mission_Command::type() const
 {
     switch (id) {
@@ -2402,7 +2440,8 @@ const char *AP_Mission::Mission_Command::type() const
         return "NavAttitudeTime";
     case MAV_CMD_DO_PAUSE_CONTINUE:
         return "PauseContinue";
-
+    case MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW:
+        return "GimbalPitchYaw";
     default:
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
         AP_HAL::panic("Mission command with ID %u has no string", id);

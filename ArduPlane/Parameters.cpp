@@ -618,7 +618,7 @@ const AP_Param::Info Plane::var_info[] = {
     // @Param: LOG_BITMASK
     // @DisplayName: Log bitmask
     // @Description: Bitmap of what on-board log types to enable. This value is made up of the sum of each of the log types you want to be saved. It is usually best just to enable all log types by setting this to 65535. The individual bits are ATTITUDE_FAST=1, ATTITUDE_MEDIUM=2, GPS=4, PerformanceMonitoring=8, ControlTuning=16, NavigationTuning=32, Mode=64, IMU=128, Commands=256, Battery=512, Compass=1024, TECS=2048, Camera=4096, RCandServo=8192, Sonar=16384, Arming=32768, FullLogs=65535
-    // @Bitmask: 0:ATTITUDE_FAST,1:ATTITUDE_MED,2:GPS,3:PM,4:CTUN,5:NTUN,6:MODE,7:IMU,8:CMD,9:CURRENT,10:COMPASS,11:TECS,12:CAMERA,13:RC,14:SONAR,15:ARM/DISARM,19:IMU_RAW,20:ATTITUDE_FULLRATE,21:VideoStabilization
+    // @Bitmask: 0:ATTITUDE_FAST,1:ATTITUDE_MED,2:GPS,3:PM,4:CTUN,5:NTUN,6:MODE,7:IMU,8:CMD,9:BATT_MON,10:COMPASS,11:TECS,12:CAMERA,13:RC,14:RANGEFINDER,15:ARM/DISARM,19:IMU_RAW,20:ATTITUDE_FULLRATE,21:VideoStabilization
     // @User: Advanced
     GSCALAR(log_bitmask,            "LOG_BITMASK",    DEFAULT_LOG_BITMASK),
 
@@ -950,12 +950,6 @@ const AP_Param::Info Plane::var_info[] = {
     // @Path: ../libraries/AP_Rally/AP_Rally.cpp
     GOBJECT(rally,  "RALLY_",       AP_Rally),
 
-#if AC_FENCE == ENABLED
-    // @Group: FENCE_
-    // @Path: ../libraries/AC_Fence/AC_Fence.cpp
-    GOBJECT(fence, "FENCE_",        AC_Fence),
-#endif
-
 #if HAL_NAVEKF2_AVAILABLE
     // @Group: EK2_
     // @Path: ../libraries/AP_NavEKF2/AP_NavEKF2.cpp
@@ -1016,9 +1010,11 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     AP_SUBGROUPPTR(button_ptr, "BTN_", 1, ParametersG2, AP_Button),
 #endif
 
+#if AP_ICENGINE_ENABLED
     // @Group: ICE_
     // @Path: ../libraries/AP_ICEngine/AP_ICEngine.cpp
     AP_SUBGROUPINFO(ice_control, "ICE_", 2, ParametersG2, AP_ICEngine),
+#endif
 
     // 3 was used by prototype for servo_channels
     
@@ -1240,7 +1236,10 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
 };
 
 ParametersG2::ParametersG2(void) :
-    ice_control(plane.rpm_sensor)
+    unused_integer{1}
+#if AP_ICENGINE_ENABLED
+    ,ice_control(plane.rpm_sensor)
+#endif
 #if HAL_SOARING_ENABLED
     ,soaring_controller(plane.TECS_controller, plane.aparm)
 #endif
@@ -1350,6 +1349,7 @@ void Plane::load_parameters(void)
         g.format_version.set_and_save(Parameters::k_format_version);
         hal.console->printf("done.\n");
     }
+    g.format_version.set_default(Parameters::k_format_version);
 
     uint32_t before = micros();
     // Load all auto-loaded EEPROM variables
@@ -1385,6 +1385,7 @@ void Plane::load_parameters(void)
         }
     }
 
+#if AP_FENCE_ENABLED
     enum ap_var_type ptype_fence_type;
     AP_Int8 *fence_type_new = (AP_Int8*)AP_Param::find("FENCE_TYPE", &ptype_fence_type);
     if (fence_type_new && !fence_type_new->configured()) {
@@ -1469,6 +1470,7 @@ void Plane::load_parameters(void)
             }
         }
     }
+#endif // AP_FENCE_ENABLED
 
 #if AP_TERRAIN_AVAILABLE
     g.terrain_follow.convert_parameter_width(AP_PARAM_INT8);
@@ -1520,5 +1522,10 @@ void Plane::load_parameters(void)
     }
 #endif // HAL_INS_NUM_HARMONIC_NOTCH_FILTERS
     
+    // PARAMETER_CONVERSION - Added: Mar-2022
+#if AP_FENCE_ENABLED
+    AP_Param::convert_class(g.k_param_fence, &fence, fence.var_info, 0, 0, true);
+#endif
+
     hal.console->printf("load_all took %uus\n", (unsigned)(micros() - before));
 }

@@ -277,9 +277,6 @@ public:
     // true if offsets are valid
     bool getMagOffsets(uint8_t mag_idx, Vector3f &magOffsets) const;
 
-    // check all cores providing consistent attitudes for prearm checks
-    bool attitudes_consistent(char *failure_msg, const uint8_t failure_msg_len) const;
-
     // return the amount of yaw angle change due to the last yaw angle reset in radians
     // returns the time of the last yaw angle reset or 0 if no reset has ever occurred
     uint32_t getLastYawResetAngle(float &yawAng);
@@ -373,11 +370,6 @@ public:
 
     // set and save the ALT_M_NSE parameter value
     void set_alt_measurement_noise(float noise);
-
-    // active EKF type for logging
-    uint8_t get_active_AHRS_type(void) const {
-        return uint8_t(active_EKF_type());
-    }
 
     // get the selected ekf type, for allocation decisions
     int8_t get_ekf_type(void) const {
@@ -535,7 +527,7 @@ public:
 
     // convert a vector from body to earth frame
     Vector3f body_to_earth(const Vector3f &v) const {
-        return v * get_rotation_body_to_ned();
+        return get_rotation_body_to_ned() * v;
     }
 
     // convert a vector from earth to body frame
@@ -674,6 +666,9 @@ private:
     bool always_use_EKF() const {
         return _ekf_flags & FLAG_ALWAYS_USE_EKF;
     }
+
+    // check all cores providing consistent attitudes for prearm checks
+    bool attitudes_consistent(char *failure_msg, const uint8_t failure_msg_len) const;
 
     /*
      * Attitude-related private methods and attributes:

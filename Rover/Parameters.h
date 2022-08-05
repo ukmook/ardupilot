@@ -334,9 +334,6 @@ public:
     // frame class for vehicle
     AP_Int8 frame_class;
 
-    // fence library
-    AC_Fence fence;
-
 #if HAL_PROXIMITY_ENABLED
     // proximity library
     AP_Proximity proximity;
@@ -415,16 +412,14 @@ public:
     AP_Torqeedo torqeedo;
 #endif
 
-#if HAL_AIS_ENABLED
-    // Automatic Identification System - for tracking sea-going vehicles
-    AP_AIS ais;
-#endif
-
     // position controller
     AR_PosControl pos_control;
 
     // guided options bitmask
     AP_Int32 guided_options;
+
+    // Rover options
+    AP_Int32 manual_options;
 };
 
 extern const AP_Param::Info var_info[];

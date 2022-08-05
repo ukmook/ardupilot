@@ -307,8 +307,8 @@ void AP_Logger_Block::periodic_1Hz()
 {
     AP_Logger_Backend::periodic_1Hz();
 
-    if (rate_limiter == nullptr && _front._params.blk_ratemax > 0) {
-        // setup rate limiting
+    if (rate_limiter == nullptr && (_front._params.blk_ratemax > 0 || _front._log_pause)) {
+        // setup rate limiting if log rate max > 0Hz or log pause of streaming entries is requested
         rate_limiter = new AP_Logger_RateLimiter(_front, _front._params.blk_ratemax);
     }
     
@@ -831,7 +831,7 @@ bool AP_Logger_Block::io_thread_alive() const
 
 /*
   IO timer running on IO thread
-  The IO timer runs every 1ms or at 1Khz. The standard flash chip can write rougly 130Kb/s
+  The IO timer runs every 1ms or at 1Khz. The standard flash chip can write roughly 130Kb/s
   so there is little point in trying to write more than 130 bytes - or 1 page (256 bytes).
   The W25Q128FV datasheet gives tpp as typically 0.7ms yielding an absolute maximum rate of
   365Kb/s or just over a page per cycle.

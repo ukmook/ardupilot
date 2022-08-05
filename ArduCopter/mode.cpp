@@ -207,6 +207,10 @@ bool Copter::set_mode(Mode::Number mode, ModeReason reason)
     // return immediately if we are already in the desired mode
     if (mode == flightmode->mode_number()) {
         control_mode_reason = reason;
+        // set yaw rate time constant during autopilot startup
+        if (reason == ModeReason::INITIALISED && mode == Mode::Number::STABILIZE) {
+            attitude_control->set_yaw_rate_tc(g2.command_model_pilot.get_rate_tc());
+        }
         // make happy noise
         if (copter.ap.initialised && (reason != last_reason)) {
             AP_Notify::events.user_mode_change = 1;
@@ -308,7 +312,7 @@ bool Copter::set_mode(Mode::Number mode, ModeReason reason)
     adsb.set_is_auto_mode((mode == Mode::Number::AUTO) || (mode == Mode::Number::RTL) || (mode == Mode::Number::GUIDED));
 #endif
 
-#if AC_FENCE == ENABLED
+#if AP_FENCE_ENABLED
     // pilot requested flight mode change during a fence breach indicates pilot is attempting to manually recover
     // this flight mode change could be automatic (i.e. fence, battery, GPS or GCS failsafe)
     // but it should be harmless to disable the fence temporarily in these situations as well
@@ -317,6 +321,17 @@ bool Copter::set_mode(Mode::Number mode, ModeReason reason)
 
 #if CAMERA == ENABLED
     camera.set_is_auto_mode(flightmode->mode_number() == Mode::Number::AUTO);
+#endif
+
+    // set rate shaping time constants
+#if MODE_ACRO_ENABLED == ENABLED || MODE_SPORT_ENABLED == ENABLED
+    attitude_control->set_roll_pitch_rate_tc(g2.command_model_acro_rp.get_rate_tc());
+#endif
+    attitude_control->set_yaw_rate_tc(g2.command_model_pilot.get_rate_tc());
+#if MODE_ACRO_ENABLED == ENABLED || MODE_DRIFT_ENABLED == ENABLED
+    if (mode== Mode::Number::ACRO || mode== Mode::Number::DRIFT) {
+        attitude_control->set_yaw_rate_tc(g2.command_model_acro_y.get_rate_tc());
+    }
 #endif
 
     // update notify object
@@ -757,7 +772,7 @@ void Mode::precland_retry_position(const Vector3f &retry_pos)
         }
 
         // allow user to take control during repositioning. Note: copied from land_run_horizontal_control()
-        // To-Do: this code exists at several different places in slightly diffrent forms and that should be fixed
+        // To-Do: this code exists at several different places in slightly different forms and that should be fixed
         if (g.land_repositioning) {
             float target_roll = 0.0f;
             float target_pitch = 0.0f;
@@ -781,7 +796,7 @@ void Mode::precland_retry_position(const Vector3f &retry_pos)
     }
 
     Vector3p retry_pos_NEU{retry_pos.x, retry_pos.y, retry_pos.z * -1.0f};
-    //pos contoller expects input in NEU cm's
+    // pos controller expects input in NEU cm's
     retry_pos_NEU = retry_pos_NEU * 100.0f;
     pos_control->input_pos_xyz(retry_pos_NEU, 0.0f, 1000.0f);
 
@@ -962,7 +977,7 @@ float Mode::get_pilot_desired_yaw_rate(float yaw_in)
     }
 
     // convert pilot input to the desired yaw rate
-    return g2.pilot_y_rate * 100.0 * input_expo(yaw_in, g2.pilot_y_expo);
+    return g2.command_model_pilot.get_rate() * 100.0 * input_expo(yaw_in, g2.command_model_pilot.get_expo());
 }
 
 // pass-through functions to reduce code churn on conversion;

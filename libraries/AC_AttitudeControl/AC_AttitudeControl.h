@@ -87,7 +87,7 @@ public:
     float get_accel_roll_max_radss() const { return radians(_accel_roll_max * 0.01f); }
 
     // Sets the roll acceleration limit in centidegrees/s/s
-    void set_accel_roll_max_cdss(float accel_roll_max) { _accel_roll_max = accel_roll_max; }
+    void set_accel_roll_max_cdss(float accel_roll_max) { _accel_roll_max.set(accel_roll_max); }
 
     // Sets and saves the roll acceleration limit in centidegrees/s/s
     void save_accel_roll_max_cdss(float accel_roll_max) { _accel_roll_max.set_and_save(accel_roll_max); }
@@ -97,7 +97,7 @@ public:
     float get_accel_pitch_max_radss() const { return radians(_accel_pitch_max * 0.01f); }
 
     // Sets the pitch acceleration limit in centidegrees/s/s
-    void set_accel_pitch_max_cdss(float accel_pitch_max) { _accel_pitch_max = accel_pitch_max; }
+    void set_accel_pitch_max_cdss(float accel_pitch_max) { _accel_pitch_max.set(accel_pitch_max); }
 
     // Sets and saves the pitch acceleration limit in centidegrees/s/s
     void save_accel_pitch_max_cdss(float accel_pitch_max) { _accel_pitch_max.set_and_save(accel_pitch_max); }
@@ -107,7 +107,7 @@ public:
     float get_accel_yaw_max_radss() const { return radians(_accel_yaw_max * 0.01f); }
 
     // Sets the yaw acceleration limit in centidegrees/s/s
-    void set_accel_yaw_max_cdss(float accel_yaw_max) { _accel_yaw_max = accel_yaw_max; }
+    void set_accel_yaw_max_cdss(float accel_yaw_max) { _accel_yaw_max.set(accel_yaw_max); }
 
     // Sets and saves the yaw acceleration limit in centidegrees/s/s
     void save_accel_yaw_max_cdss(float accel_yaw_max) { _accel_yaw_max.set_and_save(accel_yaw_max); }
@@ -128,7 +128,7 @@ public:
     float get_input_tc() const { return _input_tc; }
 
     // set the rate control input smoothing time constant
-    void set_input_tc(float input_tc) { _input_tc = constrain_float(input_tc, 0.0f, 1.0f); }
+    void set_input_tc(float input_tc) { _input_tc.set(constrain_float(input_tc, 0.0f, 1.0f)); }
 
     // Ensure attitude controller have zero errors to relax rate controller output
     void relax_attitude_controllers();
@@ -269,7 +269,7 @@ public:
     Vector3f rate_bf_targets() const { return _ang_vel_body + _sysid_ang_vel_body; }
 
     // Enable or disable body-frame feed forward
-    void bf_feedforward(bool enable_or_disable) { _rate_bf_ff_enabled = enable_or_disable; }
+    void bf_feedforward(bool enable_or_disable) { _rate_bf_ff_enabled.set(enable_or_disable); }
 
     // Enable or disable body-frame feed forward and save
     void bf_feedforward_save(bool enable_or_disable) { _rate_bf_ff_enabled.set_and_save(enable_or_disable); }
@@ -306,8 +306,8 @@ public:
     static float input_shaping_angle(float error_angle, float input_tc, float accel_max, float target_ang_vel, float desired_ang_vel, float max_ang_vel, float dt);
     static float input_shaping_angle(float error_angle, float input_tc, float accel_max, float target_ang_vel, float dt){ return input_shaping_angle(error_angle,  input_tc,  accel_max,  target_ang_vel,  0.0f,  0.0f,  dt); }
 
-    // limits the acceleration and deceleration of a velocity request
-    static float input_shaping_ang_vel(float target_ang_vel, float desired_ang_vel, float accel_max, float dt);
+    // Shapes the velocity request based on a rate time constant. The angular acceleration and deceleration is limited.
+    static float input_shaping_ang_vel(float target_ang_vel, float desired_ang_vel, float accel_max, float dt, float input_tc);
 
     // calculates the expected angular velocity correction from an angle error based on the AC_AttitudeControl settings.
     // This function can be used to predict the delay associated with angle requests.
@@ -370,6 +370,12 @@ public:
     // get the slew rate value for roll, pitch and yaw, for oscillation detection in lua scripts
     void get_rpy_srate(float &roll_srate, float &pitch_srate, float &yaw_srate);
     
+    // Sets the roll and pitch rate shaping time constant
+    void set_roll_pitch_rate_tc(float input_tc) { _rate_rp_tc = input_tc; }
+
+    // Sets the yaw rate shaping time constant
+    void set_yaw_rate_tc(float input_tc) { _rate_y_tc = input_tc; }
+
     // User settable parameters
     static const struct AP_Param::GroupInfo var_info[];
 
@@ -484,6 +490,10 @@ protected:
 
     // Yaw feed forward percent to allow zero yaw actuator output during extreme roll and pitch corrections
     float               _feedforward_scalar = 1.0f;
+
+    // rate controller input smoothing time constant
+    float               _rate_rp_tc;
+    float               _rate_y_tc;
 
     // References to external libraries
     const AP_AHRS_View&  _ahrs;

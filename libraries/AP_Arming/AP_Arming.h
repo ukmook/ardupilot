@@ -3,7 +3,7 @@
 #include <AP_HAL/AP_HAL_Boards.h>
 #include <AP_HAL/Semaphores.h>
 #include <AP_Param/AP_Param.h>
-#include <AP_InertialSensor/AP_InertialSensor.h>
+#include <GCS_MAVLink/GCS_MAVLink.h>
 
 class AP_Arming {
 public:
@@ -126,9 +126,12 @@ public:
     Method last_disarm_method() const { return _last_disarm_method; }
 
     // enum for ARMING_OPTIONS parameter
-    enum class ArmingOptions : int32_t {
+    enum class Option : int32_t {
         DISABLE_PREARM_DISPLAY   = (1U << 0),
     };
+    bool option_enabled(Option option) const {
+        return (_arming_options & uint32_t(option)) != 0;
+    }
 
 protected:
 
@@ -142,8 +145,8 @@ protected:
 
     // internal members
     bool                    armed;
-    uint32_t                last_accel_pass_ms[INS_MAX_INSTANCES];
-    uint32_t                last_gyro_pass_ms[INS_MAX_INSTANCES];
+    uint32_t                last_accel_pass_ms;
+    uint32_t                last_gyro_pass_ms;
 
     virtual bool barometer_checks(bool report);
 
@@ -184,6 +187,8 @@ protected:
     bool camera_checks(bool display_failure);
 
     bool osd_checks(bool display_failure) const;
+
+    bool mount_checks(bool display_failure) const;
 
     bool aux_auth_checks(bool display_failure);
 
@@ -254,6 +259,8 @@ private:
     // method that was last used for disarm; invalid unless the
     // vehicle has been disarmed at least once.
     Method _last_disarm_method = Method::UNKNOWN;
+
+    uint32_t last_prearm_display_ms;  // last time we send statustexts for prearm failures
 };
 
 namespace AP {
