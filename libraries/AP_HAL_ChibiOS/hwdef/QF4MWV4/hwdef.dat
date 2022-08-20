@@ -80,10 +80,10 @@ PB9 CAN1_TX CAN1
 
 # --------SPI------------
 # spi bus for Osd
-PA5  SPI1_SCK SPI1
-PA6  SPI1_MISO SPI1
-PA7  SPI1_MOSI SPI1
-PB1 OSD_CS CS
+# PA5  SPI1_SCK SPI1
+# PA6  SPI1_MISO SPI1
+# PA7  SPI1_MOSI SPI1
+# PB1 OSD_CS CS
 
 # spi bus for Sensors
 PB13 SPI2_SCK SPI2
@@ -129,7 +129,7 @@ define HAL_GPIO_B_LED_PIN 1
 define HAL_GPIO_C_LED_PIN 2
 
 # ----------SPI devices------------
-SPIDEV osd         SPI1 DEVID6  OSD_CS              MODE0 10*MHZ 10*MHZ
+# SPIDEV osd         SPI1 DEVID6  OSD_CS              MODE0 10*MHZ 10*MHZ
 SPIDEV bmp280      SPI2 DEVID1  BARO_CS             MODE3 1*MHZ 8*MHZ
 SPIDEV bmi088_g    SPI2 DEVID3  BMI088_GYRO_CS      MODE3 10*MHZ 10*MHZ
 SPIDEV bmi088_a    SPI2 DEVID4  BMI088_ACCEL_CS     MODE3 10*MHZ 10*MHZ
@@ -156,11 +156,13 @@ define HAL_OS_FATFS_IO 1
 define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
 define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
-# -----------OSD--------------------
+# -----------OSD FONT--------------------
 # font for the osd
-ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
+# ROMFS_WILDCARD libraries/AP_OSD/fonts/font0.bin
+
+# -----------OSD TYPE MSP--------------------
 define OSD_ENABLED 1
-define HAL_OSD_TYPE_DEFAULT 1
+define HAL_OSD_TYPE_DEFAULT 3
 
 # -------------CROSSFIRE---------------
 define HAL_MSP_ENABLED 1
@@ -177,9 +179,14 @@ define HAL_BATTMON_FUEL_ENABLE 0
 define HAL_PARACHUTE_ENABLED 0
 define HAL_SPRAYER_ENABLED 0
 
+# save even more flash
+define HAL_GENERATOR_ENABLED 0
+define AC_OAPATHPLANNER_ENABLED 0
+define PRECISION_LANDING 0
+define AP_OPTICALFLOW_ENABLED 0
+
 # reduce max size of embedded params for apj_tool.py
 define AP_PARAM_MAX_EMBEDDED_PARAM 1024
-define HAL_WITH_DSP FALSE
 
 define HAL_MINIMIZE_FEATURES 1
 
