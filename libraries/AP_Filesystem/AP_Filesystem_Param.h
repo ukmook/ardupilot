@@ -24,7 +24,7 @@ class AP_Filesystem_Param : public AP_Filesystem_Backend
 {
 public:
     // functions that closely match the equivalent posix calls
-    int open(const char *fname, int flags) override;
+    int open(const char *fname, int flags, bool allow_absolute_paths = false) override;
     int close(int fd) override;
     int32_t read(int fd, void *buf, uint32_t count) override;
     int32_t lseek(int fd, int32_t offset, int whence) override;
@@ -39,10 +39,12 @@ private:
     // only allow up to 4 files at a time
     static constexpr uint8_t max_open_file = 4;
 
-    // maximum size of one packed parameter
-    static constexpr uint8_t max_pack_len = AP_MAX_NAME_SIZE + 2 + 4 + 3;
+    // maximum size of one packed parameter and default value
+    static constexpr uint8_t max_pack_len = AP_MAX_NAME_SIZE + 2 + 4 + 4 + 3;
 
+    // Support both protocol versions
     static constexpr uint16_t pmagic = 0x671b;
+    static constexpr uint16_t pmagic_with_default = 0x671c;
 
     // header at front of the file
     struct header {
@@ -62,6 +64,7 @@ private:
 
     struct rfile {
         bool open;
+        bool with_defaults;
         uint16_t read_size;
         uint16_t start;
         uint16_t count;

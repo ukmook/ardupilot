@@ -225,6 +225,14 @@ submodules at specific revisions.
                  default=False,
                  help="enable generation of scripting documentation")
 
+    g.add_option('--enable-opendroneid', action='store_true',
+                 default=False,
+                 help="Enables OpenDroneID")
+
+    g.add_option('--enable-check-firmware', action='store_true',
+                 default=False,
+                 help="Enables firmware ID checking on boot")
+
     g = opt.ap_groups['linux']
 
     linux_options = ('--prefix', '--destdir', '--bindir', '--libdir')
@@ -683,7 +691,6 @@ def _build_recursion(bld):
     common_dirs_excl = [
         'modules',
         'libraries/AP_HAL_*',
-        'libraries/SITL',
     ]
 
     hal_dirs_patterns = [

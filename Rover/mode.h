@@ -1,13 +1,6 @@
 #pragma once
 
-#include <stdint.h>
-
-#include <GCS_MAVLink/GCS_MAVLink.h>
-#include <AP_Math/AP_Math.h>
-#include <AP_Mission/AP_Mission.h>
-#include <AR_WPNav/AR_WPNav.h>
-
-#include "defines.h"
+#include "Rover.h"
 
 // pre-define ModeRTL so Auto can appear higher in this file
 class ModeRTL;
@@ -112,8 +105,8 @@ public:
     virtual bool get_desired_location(Location& destination) const WARN_IF_UNUSED { return false; }
 
     // set desired location (used in Guided, Auto)
-    //   next_leg_bearing_cd should be heading to the following waypoint (used to slow the vehicle in order to make the turn)
-    virtual bool set_desired_location(const struct Location& destination, float next_leg_bearing_cd = AR_WPNAV_HEADING_UNKNOWN) WARN_IF_UNUSED;
+    // set next_destination (if known).  If not provided vehicle stops at destination
+    virtual bool set_desired_location(const Location &destination, Location next_destination = Location()) WARN_IF_UNUSED;
 
     // true if vehicle has reached desired location. defaults to true because this is normally used by missions and we do not want the mission to become stuck
     virtual bool reached_destination() const { return true; }
@@ -262,7 +255,7 @@ public:
 
     // get or set desired location
     bool get_desired_location(Location& destination) const override WARN_IF_UNUSED;
-    bool set_desired_location(const struct Location& destination, float next_leg_bearing_cd = AR_WPNAV_HEADING_UNKNOWN) override WARN_IF_UNUSED;
+    bool set_desired_location(const Location &destination, Location next_destination = Location()) override WARN_IF_UNUSED;
     bool reached_destination() const override;
 
     // set desired speed in m/s
@@ -383,6 +376,9 @@ private:
         float arg2;         // 2nd argument provided by mission command
     } nav_scripting;
 #endif
+
+    // Mission change detector
+    AP_Mission_ChangeDetector mis_change_detector;
 };
 
 
@@ -402,6 +398,12 @@ public:
     // return if external control is allowed in this mode (Guided or Guided-within-Auto)
     bool in_guided_mode() const override { return true; }
 
+    // return heading (in degrees) and cross track error (in meters) for reporting to ground station (NAV_CONTROLLER_OUTPUT message)
+    float wp_bearing() const override;
+    float nav_bearing() const override;
+    float crosstrack_error() const override;
+    float get_desired_lat_accel() const override;
+
     // return distance (in meters) to destination
     float get_distance_to_destination() const override;
 
@@ -413,7 +415,7 @@ public:
 
     // get or set desired location
     bool get_desired_location(Location& destination) const override WARN_IF_UNUSED;
-    bool set_desired_location(const struct Location& destination, float next_leg_bearing_cd = AR_WPNAV_HEADING_UNKNOWN) override WARN_IF_UNUSED;
+    bool set_desired_location(const Location &destination, Location next_destination = Location()) override WARN_IF_UNUSED;
 
     // set desired heading and speed
     void set_desired_heading_and_speed(float yaw_angle_cd, float target_speed);
@@ -448,7 +450,16 @@ protected:
         Guided_Stop
     };
 
+    // enum for GUID_OPTIONS parameter
+    enum class Options : int32_t {
+        SCurvesUsedForNavigation = (1U << 6)
+    };
+
     bool _enter() override;
+
+    // returns true if GUID_OPTIONS bit set to use scurve navigation instead of position controller input shaping
+    // scurves provide path planning and object avoidance but cannot handle fast updates to the destination (for fast updates use position controller input shaping)
+    bool use_scurves_for_navigation() const;
 
     GuidedMode _guided_mode;    // stores which GUIDED mode the vehicle is in
 
