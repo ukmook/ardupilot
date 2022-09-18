@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # encoding: utf-8
 
 from collections import OrderedDict
@@ -95,6 +94,26 @@ class Board:
                 ENABLE_ONVIF=0,
             )
 
+        # allow enable of OpenDroneID for any board
+        if cfg.options.enable_opendroneid:
+            env.ENABLE_OPENDRONEID = True
+            env.DEFINES.update(
+                AP_OPENDRONEID_ENABLED=1,
+            )
+            cfg.msg("Enabled OpenDroneID", 'yes')
+        else:
+            cfg.msg("Enabled OpenDroneID", 'no', color='YELLOW')
+
+        # allow enable of firmware ID checking for any board
+        if cfg.options.enable_check_firmware:
+            env.CHECK_FIRMWARE_ENABLED = True
+            env.DEFINES.update(
+                AP_CHECK_FIRMWARE_ENABLED=1,
+            )
+            cfg.msg("Enabled firmware ID checking", 'yes')
+        else:
+            cfg.msg("Enabled firmware ID checking", 'no', color='YELLOW')
+
         d = env.get_merged_dict()
         # Always prepend so that arguments passed in the command line get
         # the priority.
@@ -136,6 +155,13 @@ class Board:
         # Use a dictionary instead of the convetional list for definitions to
         # make easy to override them. Convert back to list before consumption.
         env.DEFINES = {}
+
+        # potentially set extra defines from an environment variable:
+        if cfg.options.define is not None:
+            for (n, v) in [d.split("=") for d in cfg.options.define]:
+                cfg.msg("Defining: %s" % (n, ), v)
+                env.CFLAGS += ['-D%s=%s' % (n, v)]
+                env.CXXFLAGS += ['-D%s=%s' % (n, v)]
 
         env.CFLAGS += [
             '-ffunction-sections',
@@ -545,16 +571,36 @@ class sitl(Board):
             HAL_PROBE_EXTERNAL_I2C_BAROS = 1,
         )
 
+        cfg.define('AP_SIM_ENABLED', 1)
         cfg.define('HAL_WITH_SPI', 1)
         cfg.define('HAL_WITH_RAMTRON', 1)
+        cfg.define('AP_GENERATOR_RICHENPOWER_ENABLED', 1)
+        cfg.define('AP_OPENDRONEID_ENABLED', 1)
 
         if self.with_can:
             cfg.define('HAL_NUM_CAN_IFACES', 2)
             cfg.define('UAVCAN_EXCEPTIONS', 0)
+            cfg.define('UAVCAN_SUPPORT_CANFD', 1)
 
         env.CXXFLAGS += [
             '-Werror=float-equal'
         ]
+
+        if cfg.options.ubsan or cfg.options.ubsan_abort:
+            env.CXXFLAGS += [
+                "-fsanitize=undefined",
+                "-fsanitize=float-cast-overflow",
+                "-DUBSAN_ENABLED",
+            ]
+            env.LINKFLAGS += [
+                "-fsanitize=undefined",
+                "-lubsan",
+            ]
+
+        if cfg.options.ubsan_abort:
+            env.CXXFLAGS += [
+                "-fno-sanitize-recover"
+            ]
 
         if not cfg.env.DEBUG:
             env.CXXFLAGS += [
@@ -666,6 +712,7 @@ class sitl_periph_gps(sitl):
             HAL_BUILD_AP_PERIPH = 1,
             PERIPH_FW = 1,
             CAN_APP_NODE_NAME = '"org.ardupilot.ap_periph_gps"',
+            AP_AIRSPEED_ENABLED = 0,
             HAL_PERIPH_ENABLE_GPS = 1,
             HAL_WITH_DSP = 1,
             HAL_CAN_DEFAULT_NODE_ID = 0,
@@ -674,9 +721,10 @@ class sitl_periph_gps(sitl):
             HAL_GCS_ENABLED = 0,
             HAL_LOGGING_ENABLED = 0,
             HAL_LOGGING_MAVLINK_ENABLED = 0,
-            HAL_MISSION_ENABLED = 0,
+            AP_MISSION_ENABLED = 0,
             HAL_RALLY_ENABLED = 0,
             HAL_SCHEDULER_ENABLED = 0,
+            CANARD_ENABLE_CANFD = 1,
         )
         # libcanard is written for 32bit platforms
         env.CXXFLAGS += [
@@ -706,7 +754,8 @@ class esp32(Board):
         super(esp32, self).configure_env(cfg, env)
         cfg.load('esp32')
         env.DEFINES.update(
-            CONFIG_HAL_BOARD = 'HAL_BOARD_ESP32'
+            CONFIG_HAL_BOARD = 'HAL_BOARD_ESP32',
+            AP_SIM_ENABLED = 0,
         )
 
         tt = self.name[5:] #leave off 'esp32' so we just get 'buzz','diy','icarus, etc
@@ -918,6 +967,18 @@ class chibios(Board):
         else:
             cfg.msg("Enabling ChibiOS thread statistics", "no")
 
+        if cfg.env.SIM_ENABLED:
+            env.DEFINES.update(
+                AP_SIM_ENABLED = 1,
+            )
+            env.AP_LIBRARIES += [
+                'SITL',
+            ]
+        else:
+            env.DEFINES.update(
+                AP_SIM_ENABLED = 0,
+            )
+
         env.LIB += ['gcc', 'm']
 
         env.GIT_SUBMODULES += [
@@ -936,6 +997,12 @@ class chibios(Board):
             ('9','3','1'),
             ('10','2','1'),
         ]
+
+        if cfg.env.AP_PERIPH:
+            if cfg.env.HAL_CANFD_SUPPORTED:
+                env.DEFINES.update(CANARD_ENABLE_CANFD=1)
+            else:
+                env.DEFINES.update(CANARD_ENABLE_TAO_OPTION=1)
 
         if cfg.options.Werror or cfg.env.CC_VERSION in gcc_whitelist:
             cfg.msg("Enabling -Werror", "yes")
@@ -976,6 +1043,7 @@ class linux(Board):
         env.DEFINES.update(
             CONFIG_HAL_BOARD = 'HAL_BOARD_LINUX',
             CONFIG_HAL_BOARD_SUBTYPE = 'HAL_BOARD_SUBTYPE_LINUX_NONE',
+            AP_SIM_ENABLED = 0,
         )
 
         if not cfg.env.DEBUG:

@@ -4,8 +4,8 @@ Mode::_TakeOff Mode::takeoff;
 
 bool Mode::auto_takeoff_no_nav_active = false;
 float Mode::auto_takeoff_no_nav_alt_cm = 0;
-float Mode::auto_take_off_start_alt_cm = 0;
-float Mode::auto_take_off_complete_alt_cm = 0;
+float Mode::auto_takeoff_start_alt_cm = 0;
+float Mode::auto_takeoff_complete_alt_cm = 0;
 bool Mode::auto_takeoff_terrain_alt = false;
 bool Mode::auto_takeoff_complete = false;
 Vector3p Mode::auto_takeoff_complete_pos;
@@ -112,7 +112,8 @@ void Mode::auto_takeoff_run()
     // get terrain offset
     float terr_offset = 0.0f;
     if (auto_takeoff_terrain_alt && !wp_nav->get_terrain_offset(terr_offset)) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "auto takeoff: failed to get terrain offset");
+        // trigger terrain failsafe
+        copter.failsafe_terrain_on_event();
         return;
     }
 
@@ -159,7 +160,7 @@ void Mode::auto_takeoff_run()
     pos_control->update_xy_controller();
 
     // command the aircraft to the take off altitude
-    float pos_z = auto_take_off_complete_alt_cm + terr_offset;
+    float pos_z = auto_takeoff_complete_alt_cm + terr_offset;
     float vel_z = 0.0;
     copter.pos_control->input_pos_vel_accel_z(pos_z, vel_z, 0.0);
     
@@ -179,7 +180,7 @@ void Mode::auto_takeoff_run()
     }
 
     // handle takeoff completion
-    bool reached_altitude = (copter.pos_control->get_pos_target_z_cm() - auto_take_off_start_alt_cm) >= ((auto_take_off_complete_alt_cm  - auto_take_off_start_alt_cm) * 0.90);
+    bool reached_altitude = (copter.pos_control->get_pos_target_z_cm() - auto_takeoff_start_alt_cm) >= ((auto_takeoff_complete_alt_cm + terr_offset - auto_takeoff_start_alt_cm) * 0.90);
     bool reached_climb_rate = copter.pos_control->get_vel_desired_cms().z < copter.pos_control->get_max_speed_up_cms() * 0.1;
     auto_takeoff_complete = reached_altitude && reached_climb_rate;
 
@@ -192,13 +193,13 @@ void Mode::auto_takeoff_run()
 
 void Mode::auto_takeoff_start(float complete_alt_cm, bool terrain_alt)
 {
-    auto_take_off_start_alt_cm = inertial_nav.get_position_z_up_cm();
-    auto_take_off_complete_alt_cm = complete_alt_cm;
+    auto_takeoff_start_alt_cm = inertial_nav.get_position_z_up_cm();
+    auto_takeoff_complete_alt_cm = complete_alt_cm;
     auto_takeoff_terrain_alt = terrain_alt;
     auto_takeoff_complete = false;
     if ((g2.wp_navalt_min > 0) && (is_disarmed_or_landed() || !motors->get_interlock())) {
         // we are not flying, climb with no navigation to current alt-above-ekf-origin + wp_navalt_min
-        auto_takeoff_no_nav_alt_cm = auto_take_off_start_alt_cm + g2.wp_navalt_min * 100;
+        auto_takeoff_no_nav_alt_cm = auto_takeoff_start_alt_cm + g2.wp_navalt_min * 100;
         auto_takeoff_no_nav_active = true;
     } else {
         auto_takeoff_no_nav_active = false;

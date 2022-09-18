@@ -67,6 +67,14 @@ const AP_Param::GroupInfo AP_Terrain::var_info[] = {
     // @Range: 0.05 50000
     // @User: Advanced
     AP_GROUPINFO("MARGIN",   3, AP_Terrain, margin, 0.05),
+
+    // @Param: OFS_MAX
+    // @DisplayName: Terrain reference offset maximum
+    // @Description: The maximum adjustment of terrain altitude based on the assumption that the vehicle is on the ground when it is armed. When the vehicle is armed the location of the vehicle is recorded, and when terrain data is available for that location a height adjustment for terrain data is calculated that aligns the terrain height at that location with the altitude recorded at arming. This height adjustment is applied to all terrain data. This parameter clamps the amount of adjustment. A value of zero disables the use of terrain height adjustment.
+    // @Units: m
+    // @Range: 0 50
+    // @User: Advanced
+    AP_GROUPINFO("OFS_MAX",  4, AP_Terrain, offset_max, 15),
     
     AP_GROUPEND
 };
@@ -95,7 +103,7 @@ AP_Terrain::AP_Terrain() :
 
   This function costs about 20 microseconds on Pixhawk
  */
-bool AP_Terrain::height_amsl(const Location &loc, float &height)
+bool AP_Terrain::height_amsl(const Location &loc, float &height, bool corrected)
 {
     if (!allocate()) {
         return false;
@@ -107,6 +115,9 @@ bool AP_Terrain::height_amsl(const Location &loc, float &height)
     if (loc.lat == home_loc.lat &&
         loc.lng == home_loc.lng) {
         height = home_height;
+        if (corrected && have_reference_offset) {
+            height += reference_offset;
+        }
         return true;
     }
 
@@ -155,8 +166,13 @@ bool AP_Terrain::height_amsl(const Location &loc, float &height)
         // remember home altitude as a special case
         home_height = height;
         home_loc = loc;
+        have_home_height = true;
     }
 
+    if (corrected && have_reference_offset) {
+        height += reference_offset;
+    }
+    
     return true;
 }
 
@@ -332,6 +348,13 @@ void AP_Terrain::update(void)
     // check for pending rally data
     update_rally_data();
 
+    // update tiles surrounding our current location:
+    if (pos_valid) {
+        have_surrounding_tiles = update_surrounding_tiles(loc);
+    } else {
+        have_surrounding_tiles = false;
+    }
+
     // update capabilities and status
     if (allocate()) {
         if (!pos_valid) {
@@ -346,7 +369,41 @@ void AP_Terrain::update(void)
     } else {
         system_status = TerrainStatusDisabled;
     }
+}
 
+bool AP_Terrain::update_surrounding_tiles(const Location &loc)
+{
+    // also request a larger set of up to 9 grids
+    bool ret = true;
+    for (int8_t x=-1; x<=1; x++) {
+        for (int8_t y=-1; y<=1; y++) {
+            Location loc2 = loc;
+            loc2.offset(x*TERRAIN_GRID_BLOCK_SIZE_X*0.7f*grid_spacing,
+                        y*TERRAIN_GRID_BLOCK_SIZE_Y*0.7f*grid_spacing);
+            float height;
+            if (!height_amsl(loc2, height)) {
+                ret = false;
+            }
+        }
+    }
+    return ret;
+}
+
+bool AP_Terrain::pre_arm_checks(char *failure_msg, uint8_t failure_msg_len) const
+{
+    // check no outstanding requests for data:
+    uint16_t terr_pending, terr_loaded;
+    get_statistics(terr_pending, terr_loaded);
+    if (terr_pending != 0 ||
+        !have_current_loc_height ||
+        !have_home_height ||
+        next_mission_index != 0 ||
+        next_rally_index != 0) {
+        hal.util->snprintf(failure_msg, failure_msg_len, "waiting for terrain data");
+        return false;
+    }
+
+    return true;
 }
 
 void AP_Terrain::log_terrain_data()
@@ -377,7 +434,8 @@ void AP_Terrain::log_terrain_data()
         terrain_height : terrain_height,
         current_height : current_height,
         pending        : pending,
-        loaded         : loaded
+        loaded         : loaded,
+        reference_offset : have_reference_offset?reference_offset:0,
     };
     AP::logger().WriteBlock(&pkt, sizeof(pkt));
 }
@@ -403,6 +461,78 @@ bool AP_Terrain::allocate(void)
     cache_size = TERRAIN_GRID_BLOCK_CACHE_SIZE;
     return true;
 }
+
+/*
+  setup a reference location for terrain adjustment. This should
+  be called when the vehicle is definately on the ground
+*/
+void AP_Terrain::set_reference_location(void)
+{
+    const auto &ahrs = AP::ahrs();
+
+    // check we have absolute position
+    nav_filter_status status;
+    if (!ahrs.get_filter_status(status) ||
+        !status.flags.vert_pos ||
+        !status.flags.horiz_pos_abs ||
+        !status.flags.attitude) {
+        return;
+    }
+
+    // check we have a small 3D velocity
+    Vector3f vel;
+    if (!ahrs.get_velocity_NED(vel) ||
+        vel.length() > 3) {
+        return;
+    }
+
+    have_reference_offset = false;
+    have_reference_loc = ahrs.get_location(reference_loc);
+
+    update_reference_offset();
+}
+
+/*
+  get the offset between terrain height and reference alt at the
+  reference location
+ */
+void AP_Terrain::update_reference_offset(void)
+{
+    // TERR_OFS_MAX of zero means no adjustment
+    if (!is_positive(offset_max)) {
+        have_reference_offset = false;
+        return;
+    }
+
+    // allow for change to TERRAIN_OFS_MAX while flying
+    if (have_reference_offset) {
+        reference_offset = constrain_float(reference_offset, -offset_max, offset_max);
+        return;
+    }
+
+    if (!have_reference_loc) {
+        // no reference available yet
+        return;
+    }
+
+    // calculate adjustment
+    float height;
+    if (!height_amsl(reference_loc, height)) {
+        return;
+    }
+    int32_t alt_cm;
+    if (!reference_loc.get_alt_cm(Location::AltFrame::ABSOLUTE, alt_cm)) {
+        return;
+    }
+    float adjustment = alt_cm*0.01 - height;
+    reference_offset = constrain_float(adjustment, -offset_max, offset_max);
+    if (fabsf(adjustment) > offset_max.get()+0.5) {
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Terrain: clamping offset %.0f to %.0f",
+                      adjustment, reference_offset);
+    }
+    have_reference_offset = true;
+}
+
 
 namespace AP {
 

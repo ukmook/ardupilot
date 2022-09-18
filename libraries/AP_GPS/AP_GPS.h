@@ -20,9 +20,10 @@
 #include <AP_Common/Location.h>
 #include <AP_Param/AP_Param.h>
 #include "GPS_detect_state.h"
-#include <AP_SerialManager/AP_SerialManager.h>
 #include <AP_MSP/msp.h>
 #include <AP_ExternalAHRS/AP_ExternalAHRS.h>
+#include <SITL/SIM_GPS.h>
+#include <GCS_MAVLink/GCS_MAVLink.h>
 
 /**
    maximum number of GPS instances available on this platform. If more
@@ -128,6 +129,9 @@ public:
         GPS_TYPE_EXTERNAL_AHRS = 21,
         GPS_TYPE_UAVCAN_RTK_BASE = 22,
         GPS_TYPE_UAVCAN_RTK_ROVER = 23,
+#if HAL_SIM_GPS_ENABLED
+        GPS_TYPE_SITL = 100,
+#endif
     };
 
     /// GPS status codes
@@ -193,6 +197,8 @@ public:
         bool have_vertical_accuracy;      ///< does GPS give vertical position accuracy? Set to true only once available.
         bool have_gps_yaw;                ///< does GPS give yaw? Set to true only once available.
         bool have_gps_yaw_accuracy;       ///< does the GPS give a heading accuracy estimate? Set to true only once available
+        float undulation;                   //<height that WGS84 is above AMSL at the current location
+        bool have_undulation;               ///<do we have a value for the undulation
         uint32_t last_gps_time_ms;          ///< the system time we got the last GPS timestamp, milliseconds
         uint64_t last_corrected_gps_time_us;///< the system time we got the last corrected GPS timestamp, microseconds
         bool corrected_timestamp_updated;  ///< true if the corrected timestamp has been updated
@@ -219,7 +225,7 @@ public:
     };
 
     /// Startup initialisation.
-    void init(const AP_SerialManager& serial_manager);
+    void init(const class AP_SerialManager& serial_manager);
 
     /// Update GPS state based on possible bytes received from the module.
     /// This routine must be called periodically (typically at 10Hz or
@@ -291,6 +297,16 @@ public:
     }
     const Location &location() const {
         return location(primary_instance);
+    }
+
+    // get the difference between WGS84 and AMSL. A positive value means
+    // the AMSL height is higher than WGS84 ellipsoid height
+    bool get_undulation(uint8_t instance, float &undulation) const;
+
+    // get the difference between WGS84 and AMSL. A positive value means
+    // the AMSL height is higher than WGS84 ellipsoid height
+    bool get_undulation(float &undulation) const {
+        return get_undulation(primary_instance, undulation);
     }
 
     // report speed accuracy
@@ -470,6 +486,7 @@ public:
     bool blend_health_check() const;
 
     // handle sending of initialisation strings to the GPS - only used by backends
+    void send_blob_start(uint8_t instance);
     void send_blob_start(uint8_t instance, const char *_blob, uint16_t size);
     void send_blob_update(uint8_t instance);
 
@@ -584,6 +601,19 @@ protected:
 
     uint32_t _log_gps_bit = -1;
 
+    enum DriverOptions : int16_t {
+        UBX_MBUseUart2    = (1U << 0U),
+        SBF_UseBaseForYaw = (1U << 1U),
+        UBX_Use115200     = (1U << 2U),
+        UAVCAN_MBUseDedicatedBus  = (1 << 3U),
+        HeightEllipsoid   = (1U << 4),
+    };
+
+    // check if an option is set
+    bool option_set(const DriverOptions option) const {
+        return (uint8_t(_driver_options.get()) & uint8_t(option)) != 0;
+    }
+
 private:
     static AP_GPS *_singleton;
     HAL_Semaphore rsem;
@@ -648,6 +678,10 @@ private:
     static const char _initialisation_raw_blob[];
 
     void detect_instance(uint8_t instance);
+    // run detection step for one GPS instance. If this finds a GPS then it
+    // will return it - otherwise nullptr
+    AP_GPS_Backend *_detect_instance(uint8_t instance);
+
     void update_instance(uint8_t instance);
 
     /*

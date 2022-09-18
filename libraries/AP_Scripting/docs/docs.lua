@@ -680,12 +680,56 @@ local RC_Channel_ud = {}
 function RC_Channel_ud:norm_input_ignore_trim() end
 
 -- desc
+---@param PWM integer
+function RC_Channel_ud:set_override(PWM) end
+
+-- desc
 ---@return integer
 function RC_Channel_ud:get_aux_switch_pos() end
 
--- desc
+-- desc return input on a channel from -1 to 1, centered on the trim. Ignores the deadzone
 ---@return number
 function RC_Channel_ud:norm_input() end
+
+-- desc return input on a channel from -1 to 1, centered on the trim. Returns zero when within deadzone of the trim
+---@return number
+function RC_Channel_ud:norm_input_dz() end
+
+
+-- desc
+---@class mount
+mount = {}
+
+-- desc
+---@param instance integer
+---@param target_loc Location_ud
+function mount:set_roi_target(instance, target_loc) end
+
+-- desc
+---@param instance integer
+---@param roll_degs number
+---@param pitch_degs number
+---@param yaw_degs number
+---@param yaw_is_earth_frame boolean
+function mount:set_rate_target(instance, roll_degs, pitch_degs, yaw_degs, yaw_is_earth_frame) end
+
+-- desc
+---@param instance integer
+---@param roll_deg number
+---@param pitch_deg number
+---@param yaw_deg number
+---@param yaw_is_earth_frame boolean
+function mount:set_angle_target(instance, roll_deg, pitch_deg, yaw_deg, yaw_is_earth_frame) end
+
+-- desc
+---@param instance integer
+---@param mode integer
+function mount:set_mode(instance, mode) end
+
+-- desc
+---@param instance integer
+---@return integer
+function mount:get_mode(instance) end
 
 
 -- desc
@@ -738,6 +782,9 @@ function periph:get_vehicle_state() end
 ---@return number
 function periph:get_yaw_earth() end
 
+-- desc
+---@param text string
+function periph:can_printf(text) end
 
 -- desc
 ---@class ins
@@ -1066,6 +1113,12 @@ function esc_telem:get_temperature(instance) end
 ---@return number|nil
 function esc_telem:get_rpm(instance) end
 
+-- update RPM for an ESC
+---@param param1 integer -- ESC number
+---@param param2 integer -- RPM
+---@param param3 number -- error rate
+function esc_telem:update_rpm(esc_index, rpm, error_rate) end
+
 
 -- desc
 ---@class optical_flow
@@ -1105,10 +1158,12 @@ function baro:get_pressure() end
 ---@class serial
 serial = {}
 
--- desc
----@param protocol integer
----@return AP_HAL__UARTDriver_ud
-function serial:find_serial(protocol) end
+-- Returns the UART instance that allows connections from scripts (those with SERIALx_PROTOCOL = 28`).
+-- For instance = 0, returns first such UART, second for instance = 1, and so on.
+-- If such an instance is not found, returns nil.
+---@param instance integer -- the 0-based index of the UART instance to return.
+---@return AP_HAL__UARTDriver_ud -- the requested UART instance available for scripting, or nil if none.
+function serial:find_serial(instance) end
 
 
 -- desc
@@ -1384,6 +1439,11 @@ function vehicle:set_velocity_match(param1) end
 ---@return boolean
 function vehicle:nav_scripting_enable(param1) end
 
+-- desc sets autopilot nav speed (Copter and Rover)
+---@param param1 number
+---@return boolean
+function vehicle:set_desired_speed(param1) end
+
 -- desc
 ---@param param1 number
 ---@param param2 number
@@ -1500,8 +1560,9 @@ function terrain:height_terrain_difference_home(extrapolate) end
 
 -- desc
 ---@param loc Location_ud
+---@param corrected boolean
 ---@return number|nil
-function terrain:height_amsl(loc) end
+function terrain:height_amsl(loc, corrected) end
 
 -- desc
 ---@return integer
@@ -1822,6 +1883,10 @@ function arming:is_armed() end
 
 -- desc
 ---@return boolean
+function arming:pre_arm_checks() end
+
+-- desc
+---@return boolean
 function arming:disarm() end
 
 
@@ -1946,6 +2011,16 @@ function ahrs:get_pitch() end
 -- desc
 ---@return number
 function ahrs:get_roll() end
+
+-- desc
+---@class AC_AttitudeControl
+AC_AttitudeControl = {}
+
+-- return slew rates for VTOL controller
+---@return number -- roll slew rate
+---@return number -- pitch slew rate
+---@return number -- yaw slew rate
+function AC_AttitudeControl:get_rpy_srate() end
 
 -- desc
 ---@class follow
