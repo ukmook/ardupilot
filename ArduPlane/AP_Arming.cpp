@@ -17,6 +17,18 @@ const AP_Param::GroupInfo AP_Arming_Plane::var_info[] = {
     AP_GROUPEND
 };
 
+// expected to return true if the terrain database is required to have
+// all data loaded
+bool AP_Arming_Plane::terrain_database_required() const
+{
+#if AP_TERRAIN_AVAILABLE
+    if (plane.g.terrain_follow) {
+        return true;
+    }
+#endif
+    return AP_Arming::terrain_database_required();
+}
+
 /*
   additional arming checks for plane
 
@@ -63,6 +75,11 @@ bool AP_Arming_Plane::pre_arm_checks(bool display_failure)
 
     if (plane.aparm.pitch_limit_min_cd > -300) {
         check_failed(display_failure, "LIM_PITCH_MIN too large (%u)", (unsigned)plane.aparm.pitch_limit_min_cd);
+        ret = false;
+    }
+
+    if (plane.aparm.airspeed_min < MIN_AIRSPEED_MIN) {
+        check_failed(display_failure, "ARSPD_FBW_MIN too low (%i < %i)", plane.aparm.airspeed_min.get(), MIN_AIRSPEED_MIN);
         ret = false;
     }
 
@@ -130,8 +147,9 @@ bool AP_Arming_Plane::quadplane_checks(bool display_failure)
         ret = false;
     }
 
-    if (!plane.quadplane.motors->initialised_ok()) {
-        check_failed(display_failure, "Quadplane: check motor setup");
+    char failure_msg[50] {};
+    if (!plane.quadplane.motors->arming_checks(ARRAY_SIZE(failure_msg), failure_msg)) {
+        check_failed(display_failure, "Motors: %s", failure_msg);
         ret = false;
     }
 
@@ -159,7 +177,6 @@ bool AP_Arming_Plane::quadplane_checks(bool display_failure)
     }
 
     // ensure controllers are OK with us arming:
-    char failure_msg[50] = {};
     if (!plane.quadplane.pos_control->pre_arm_checks("PSC", failure_msg, ARRAY_SIZE(failure_msg))) {
         check_failed(ARMING_CHECK_PARAMETERS, display_failure, "Bad parameter: %s", failure_msg);
         ret = false;
@@ -168,12 +185,8 @@ bool AP_Arming_Plane::quadplane_checks(bool display_failure)
         check_failed(ARMING_CHECK_PARAMETERS, display_failure, "Bad parameter: %s", failure_msg);
         ret = false;
     }
-    if (!plane.quadplane.motors->check_mot_pwm_params()) {
-        check_failed(ARMING_CHECK_PARAMETERS, display_failure, "Check Q_M_PWM_MIN/MAX");
-        ret = false;
-    }
 
-    if ((plane.quadplane.options & QuadPlane::OPTION_ONLY_ARM_IN_QMODE_OR_AUTO) != 0) {
+    if (plane.quadplane.option_is_set(QuadPlane::OPTION::ONLY_ARM_IN_QMODE_OR_AUTO)) {
         if (!plane.control_mode->is_vtol_mode() && (plane.control_mode != &plane.mode_auto) && (plane.control_mode != &plane.mode_guided)) {
             check_failed(display_failure,"not in Q mode");
             ret = false;

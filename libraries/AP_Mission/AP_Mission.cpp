@@ -5,6 +5,7 @@
 #include <AP_Terrain/AP_Terrain.h>
 #include <GCS_MAVLink/GCS.h>
 #include <AP_AHRS/AP_AHRS.h>
+#include <AP_Camera/AP_Camera.h>
 
 const AP_Param::GroupInfo AP_Mission::var_info[] = {
 
@@ -241,7 +242,7 @@ bool AP_Mission::clear()
     }
 
     // remove all commands
-    _cmd_total.set_and_save(0);
+    truncate(0);
 
     // clear index to commands
     _nav_cmd.index = AP_MISSION_CMD_INDEX_NONE;
@@ -259,6 +260,7 @@ void AP_Mission::truncate(uint16_t index)
 {
     if ((unsigned)_cmd_total > index) {
         _cmd_total.set_and_save(index);
+        _last_change_time_ms = AP_HAL::millis();
     }
 }
 
@@ -357,8 +359,10 @@ bool AP_Mission::start_command(const Mission_Command& cmd)
     case MAV_CMD_DO_CONTROL_VIDEO:
     case MAV_CMD_DO_DIGICAM_CONFIGURE:
     case MAV_CMD_DO_DIGICAM_CONTROL:
+#if AP_CAMERA_ENABLED
     case MAV_CMD_DO_SET_CAM_TRIGG_DIST:
         return start_command_camera(cmd);
+#endif
     case MAV_CMD_DO_PARACHUTE:
         return start_command_parachute(cmd);
     case MAV_CMD_DO_SEND_SCRIPT_MESSAGE:
@@ -1141,6 +1145,7 @@ MAV_MISSION_RESULT AP_Mission::mavlink_int_to_mission_cmd(const mavlink_mission_
         break;
 
     case MAV_CMD_NAV_VTOL_LAND:
+        cmd.p1 = (NAV_VTOL_LAND_OPTIONS)packet.param1;
         break;
 
     case MAV_CMD_DO_VTOL_TRANSITION:
@@ -1391,16 +1396,14 @@ MAV_MISSION_RESULT AP_Mission::mavlink_cmd_long_to_mission_cmd(const mavlink_com
 //  return true on success, false on failure
 bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& cmd, mavlink_mission_item_int_t& packet)
 {
+    // zero result:
+    packet = {};
+
     // command's position in mission list and mavlink id
     packet.seq = cmd.index;
     packet.command = cmd.id;
 
     // set defaults
-    packet.current = 0;     // 1 if we are passing back the mission command that is currently being executed
-    packet.param1 = 0;
-    packet.param2 = 0;
-    packet.param3 = 0;
-    packet.param4 = 0;
     packet.autocontinue = 1;
 
     // command specific conversions from mission command to mavlink packet
@@ -1636,6 +1639,7 @@ bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& c
         break;
 
     case MAV_CMD_NAV_VTOL_LAND:
+        packet.param1 = cmd.p1;
         break;
 
     case MAV_CMD_DO_VTOL_TRANSITION:
@@ -2458,6 +2462,32 @@ bool AP_Mission::contains_item(MAV_CMD command) const
             continue;
         }
         if (tmp.id == command) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
+  return true if the mission has a terrain relative item.  ~2200us for 530 items on H7
+ */
+bool AP_Mission::contains_terrain_alt_items(void)
+{
+    if (_last_contains_relative_calculated_ms != _last_change_time_ms) {
+        _contains_terrain_alt_items = calculate_contains_terrain_alt_items();
+        _last_contains_relative_calculated_ms = _last_change_time_ms;
+    }
+    return _contains_terrain_alt_items;
+}
+
+bool AP_Mission::calculate_contains_terrain_alt_items(void) const
+{
+    for (int i = 1; i < num_commands(); i++) {
+        Mission_Command tmp;
+        if (!read_cmd_from_storage(i, tmp)) {
+            continue;
+        }
+        if (stored_in_location(tmp.id) && tmp.content.location.terrain_alt) {
             return true;
         }
     }

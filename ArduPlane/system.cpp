@@ -36,7 +36,7 @@ void Plane::init_ardupilot()
 
     // initialise rc channels including setting mode
 #if HAL_QUADPLANE_ENABLED
-    rc().convert_options(RC_Channel::AUX_FUNC::ARMDISARM_UNUSED, (quadplane.enabled() && (quadplane.options & QuadPlane::OPTION_AIRMODE_UNUSED) && (rc().find_channel_for_option(RC_Channel::AUX_FUNC::AIRMODE) == nullptr)) ? RC_Channel::AUX_FUNC::ARMDISARM_AIRMODE : RC_Channel::AUX_FUNC::ARMDISARM);
+    rc().convert_options(RC_Channel::AUX_FUNC::ARMDISARM_UNUSED, (quadplane.enabled() && quadplane.option_is_set(QuadPlane::OPTION::AIRMODE_UNUSED) && (rc().find_channel_for_option(RC_Channel::AUX_FUNC::AIRMODE) == nullptr)) ? RC_Channel::AUX_FUNC::ARMDISARM_AIRMODE : RC_Channel::AUX_FUNC::ARMDISARM);
 #else
     rc().convert_options(RC_Channel::AUX_FUNC::ARMDISARM_UNUSED, RC_Channel::AUX_FUNC::ARMDISARM);
 #endif
@@ -66,7 +66,9 @@ void Plane::init_ardupilot()
 
     rssi.init();
 
+#if AP_RPM_ENABLED
     rpm_sensor.init();
+#endif
 
     // setup telem slots with serial ports
     gcs().setup_uarts();
@@ -243,6 +245,16 @@ bool Plane::set_mode(Mode &new_mode, const ModeReason reason)
         return false;
     }
 #endif  // HAL_QUADPLANE_ENABLED
+
+#if AP_FENCE_ENABLED
+    // may not be allowed to change mode if recovering from fence breach
+    if (hal.util->get_soft_armed() && fence.enabled() && fence.option_enabled(AC_Fence::OPTIONS::DISABLE_MODE_CHANGE) &&
+                                            fence.get_breaches() && in_fence_recovery()) {
+        gcs().send_text(MAV_SEVERITY_NOTICE,"Mode change to %s denied, in fence recovery", new_mode.name());
+        AP_Notify::events.user_mode_change_failed = 1;
+        return false;
+    }
+#endif
 
     // backup current control_mode and previous_mode
     Mode &old_previous_mode = *previous_mode;

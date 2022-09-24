@@ -445,8 +445,7 @@ const AP_Param::Info Plane::var_info[] = {
     // @Param: FLTMODE_CH
     // @DisplayName: Flightmode channel
     // @Description: RC Channel to use for flight mode control
-    // @Range: 1 16
-    // @Increment: 1
+    // @Values: 0:Disabled,1:Channel 1,2:Channel 2,3:Channel 3,4:Channel 4,5:Channel 5,6:Channel 6,7:Channel 7,8:Channel 8,9:Channel 9,10:Channel 10,11:Channel 11,12:Channel 12,13:Channel 13,14:Channel 14,15:Channel 15,16:Channel 16
     // @User: Advanced
     GSCALAR(flight_mode_channel,    "FLTMODE_CH",     FLIGHT_MODE_CHANNEL),
 
@@ -617,8 +616,8 @@ const AP_Param::Info Plane::var_info[] = {
 
     // @Param: LOG_BITMASK
     // @DisplayName: Log bitmask
-    // @Description: Bitmap of what on-board log types to enable. This value is made up of the sum of each of the log types you want to be saved. It is usually best just to enable all log types by setting this to 65535. The individual bits are ATTITUDE_FAST=1, ATTITUDE_MEDIUM=2, GPS=4, PerformanceMonitoring=8, ControlTuning=16, NavigationTuning=32, Mode=64, IMU=128, Commands=256, Battery=512, Compass=1024, TECS=2048, Camera=4096, RCandServo=8192, Sonar=16384, Arming=32768, FullLogs=65535
-    // @Bitmask: 0:ATTITUDE_FAST,1:ATTITUDE_MED,2:GPS,3:PM,4:CTUN,5:NTUN,6:MODE,7:IMU,8:CMD,9:BATT_MON,10:COMPASS,11:TECS,12:CAMERA,13:RC,14:RANGEFINDER,15:ARM/DISARM,19:IMU_RAW,20:ATTITUDE_FULLRATE,21:VideoStabilization
+    // @Description: Bitmap of what on-board log types to enable. This value is made up of the sum of each of the log types you want to be saved. It is usually best just to enable all basic log types by setting this to 65535.
+    // @Bitmask: 0:Fast Attitude,1:Medium Attitude,2:GPS,3:Performance,4:Control Tuning,5:Navigation Tuning,7:IMU,8:Mission Commands,9:Battery Monitor,10:Compass,11:TECS,12:Camera,13:RC Input-Output,14:Rangefinder,19:Raw IMU,20:Fullrate Attitude,21:Video Stabilization
     // @User: Advanced
     GSCALAR(log_bitmask,            "LOG_BITMASK",    DEFAULT_LOG_BITMASK),
 
@@ -747,7 +746,7 @@ const AP_Param::Info Plane::var_info[] = {
     // @Path: ../libraries/AP_GPS/AP_GPS.cpp
     GOBJECT(gps, "GPS", AP_GPS),
 
-#if CAMERA == ENABLED
+#if AP_CAMERA_ENABLED
     // @Group: CAM_
     // @Path: ../libraries/AP_Camera/AP_Camera.cpp
     GOBJECT(camera,                  "CAM_", AP_Camera),
@@ -939,7 +938,7 @@ const AP_Param::Info Plane::var_info[] = {
 #if AP_OPTICALFLOW_ENABLED
     // @Group: FLOW
     // @Path: ../libraries/AP_OpticalFlow/AP_OpticalFlow.cpp
-    GOBJECT(optflow,   "FLOW", OpticalFlow),
+    GOBJECT(optflow,   "FLOW", AP_OpticalFlow),
 #endif
 
     // @Group: MIS_
@@ -962,10 +961,12 @@ const AP_Param::Info Plane::var_info[] = {
     GOBJECTN(ahrs.EKF3, NavEKF3, "EK3_", NavEKF3),
 #endif
 
+#if AP_RPM_ENABLED
     // @Group: RPM
     // @Path: ../libraries/AP_RPM/AP_RPM.cpp
     GOBJECT(rpm_sensor, "RPM", AP_RPM),
-    
+#endif
+
     // @Group: RSSI_
     // @Path: ../libraries/AP_RSSI/AP_RSSI.cpp
     GOBJECT(rssi, "RSSI_",  AP_RSSI),

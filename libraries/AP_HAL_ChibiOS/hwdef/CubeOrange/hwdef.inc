@@ -54,7 +54,7 @@ PA7 SPI1_MOSI SPI1
 # a pin that enables peripheral power on this board. It starts in the
 # off state, then is pulled low to enable peripherals in
 # peripheral_power_enable()
-PA8 nVDD_5V_PERIPH_EN OUTPUT HIGH
+PA8 nVDD_5V_PERIPH_EN OUTPUT LOW
 
 # This is the pin that senses USB being connected. It is an input pin
 # setup as OPENDRAIN.
@@ -335,3 +335,8 @@ define HAL_SOLO_GIMBAL_ENABLED HAL_MOUNT_ENABLED
 
 # Enable Sagetech MXS ADSB transponder
 define HAL_ADSB_SAGETECH_MXS_ENABLED HAL_ADSB_ENABLED
+
+# enable DFU reboot for installing bootloader
+# note that if firmware is build with --secure-bl then DFU is
+# disabled
+ENABLE_DFU_BOOT 1

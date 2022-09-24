@@ -136,7 +136,7 @@ public:
 protected:
 
     // Parameters
-    AP_Int8                 require;
+    AP_Enum<Required>       require;
     AP_Int32                checks_to_perform;      // bitmask for which checks are required
     AP_Float                accel_error_threshold;
     AP_Int8                 _rudder_arming;
@@ -176,6 +176,12 @@ protected:
 
     virtual bool mission_checks(bool report);
 
+    bool terrain_checks(bool report) const;
+
+    // expected to return true if the terrain database is required to have
+    // all data loaded
+    virtual bool terrain_database_required() const;
+
     bool rangefinder_checks(bool report);
 
     bool fence_checks(bool report);
@@ -193,6 +199,8 @@ protected:
     bool aux_auth_checks(bool display_failure);
 
     bool generator_checks(bool report) const;
+
+    bool opendroneid_checks(bool display_failure);
 
     virtual bool system_checks(bool report);
 
@@ -213,8 +221,6 @@ protected:
 
     // returns true if a particular check is enabled
     bool check_enabled(const enum AP_Arming::ArmingChecks check) const;
-    // returns a mavlink severity which should be used if a specific check fails
-    MAV_SEVERITY check_severity(const enum AP_Arming::ArmingChecks check) const;
     // handle the case where a check fails
     void check_failed(const enum AP_Arming::ArmingChecks check, bool report, const char *fmt, ...) const FMT_PRINTF(4, 5);
     void check_failed(bool report, const char *fmt, ...) const FMT_PRINTF(3, 4);
@@ -239,6 +245,7 @@ private:
         MIS_ITEM_CHECK_TAKEOFF       = (1 << 3),
         MIS_ITEM_CHECK_VTOL_TAKEOFF  = (1 << 4),
         MIS_ITEM_CHECK_RALLY         = (1 << 5),
+        MIS_ITEM_CHECK_RETURN_TO_LAUNCH = (1 << 6),
         MIS_ITEM_CHECK_MAX
     };
 
@@ -261,6 +268,7 @@ private:
     Method _last_disarm_method = Method::UNKNOWN;
 
     uint32_t last_prearm_display_ms;  // last time we send statustexts for prearm failures
+    bool running_arming_checks;  // true if the arming checks currently being performed are being done because the vehicle is trying to arm the vehicle
 };
 
 namespace AP {

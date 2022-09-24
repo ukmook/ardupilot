@@ -39,6 +39,9 @@ public:
         AUTOROTATE =   26,  // Autonomous autorotation
         AUTO_RTL =     27,  // Auto RTL, this is not a true mode, AUTO will report as this mode if entered to perform a DO_LAND_START Landing sequence
         TURTLE =       28,  // Flip over after crash
+
+        // Mode number 127 reserved for the "drone show mode" in the Skybrush
+        // fork at https://github.com/skybrush-io/ardupilot
     };
 
     // constructor
@@ -200,7 +203,7 @@ protected:
     private:
         bool _running;
         float take_off_start_alt;
-        float take_off_complete_alt ;
+        float take_off_complete_alt;
     };
 
     static _TakeOff takeoff;
@@ -293,7 +296,6 @@ public:
     bool set_mode(Mode::Number mode, ModeReason reason);
     void set_land_complete(bool b);
     GCS_Copter &gcs();
-    void set_throttle_takeoff(void);
     uint16_t get_pilot_speed_dn(void);
     // end pass-through functions
 };
@@ -833,7 +835,7 @@ private:
 };
 
 
-#if !HAL_MINIMIZE_FEATURES && AP_OPTICALFLOW_ENABLED
+#if MODE_FLOWHOLD_ENABLED == ENABLED
 /*
   class to support FLOWHOLD mode, which is a position hold mode using
   optical flow directly, avoiding the need for a rangefinder
@@ -919,7 +921,7 @@ private:
     // last time there was significant stick input
     uint32_t last_stick_input_ms;
 };
-#endif // AP_OPTICALFLOW_ENABLED
+#endif // MODE_FLOWHOLD_ENABLED
 
 
 class ModeGuided : public Mode {
