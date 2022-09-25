@@ -1394,16 +1394,20 @@ MAV_MISSION_RESULT AP_Mission::mavlink_cmd_long_to_mission_cmd(const mavlink_com
 
 // mission_cmd_to_mavlink_int - converts an AP_Mission::Mission_Command object to a mavlink message which can be sent to the GCS
 //  return true on success, false on failure
+//  NOTE: callers to this method current fill parts of "packet" in before calling this method, so do NOT attempt to zero the entire packet in here
 bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& cmd, mavlink_mission_item_int_t& packet)
 {
-    // zero result:
-    packet = {};
-
     // command's position in mission list and mavlink id
     packet.seq = cmd.index;
     packet.command = cmd.id;
 
     // set defaults
+    packet.current = 0;     // 1 if we are passing back the mission command that is currently being executed
+    packet.param1 = 0;
+    packet.param2 = 0;
+    packet.param3 = 0;
+    packet.param4 = 0;
+    packet.frame = 0;
     packet.autocontinue = 1;
 
     // command specific conversions from mission command to mavlink packet
