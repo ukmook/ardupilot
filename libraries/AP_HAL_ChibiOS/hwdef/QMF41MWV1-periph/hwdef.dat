@@ -1,0 +1,179 @@
+# hw definition file for processing by chibios_pins.py
+# MCU class and specific type
+
+# MCU class and specific type
+MCU STM32F4xx STM32F413xx
+
+# bootloader starts firmware at 64k
+FLASH_RESERVE_START_KB 64
+
+# store parameters in pages 2 and 3
+define STORAGE_FLASH_PAGE 2
+define HAL_STORAGE_SIZE 16384
+
+# board ID for firmware load
+APJ_BOARD_ID 7501
+
+# setup build for a peripheral firmware
+env AP_PERIPH 1
+
+STM32_ST_USE_TIMER 5
+
+# enable watchdog
+define HAL_WATCHDOG_ENABLED_DEFAULT true
+
+# crystal frequency
+OSCILLATOR_HZ 16000000
+define HAL_CUSTOM_CLOCK_TREE
+define STM32_PLLM_VALUE 8
+define STM32_PLLN_VALUE 100
+define STM32_PLLP_VALUE 2
+# define STM32_PLLQ_VALUE 7
+
+define CH_CFG_ST_FREQUENCY 1000000
+
+# assume 1536k flash part
+FLASH_SIZE_KB 1536
+
+# order of UARTs
+#            ---------------------------------------
+#            |sr0  |sr1  |sr2  | GPS |sr4  | RNGF1 |
+#            ---------------------------------------
+SERIAL_ORDER EMPTY EMPTY EMPTY USART1 EMPTY USART2
+
+# a LED to flash
+PA15 LED OUTPUT LOW
+
+# USART1 for GPS
+PB6 USART1_TX USART1 SPEED_HIGH NODMA
+PB7 USART1_RX USART1 SPEED_HIGH NODMA
+
+# USART2 for RNGFND
+PA2 USART2_TX USART2 SPEED_HIGH
+PA3 USART2_RX USART2 SPEED_HIGH
+
+define HAL_SERIAL5_PROTOCOL SerialProtocol_Rangefinder
+define HAL_SERIAL5_BAUD 115200
+
+# SWD debugging
+PA13 JTMS-SWDIO SWD
+PA14 JTCK-SWCLK SWD
+
+# only one I2C bus in normal config
+PB3 I2C2_SDA I2C2
+PB10 I2C2_SCL I2C2
+
+define HAL_USE_I2C TRUE
+define STM32_I2C_USE_I2C2 TRUE
+
+define HAL_I2C_CLEAR_ON_TIMEOUT 0
+
+define HAL_I2C_INTERNAL_MASK 0
+
+# only one I2C bus
+I2C_ORDER I2C2
+
+# --------SPI------------
+
+# spi bus for Sensors
+PB13 SPI2_SCK SPI2
+PB14 SPI2_MISO SPI2
+PB15 SPI2_MOSI SPI2
+PC4 BMI088_GYRO_CS CS
+PC5 BMI088_ACCEL_CS CS
+PA1 BARO_CS CS
+PA4 MAG_CS CS PULLUP
+
+# ----------SPI devices------------
+# SPIDEV osd         SPI1 DEVID6  OSD_CS              MODE0 10*MHZ 10*MHZ
+SPIDEV bmp280      SPI2 DEVID1  BARO_CS             MODE3 1*MHZ 8*MHZ
+# SPIDEV bmi088_g    SPI2 DEVID3  BMI088_GYRO_CS      MODE3 10*MHZ 10*MHZ
+# SPIDEV bmi088_a    SPI2 DEVID4  BMI088_ACCEL_CS     MODE3 10*MHZ 10*MHZ
+SPIDEV lis3mdl     SPI2 DEVID5  MAG_CS              MODE3 500*KHZ 500*KHZ
+# SPIDEV sdcard      SPI3 DEVID2  SDCARD_CS           MODE0 400*KHZ 25*MHZ
+
+# --------Sensors-------------------
+# One IMU BMI088
+# IMU BMI088 SPI:bmi088_a SPI:bmi088_g ROTATION_PITCH_180
+
+# One Baro BMP280
+BARO BMP280 SPI:bmp280
+
+# One compass LIS3MDL
+COMPASS LIS3MDL SPI:lis3mdl false ROTATION_PITCH_180
+
+# PWM output for buzzer
+PC9 TIM8_CH4 TIM8 GPIO(77) ALARM
+
+define HAL_BARO_ALLOW_INIT_NO_BARO
+
+define HAL_USE_ADC FALSE
+define STM32_ADC_USE_ADC1 FALSE
+define HAL_DISABLE_ADC_DRIVER TRUE
+
+define HAL_NO_GPIO_IRQ
+
+# avoid RCIN thread to save memory
+define HAL_NO_RCIN_THREAD
+
+define HAL_USE_RTC FALSE
+define DISABLE_SERIAL_ESC_COMM TRUE
+define NO_DATAFLASH TRUE
+
+define DMA_RESERVE_SIZE 0
+
+define PERIPH_FW TRUE
+
+define HAL_DISABLE_LOOP_DELAY
+
+# enable CAN support
+PB8 CAN1_RX CAN1
+PB9 CAN1_TX CAN1
+
+# use DNA
+define HAL_CAN_DEFAULT_NODE_ID 0
+
+define CAN_APP_NODE_NAME "org.ardupilot.qF413_gps"
+
+define HAL_NO_GCS
+define HAL_NO_LOGGING
+define HAL_NO_MONITOR_THREAD
+
+define HAL_MINIMIZE_FEATURES 0
+
+define HAL_BUILD_AP_PERIPH
+
+define HAL_DEVICE_THREAD_STACK 768
+
+define AP_PARAM_MAX_EMBEDDED_PARAM 0
+
+# disable dual GPS and GPS blending to save flash space
+define GPS_MAX_RECEIVERS 1
+define GPS_MAX_INSTANCES 1
+define HAL_COMPASS_MAX_SENSORS 1
+
+# GPS+MAG+BARO+Buzzer+NeoPixels
+define HAL_PERIPH_ENABLE_GPS
+define HAL_PERIPH_ENABLE_MAG
+define HAL_PERIPH_ENABLE_BARO
+define HAL_PERIPH_ENABLE_BUZZER
+define HAL_PERIPH_NEOPIXEL_COUNT 8
+define HAL_PERIPH_NEOPIXEL_CHAN 0
+define AP_PERIPH_LED_BRIGHT_DEFAULT 50
+
+define HAL_PERIPH_ENABLE_RANGEFINDER
+define RANGEFINDER_MAX_INSTANCES 1
+
+# use the app descriptor needed by MissionPlanner for CAN upload
+env APP_DESCRIPTOR MissionPlanner
+
+# reserve 256 bytes for comms between app and bootloader
+RAM_RESERVE_START 256
+
+# --------PWMS-----------
+# PA0 TIM2_CH1 TIM2 PWM(1) GPIO(50)
+# PC8 TIM3_CH3 TIM3 PWM(2) GPIO(51)
+# PB4 TIM3_CH1 TIM3 PWM(3) GPIO(52)
+# PB5 TIM3_CH2 TIM3 PWM(4) GPIO(53)
+
+# define BOARD_PWM_COUNT_DEFAULT 4
