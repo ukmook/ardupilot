@@ -49,16 +49,16 @@ void AP_Logger_Block::Init(void)
 
         // If we can't allocate the full size, try to reduce it until we can allocate it
         while (!writebuf.set_size(bufsize) && bufsize >= df_PageSize * df_PagePerBlock) {
-            hal.console->printf("AP_Logger_Block: Couldn't set buffer size to=%u\n", (unsigned)bufsize);
+            DEV_PRINTF("AP_Logger_Block: Couldn't set buffer size to=%u\n", (unsigned)bufsize);
             bufsize >>= 1;
         }
 
         if (!writebuf.get_size()) {
-            hal.console->printf("Out of memory for logging\n");
+            DEV_PRINTF("Out of memory for logging\n");
             return;
         }
 
-        hal.console->printf("AP_Logger_Block: buffer size=%u\n", (unsigned)bufsize);
+        DEV_PRINTF("AP_Logger_Block: buffer size=%u\n", (unsigned)bufsize);
         _initialised = true;
     }
 
@@ -307,8 +307,8 @@ void AP_Logger_Block::periodic_1Hz()
 {
     AP_Logger_Backend::periodic_1Hz();
 
-    if (rate_limiter == nullptr && _front._params.blk_ratemax > 0) {
-        // setup rate limiting
+    if (rate_limiter == nullptr && (_front._params.blk_ratemax > 0 || _front._log_pause)) {
+        // setup rate limiting if log rate max > 0Hz or log pause of streaming entries is requested
         rate_limiter = new AP_Logger_RateLimiter(_front, _front._params.blk_ratemax);
     }
     
@@ -412,15 +412,15 @@ void AP_Logger_Block::validate_log_structure()
             last_file = file;
         }
         if (file == next_file) {
-            hal.console->printf("Found complete log %d at %X-%X\n", int(file), unsigned(page), unsigned(find_last_page_of_log(file)));
+            DEV_PRINTF("Found complete log %d at %X-%X\n", int(file), unsigned(page), unsigned(find_last_page_of_log(file)));
         }
     }
 
     if (file != 0xFFFF && file != next_file && page <= df_NumPages && page > 0) {
-        hal.console->printf("Found corrupt log %d at 0x%04X, erasing", int(file), unsigned(page));
+        DEV_PRINTF("Found corrupt log %d at 0x%04X, erasing", int(file), unsigned(page));
         df_EraseFrom = page;
     } else if (next_file != 0xFFFF && page > 0 && next_file > 1) { // chip is empty
-        hal.console->printf("Found %d complete logs at 0x%04X-0x%04X", int(next_file - first_file), unsigned(page_start), unsigned(page - 1));
+        DEV_PRINTF("Found %d complete logs at 0x%04X-0x%04X", int(next_file - first_file), unsigned(page_start), unsigned(page - 1));
     }
 }
 
@@ -831,7 +831,7 @@ bool AP_Logger_Block::io_thread_alive() const
 
 /*
   IO timer running on IO thread
-  The IO timer runs every 1ms or at 1Khz. The standard flash chip can write rougly 130Kb/s
+  The IO timer runs every 1ms or at 1Khz. The standard flash chip can write roughly 130Kb/s
   so there is little point in trying to write more than 130 bytes - or 1 page (256 bytes).
   The W25Q128FV datasheet gives tpp as typically 0.7ms yielding an absolute maximum rate of
   365Kb/s or just over a page per cycle.

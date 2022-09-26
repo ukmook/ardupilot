@@ -16,9 +16,12 @@
 #include <AP_HAL/AP_HAL.h>
 #include "AP_EFI_Serial_Lutan.h"
 #include <AP_HAL/utility/sparse-endian.h>
-#include <stdio.h>
 
 #if HAL_EFI_ENABLED
+
+#include <stdio.h>
+
+#include <AP_Math/AP_Math.h>
 #include <AP_SerialManager/AP_SerialManager.h>
 
 // RPM Threshold for fuel consumption estimator
@@ -50,9 +53,9 @@ void AP_EFI_Serial_Lutan::update()
     if (n + pkt_nbytes > sizeof(pkt)) {
         pkt_nbytes = 0;
     }
-    const ssize_t nread = port->read(&pkt[pkt_nbytes], n);
-    if (nread <= 0) {
-        return;
+    ssize_t nread = port->read(&pkt[pkt_nbytes], n);
+    if (nread < 0) {
+        nread = 0;
     }
     pkt_nbytes += nread;
     if (pkt_nbytes > 2) {

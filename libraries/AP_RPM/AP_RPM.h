@@ -15,7 +15,7 @@
 #pragma once
 
 #include <AP_Common/AP_Common.h>
-#include <AP_HAL/AP_HAL.h>
+#include <AP_HAL/AP_HAL_Boards.h>
 #include <AP_Param/AP_Param.h>
 #include <AP_Math/AP_Math.h>
 #include "AP_RPM_Params.h"
@@ -32,9 +32,7 @@ class AP_RPM
 public:
     AP_RPM();
 
-    /* Do not allow copies */
-    AP_RPM(const AP_RPM &other) = delete;
-    AP_RPM &operator=(const AP_RPM&) = delete;
+    CLASS_NO_COPY(AP_RPM);  /* Do not allow copies */
 
     // RPM driver types
     enum RPM_Type {
@@ -44,6 +42,7 @@ public:
         RPM_TYPE_EFI     = 3,
         RPM_TYPE_HNTCH   = 4,
         RPM_TYPE_ESC_TELEM  = 5,
+        RPM_TYPE_GENERATOR  = 6,
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
         RPM_TYPE_SITL   = 10,
 #endif
@@ -104,6 +103,8 @@ private:
     uint8_t num_instances;
 
     void detect_instance(uint8_t instance);
+
+    void Log_RPM();
 };
 
 namespace AP {

@@ -680,6 +680,10 @@ local RC_Channel_ud = {}
 function RC_Channel_ud:norm_input_ignore_trim() end
 
 -- desc
+---@param PWM integer
+function RC_Channel_ud:set_override(PWM) end
+
+-- desc
 ---@return integer
 function RC_Channel_ud:get_aux_switch_pos() end
 
@@ -690,6 +694,42 @@ function RC_Channel_ud:norm_input() end
 -- desc return input on a channel from -1 to 1, centered on the trim. Returns zero when within deadzone of the trim
 ---@return number
 function RC_Channel_ud:norm_input_dz() end
+
+
+-- desc
+---@class mount
+mount = {}
+
+-- desc
+---@param instance integer
+---@param target_loc Location_ud
+function mount:set_roi_target(instance, target_loc) end
+
+-- desc
+---@param instance integer
+---@param roll_degs number
+---@param pitch_degs number
+---@param yaw_degs number
+---@param yaw_is_earth_frame boolean
+function mount:set_rate_target(instance, roll_degs, pitch_degs, yaw_degs, yaw_is_earth_frame) end
+
+-- desc
+---@param instance integer
+---@param roll_deg number
+---@param pitch_deg number
+---@param yaw_deg number
+---@param yaw_is_earth_frame boolean
+function mount:set_angle_target(instance, roll_deg, pitch_deg, yaw_deg, yaw_is_earth_frame) end
+
+-- desc
+---@param instance integer
+---@param mode integer
+function mount:set_mode(instance, mode) end
+
+-- desc
+---@param instance integer
+---@return integer
+function mount:get_mode(instance) end
 
 
 -- desc
@@ -742,6 +782,9 @@ function periph:get_vehicle_state() end
 ---@return number
 function periph:get_yaw_earth() end
 
+-- desc
+---@param text string
+function periph:can_printf(text) end
 
 -- desc
 ---@class ins
@@ -1070,6 +1113,16 @@ function esc_telem:get_temperature(instance) end
 ---@return number|nil
 function esc_telem:get_rpm(instance) end
 
+-- update RPM for an ESC
+---@param param1 integer -- ESC number
+---@param param2 integer -- RPM
+---@param param3 number -- error rate
+function esc_telem:update_rpm(esc_index, rpm, error_rate) end
+
+-- set scale factor for RPM on a motor
+---@param param1 motor index (0 is first motor)
+---@param param2 scale factor
+function esc_telem:set_rpm_scale(esc_index, scale_factor) end
 
 -- desc
 ---@class optical_flow
@@ -1109,10 +1162,12 @@ function baro:get_pressure() end
 ---@class serial
 serial = {}
 
--- desc
----@param protocol integer
----@return AP_HAL__UARTDriver_ud
-function serial:find_serial(protocol) end
+-- Returns the UART instance that allows connections from scripts (those with SERIALx_PROTOCOL = 28`).
+-- For instance = 0, returns first such UART, second for instance = 1, and so on.
+-- If such an instance is not found, returns nil.
+---@param instance integer -- the 0-based index of the UART instance to return.
+---@return AP_HAL__UARTDriver_ud -- the requested UART instance available for scripting, or nil if none.
+function serial:find_serial(instance) end
 
 
 -- desc
@@ -1829,6 +1884,10 @@ function arming:arm() end
 -- desc
 ---@return boolean
 function arming:is_armed() end
+
+-- desc
+---@return boolean
+function arming:pre_arm_checks() end
 
 -- desc
 ---@return boolean
