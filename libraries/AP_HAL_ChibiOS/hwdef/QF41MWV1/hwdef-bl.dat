@@ -1,0 +1,46 @@
+# hw definition file for processing by chibios_pins.py
+# for QMWV5 F413 bootloader
+
+# MCU class and specific type
+MCU STM32F4xx STM32F413xx
+
+# board ID for firmware load
+APJ_BOARD_ID 7010
+
+# crystal frequency
+OSCILLATOR_HZ 16000000
+define HAL_CUSTOM_CLOCK_TREE
+define STM32_PLLM_VALUE 8
+define STM32_PLLN_VALUE 96
+define STM32_PLLP_VALUE 2
+define STM32_PLLQ_VALUE 4
+
+FLASH_SIZE_KB 1536
+
+# bootloader is installed at zero offset
+FLASH_RESERVE_START_KB 0
+
+# LEDs
+PC15 LED_BOOTLOADER OUTPUT
+PA15 LED_ACTIVITY  OUTPUT
+define HAL_LED_ON 1
+
+# the location where the bootloader will put the firmware
+FLASH_BOOTLOADER_LOAD_KB 64
+
+# order of UARTs
+SERIAL_ORDER OTG1
+
+PA11 OTG_FS_DM OTG1
+PA12 OTG_FS_DP OTG1
+
+define HAL_USE_EMPTY_STORAGE 1
+define HAL_STORAGE_SIZE 16384
+
+Add CS pins to ensure they are high in bootloader
+PC4 BMI088_GYRO_CS CS
+PC5 BMI088_ACCEL_CS CS
+PA1 BARO_CS CS
+PA4 MAG_CS CS
+PB12 SDCARD_CS CS
+PB1 OSD_CS CS
