@@ -52,7 +52,7 @@ PB9 I2C4_SDA I2C4
 
 # ---------ADC---------------
 
-# analog pins
+# analog pins for V1
 PC1 BATT_VOLTAGE_SENS ADC1 SCALE(1)
 PC0 BATT_CURRENT_SENS ADC1 SCALE(1)
 
@@ -60,8 +60,8 @@ PA2 BATT2_VOLTAGE_SENS ADC1 SCALE(1)
 
 
 # define default battery setup
-define HAL_BATT_VOLT_PIN 10
-define HAL_BATT_CURR_PIN 11
+define HAL_BATT_VOLT_PIN 11
+define HAL_BATT_CURR_PIN 10
 define HAL_BATT_VOLT_SCALE 9.3
 define HAL_BATT_CURR_SCALE 10.0
 
