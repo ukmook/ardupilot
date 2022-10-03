@@ -1,0 +1,15 @@
+# hw definition file for processing by chibios_hwdef.py
+# for qUarkMini_Wing_V1 bootloader
+# This is the qUarkMini_Wing_V2 variant
+
+include ../QF4MWV1/hwdef-bl.dat
+
+undef PC13
+undef PC14
+undef LED_BOOTLOADER OUTPUT LOW
+undef LED_ACTIVITY  OUTPUT LOW
+
+# LED
+PC15 LED_BOOTLOADER OUTPUT LOW
+PC14 LED_ACTIVITY  OUTPUT LOw
+define HAL_LED_ON 0

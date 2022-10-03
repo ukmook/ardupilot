@@ -1,0 +1,227 @@
+# hw definition file for processing by chibios_hwdef.py
+# for H743 bootloader QMWV7
+# QH7MW_HD-bdshot-QPLANE
+# quad plane variant
+
+# ------- CPU --------------
+
+# MCU class and specific type
+MCU STM32H7xx STM32H743xx
+
+# ------------ Clocks ----------
+
+# crystal frequency
+OSCILLATOR_HZ 16000000
+
+# ------ ID ----------------
+
+# board ID for firmware load
+APJ_BOARD_ID 7020
+
+# ---------- Storage -----------
+
+env OPTIMIZE -O2
+
+FLASH_SIZE_KB 2048
+
+FLASH_RESERVE_START_KB 128
+
+define HAL_STORAGE_SIZE 16384
+
+# Save to SD card more reliable
+# use last 2 pages for flash storage
+# H743 has 16 pages of 128k each
+# define STORAGE_FLASH_PAGE 14
+
+# --------- Board Timer ---------
+
+define STM32_ST_USE_TIMER 5
+define CH_CFG_ST_RESOLUTION 32
+
+# ---------I2C-------------------
+
+I2C_ORDER I2C4
+
+# J1
+PD12 I2C4_SCL I2C4
+PD13 I2C4_SDA I2C4
+
+
+# ----- RCIN -----------
+# PA1 TIM2_CH2 TIM2 RCININT PULLDOWN LOW
+
+# --------BUZZ-----------
+PE11 TIM1_CH2 TIM1 GPIO(80) ALARM
+
+# ---------ADC---------------
+
+# analog pins
+PC1 BATT_VOLTAGE_SENS ADC1 SCALE(1)
+PA0 BATT_CURRENT_SENS ADC1 SCALE(1)
+
+
+# define default battery setup
+define HAL_BATT_VOLT_PIN 18
+define HAL_BATT_CURR_PIN 13
+define HAL_BATT_VOLT_SCALE 9.3
+define HAL_BATT_CURR_SCALE 10.0
+
+# ---------CAN-----------
+PB8 CAN1_RX CAN1
+PB9 CAN1_TX CAN1
+
+PB12 CAN2_RX CAN2
+PB13 CAN2_TX CAN2
+
+# ---------UARTS-----------
+
+# order of UARTs (and USB)
+# Order      USB   sr1    sr2    sr3    sr4    sr5  sr6
+# AP Name    USB   GPS1  TELM1  TELM2   GPS2   DJI  SLCAN
+SERIAL_ORDER OTG1 USART1 USART6 UART7 UART4 USART2 OTG2
+
+# USB
+PA11 OTG_FS_DM OTG1
+PA12 OTG_FS_DP OTG1
+
+PA9 VBUS INPUT OPENDRAIN
+
+# GPS1
+PB14 USART1_TX USART1
+PB15 USART1_RX USART1
+
+# TELEM1
+PC6 USART6_TX USART6
+PC7 USART6_RX USART6
+
+# TELEM2
+PE8 UART7_TX UART7
+PE7 UART7_RX UART7
+
+# ESC TELEM
+PD1 UART4_TX UART4
+PD0 UART4_RX UART4
+
+# DJI OSD
+PA2 USART2_TX USART2
+PA3 USART2_RX USART2
+
+# --------SPI-------------
+
+# SPI4
+# spi bus FOR BARO DPS310
+PE2 SPI4_SCK SPI4
+PE5 SPI4_MISO SPI4
+PE6 SPI4_MOSI SPI4
+
+PE3 DPS310_CS CS
+
+# SPI6
+# spi bus for BMI088
+PA5 SPI6_SCK SPI6
+PA6 SPI6_MISO SPI6
+PA7 SPI6_MOSI SPI6
+
+PC3 BMI088_GYRO_CS CS
+PA4 BMI088_ACCEL_CS CS
+
+# --------PWM------------
+# PWM pins change for bdshot
+# bidir 1/2/3
+# Servos
+
+PB3 TIM2_CH2 TIM2 PWM(1) GPIO(50)
+PB4 TIM3_CH1 TIM3 PWM(2) GPIO(51)
+PB5 TIM3_CH2 TIM3 PWM(3) GPIO(52)
+PB6 TIM4_CH1 TIM4 PWM(4) GPIO(53)
+PB7 TIM4_CH2 TIM4 PWM(5) GPIO(54)
+
+define BOARD_PWM_COUNT_DEFAULT 5
+
+# --------VTX Switch------------
+
+PA1 VTX_PWR OUTPUT HIGH GPIO(81)
+define RELAY2_PIN_DEFAULT 81
+
+# --------LED-----------
+define HAL_HAVE_PIXRACER_LED
+
+define HAL_GPIO_LED_ON  0
+define HAL_GPIO_LED_OFF 1
+
+# LED setup for PixracerLED driver
+PE9 LED_RED   OUTPUT GPIO(0)
+PE12 LED_GREEN OUTPUT GPIO(1)
+PB1 LED_BLUE  OUTPUT GPIO(2)
+
+define HAL_GPIO_A_LED_PIN 0
+define HAL_GPIO_B_LED_PIN 1
+define HAL_GPIO_C_LED_PIN 2
+
+# --------SENSORS-----------
+
+# IMU
+# Two IMU MPU60XX & BMI088
+IMU BMI088 SPI:bmi088_a SPI:bmi088_g ROTATION_PITCH_180
+
+# BARO
+BARO DPS310 SPI:dps310
+
+define HAL_PROBE_EXTERNAL_I2C_COMPASSES
+define HAL_I2C_INTERNAL_MASK 0
+define HAL_COMPASS_AUTO_ROT_DEFAULT 2
+
+define HAL_DEFAULT_INS_FAST_SAMPLE 2
+
+# ------SPI DEVICES -----------
+
+# SPI devices
+SPIDEV bmi088_g    SPI6 DEVID3  BMI088_GYRO_CS      MODE3 10*MHZ 10*MHZ
+SPIDEV bmi088_a    SPI6 DEVID4  BMI088_ACCEL_CS     MODE3 10*MHZ 10*MHZ
+SPIDEV dps310      SPI4 DEVID3  DPS310_CS           MODE0 20*MHZ 20*MHZ
+
+# --------SD CARD-----------
+
+# Setup microSD card
+PC8 SDMMC1_D0 SDMMC1
+PC9 SDMMC1_D1 SDMMC1
+PC10 SDMMC1_D2 SDMMC1
+PC11 SDMMC1_D3 SDMMC1
+PC12 SDMMC1_CK SDMMC1
+PD2 SDMMC1_CMD SDMMC1
+
+define HAL_OS_FATFS_IO 1
+
+# Now some defines for logging and terrain data files.
+define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
+define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
+
+# -----------DMA PRIORITY---------------
+
+DMA_NOSHARE TIM3* TIM4* USART2_TX USART1_TX SPI4*
+
+# -----------DJI OSD---------------
+
+define OSD_ENABLED 1
+define HAL_OSD_TYPE_DEFAULT 3
+
+# -------------CROSSFIRE---------------
+# define HAL_MSP_ENABLED 1
+# define HAL_CRSF_ENABLED 1
+# define HAL_CRSF_TELEM_ENABLED 1
+# define HAL_CRSF_TELEM_TEXT_SELECTION_ENABLED 1
+
+# -----------Debug---------------
+
+# define CH_DBG_ENABLE_ASSERTS TRUE
+# define CH_DBG_ENABLE_CHECKS TRUE
+# define CH_DBG_SYSTEM_STATE_CHECK TRUE
+# define CH_DBG_ENABLE_STACK_CHECK TRUE
+
+STDOUT_SERIAL SD1
+STDOUT_BAUDRATE 57600
+
+# PA13 JTMS-SWDIO SWD
+# PA14 JTCK-SWCLK SW
+
+# define STM32_PWM_USE_ADVANCED TRUE
