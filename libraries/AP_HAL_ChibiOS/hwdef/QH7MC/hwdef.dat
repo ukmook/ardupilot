@@ -178,9 +178,9 @@ define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 # DMA_NOSHARE TIM4* USART3_TX USART1_TX USART2_TX SPI4* SPI2*
 
 # -----------DJI OSD---------------
-
+# -----------wtf.osd---------------
 define OSD_ENABLED 1
-define HAL_OSD_TYPE_DEFAULT 3
+define HAL_OSD_TYPE_DEFAULT 5 # wtf.osd
 
 # -----------Debug---------------
 
