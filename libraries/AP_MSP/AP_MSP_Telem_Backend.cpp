@@ -577,6 +577,16 @@ void AP_MSP_Telem_Backend::msp_handle_airspeed(const MSP::msp_airspeed_data_mess
 #endif
 }
 
+uint32_t AP_MSP_Telem_Backend::get_osd_flight_mode_bitmask(void)
+{
+    // Note: we only set the BOXARM bit (bit 0) which is the same for BF, INAV and DJI VTX
+    // When armed we simply return 1 (1 == 1 << 0)
+    if (hal.util->get_soft_armed()) {
+        return 1U;
+    }
+    return 0U;
+}
+
 MSPCommandResult AP_MSP_Telem_Backend::msp_process_out_api_version(sbuf_t *dst)
 {
     const struct {
@@ -1216,6 +1226,12 @@ void AP_MSP_Telem_Backend::msp_displayport_write_string(uint8_t col, uint8_t row
     memcpy(packet.text, string, len);
 
     msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, &packet, 4 + len, false);
+}
+
+void AP_MSP_Telem_Backend::msp_displayport_set_options(const uint8_t font_index, const uint8_t screen_resolution)
+{
+    const uint8_t subcmd[] = { msp_displayport_subcmd_e::MSP_DISPLAYPORT_SET_OPTIONS, font_index, screen_resolution };
+    msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, subcmd, sizeof(subcmd), false);
 }
 #endif //HAL_WITH_MSP_DISPLAYPORT
 bool AP_MSP_Telem_Backend::displaying_stats_screen() const

@@ -1723,6 +1723,42 @@ class AutoTestPlane(AutoTest):
         self.run_subtest("Mission test",
                          lambda: self.fly_mission("ap1.txt", strict=False))
 
+    def PitotBlockage(self):
+        '''Test detection and isolation of a blocked pitot tube'''
+        self.set_parameters({
+            "ARSPD_OPTIONS": 15,
+            "ARSPD_USE": 1,
+            "SIM_WIND_SPD": 7,
+            "SIM_WIND_DIR": 0,
+            "ARSPD_WIND_MAX": 15,
+        })
+        self.change_mode("TAKEOFF")
+        self.wait_ready_to_arm()
+        self.arm_vehicle()
+        # simulate the effect of a blocked pitot tube
+        self.set_parameter("ARSPD_RATIO", 0.1)
+        self.delay_sim_time(10)
+        if (self.get_parameter("ARSPD_USE") == 0):
+            self.progress("Faulty Sensor Disabled")
+        else:
+            raise NotAchievedException("Airspeed Sensor Not Disabled")
+        self.delay_sim_time(20)
+        # simulate the effect of blockage partially clearing
+        self.set_parameter("ARSPD_RATIO", 1.0)
+        self.delay_sim_time(60)
+        if (self.get_parameter("ARSPD_USE") == 0):
+            self.progress("Faulty Sensor Remains Disabled")
+        else:
+            raise NotAchievedException("Fault Sensor Re-Enabled")
+        # simulate the effect of blockage fully clearing
+        self.set_parameter("ARSPD_RATIO", 2.0)
+        self.delay_sim_time(60)
+        if (self.get_parameter("ARSPD_USE") == 1):
+            self.progress("Sensor Re-Enabled")
+        else:
+            raise NotAchievedException("Airspeed Sensor Not Re-Enabled")
+        self.disarm_vehicle(force=True)
+
     def AIRSPEED_AUTOCAL(self):
         '''Test AIRSPEED_AUTOCAL'''
         self.progress("Ensure no AIRSPEED_AUTOCAL on ground")
@@ -3393,22 +3429,6 @@ class AutoTestPlane(AutoTest):
         attempt_fence_breached_disable(start_mode="FBWA", end_mode="FBWA", expected_mode="GUIDED", action=6)
         attempt_fence_breached_disable(start_mode="FBWA", end_mode="FBWA", expected_mode="GUIDED", action=7)
 
-    def run_auxfunc(self,
-                    function,
-                    level,
-                    want_result=mavutil.mavlink.MAV_RESULT_ACCEPTED):
-        self.run_cmd(
-            mavutil.mavlink.MAV_CMD_DO_AUX_FUNCTION,
-            function,  # p1
-            level,  # p2
-            0,  # p3
-            0,  # p4
-            0,  # p5
-            0,  # p6
-            0,  # p7
-            want_result=want_result
-        )
-
     def MAV_DO_AUX_FUNCTION(self):
         '''Test triggering Auxiliary Functions via mavlink'''
         self.context_collect('STATUSTEXT')
@@ -3943,6 +3963,7 @@ class AutoTestPlane(AutoTest):
             self.TestGripperMission,
             self.Parachute,
             self.ParachuteSinkRate,
+            self.PitotBlockage,
             self.AIRSPEED_AUTOCAL,
             self.RangeFinder,
             self.FenceStatic,
