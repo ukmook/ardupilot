@@ -10,7 +10,7 @@ FLASH_BOOTLOADER_LOAD_KB 23
 APP_START_OFFSET_KB 2
 
 # board ID for firmware load
-APJ_BOARD_ID 7507
+APJ_BOARD_ID 7508
 
 # setup build for a peripheral firmware
 env AP_PERIPH 1
@@ -31,7 +31,7 @@ STDOUT_BAUDRATE 57600
 SERIAL_ORDER
 define HAL_USE_UART FALSE
 
-PA4 LED_BOOTLOADER OUTPUT LOW
+PA15 LED_BOOTLOADER OUTPUT LOW
 define HAL_LED_ON 1
 
 # USART1
@@ -58,19 +58,12 @@ define PORT_INT_REQUIRED_STACK 64
 #defined to turn off undef warnings
 define __FPU_PRESENT 0
 
-define HAL_USE_RTC FALSE
-define DISABLE_SERIAL_ESC_COMM TRUE
-define NO_DATAFLASH TRUE
 
 define DMA_RESERVE_SIZE 0
 
-define PERIPH_FW TRUE
 MAIN_STACK 0x800
 PROCESS_STACK 0x800
 define HAL_DISABLE_LOOP_DELAY
-
-define HAL_USE_EMPTY_STORAGE 1
-define HAL_STORAGE_SIZE 16384
 
 # enable CAN support
 PA11 CAN_RX CAN
@@ -89,9 +82,3 @@ define HAL_BOOTLOADER_TIMEOUT 1000
 # and look for it low then we know user has pulled it down and
 # want to stay in the bootloader
 PB6 STAY_IN_BOOTLOADER INPUT FLOATING
-
-# reserve 256 bytes for comms between app and bootloader
-RAM_RESERVE_START 256
-
-# Add CS pins to ensure they are high in bootloader
-PB0 MAG_CS CS

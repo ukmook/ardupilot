@@ -1,18 +1,4 @@
-include ../QF103-periph/hwdef-bl.dat
+include ../QF103-periph/hwdef-bl.inc
 
-# use DNA
-define HAL_CAN_DEFAULT_NODE_ID 0
 
 define CAN_APP_NODE_NAME "org.ardupilot.QF10GPS"
-
-define HAL_BOARD_AP_PERIPH_QF10GPS
-
-# a LED to flash
-undef PA4 LED_BOOTLOADER OUTPUT LOW
-undef define HAL_LED_ON 1
-
-PB4 LED_BOOTLOADER OUTPUT LOW
-define HAL_LED_ON 0
-
-# Add CS pins to ensure they are high in bootloader
-undef PB0 MAG_CS CS

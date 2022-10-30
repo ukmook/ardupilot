@@ -1,32 +1,9 @@
-include ../QF103-periph/hwdef.dat
-
-# use DNA
-define HAL_CAN_DEFAULT_NODE_ID 0
+include ../QF103-periph/hwdef.inc
 
 define CAN_APP_NODE_NAME "org.ardupilot.QF10GPS"
 
-define HAL_BOARD_AP_PERIPH_QF10GPS #JTAG removed for led
-
-undef SERIAL_ORDER
-
-SERIAL_ORDER EMPTY EMPTY EMPTY USART2
-
-# USART1 unused
-undef PA9  USART1_TX USART1 SPEED_HIGH NODMA
-undef PA10 USART1_RX USART1 SPEED_HIGH NODMA
-
-# USART2 connected to GPS
-PA2 USART2_TX USART2 SPEED_HIGH NODMA
-PA3 USART2_RX USART2 SPEED_HIGH NODMA
-
 # and support all external compass types
 # define HAL_PROBE_EXTERNAL_I2C_COMPASSES
-
-# increase TX size for RTCM
-undef HAL_UART_MIN_TX_SIZE
-define HAL_UART_MIN_TX_SIZE 256
-
-undef PB0 MAG_CS CS
 
 # GPS+MAG
 define HAL_PERIPH_ENABLE_GPS
@@ -39,8 +16,25 @@ COMPASS LIS3MDL I2C:0:0x1E false ROTATION_NONE
 # PWM output for buzzer
 PB0 TIM3_CH3 TIM3 GPIO(77) LOW ALARM
 
-# --------LED-----------
+# --------- LED -----------
+# pixracer has 3 LEDs, Red, Green, Blue
+define HAL_HAVE_PIXRACER_LED
 
-undef PA4 LED OUTPUT LOW
+define HAL_GPIO_LED_ON  0
+define HAL_GPIO_LED_OFF 1
 
-PB3 LED OUTPUT LOW
+# LED setup for PixracerLED driver
+PB3  LED_RED   OUTPUT GPIO(0)
+PB4  LED_GREEN OUTPUT GPIO(1)
+PA15  LED_BLUE  OUTPUT GPIO(2)
+
+define HAL_GPIO_A_LED_PIN 0
+define HAL_GPIO_B_LED_PIN 1
+define HAL_GPIO_C_LED_PIN 2
+
+---------------------------------------
+
+# restrict backends available on f103:
+define AP_GPS_NOVA_ENABLED 0
+define AP_GPS_SBF_ENABLED 0
+define AP_GPS_GSOF_ENABLED 0
