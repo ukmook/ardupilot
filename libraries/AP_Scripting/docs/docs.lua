@@ -737,10 +737,12 @@ local AP_HAL__I2CDevice_ud = {}
 ---@param address integer
 function AP_HAL__I2CDevice_ud:set_address(address) end
 
--- desc
+-- If no read length is provided a single register will be read and returned.
+-- If read length is provided a table of register values are returned.
 ---@param register_num integer
----@return integer|nil
-function AP_HAL__I2CDevice_ud:read_registers(register_num) end
+---@param read_length? integer
+---@return integer|table|nil
+function AP_HAL__I2CDevice_ud:read_registers(register_num, read_length) end
 
 -- desc
 ---@param register_num integer
@@ -1294,6 +1296,11 @@ function rc:get_channel(chan_num) end
 ---@return boolean
 function rc:has_valid_input() end
 
+-- return cached level of aux function
+---@param aux_fn integer
+---@return integer|nil
+function rc:get_aux_cached(aux_fn) end
+
 -- desc
 ---@param aux_fun integer
 ---@param ch_flag integer
@@ -1646,6 +1653,11 @@ function relay:toggle(instance) end
 ---@param instance integer
 ---@return boolean
 function relay:enabled(instance) end
+
+-- return state of a relay
+---@param instance integer
+---@return uint8_t
+function relay:get(instance) end
 
 -- desc
 ---@param instance integer

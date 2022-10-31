@@ -235,6 +235,14 @@ void AP_Scripting::thread(void) {
             gcs().send_text(MAV_SEVERITY_CRITICAL, "Scripting: %s", "stopped");
         }
         delete lua;
+        lua = nullptr;
+
+        // clear allocated i2c devices
+        for (uint8_t i=0; i<SCRIPTING_MAX_NUM_I2C_DEVICE; i++) {
+            delete _i2c_dev[i];
+            _i2c_dev[i] = nullptr;
+        }
+        num_i2c_devices = 0;
 
         bool cleared = false;
         while(true) {
