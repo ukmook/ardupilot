@@ -1,6 +1,8 @@
 # hw definition file for processing by chibios_pins.py
 # MCU class and specific type
 
+# 50mm SAM-M8Q  GPS
+
 # MCU class and specific type
 MCU STM32F4xx STM32F412Rx
 
