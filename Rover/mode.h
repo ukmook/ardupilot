@@ -33,8 +33,7 @@ public:
     Mode();
 
     // do not allow copying
-    Mode(const Mode &other) = delete;
-    Mode &operator=(const Mode&) = delete;
+    CLASS_NO_COPY(Mode);
 
     // enter this mode, returns false if we failed to enter
     bool enter();
@@ -268,7 +267,7 @@ public:
     void start_RTL();
 
     // lua accessors for nav script time support
-    bool nav_script_time(uint16_t &id, uint8_t &cmd, float &arg1, float &arg2);
+    bool nav_script_time(uint16_t &id, uint8_t &cmd, float &arg1, float &arg2, int16_t &arg3, int16_t &arg4);
     void nav_script_time_done(uint16_t id);
 
     AP_Mission mission{
@@ -377,6 +376,8 @@ private:
         uint8_t timeout_s;  // timeout (in seconds) provided by mission command
         float arg1;         // 1st argument provided by mission command
         float arg2;         // 2nd argument provided by mission command
+        int16_t arg3;       // 3rd argument provided by mission command
+        int16_t arg4;       // 4th argument provided by mission command
     } nav_scripting;
 #endif
 

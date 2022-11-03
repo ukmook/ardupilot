@@ -49,6 +49,8 @@
 #include <AP_RPM/AP_RPM.h>
 #include <AP_Mount/AP_Mount.h>
 #include <AP_OpenDroneID/AP_OpenDroneID.h>
+#include <AP_SerialManager/AP_SerialManager.h>
+#include <AP_Vehicle/AP_Vehicle_Type.h>
 
 #if HAL_MAX_CAN_PROTOCOL_DRIVERS
   #include <AP_CANManager/AP_CANManager.h>
@@ -264,8 +266,9 @@ bool AP_Arming::barometer_checks(bool report)
 #endif
     if ((checks_to_perform & ARMING_CHECK_ALL) ||
         (checks_to_perform & ARMING_CHECK_BARO)) {
-        if (!AP::baro().all_healthy()) {
-            check_failed(ARMING_CHECK_BARO, report, "Barometer not healthy");
+        char buffer[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1] {};
+        if (!AP::baro().arming_checks(sizeof(buffer), buffer)) {
+            check_failed(ARMING_CHECK_BARO, report, "Baro: %s", buffer);
             return false;
         }
     }
@@ -473,6 +476,7 @@ bool AP_Arming::compass_checks(bool report)
 {
     Compass &_compass = AP::compass();
 
+#if COMPASS_CAL_ENABLED
     // check if compass is calibrating
     if (_compass.is_calibrating()) {
         check_failed(report, "Compass calibration running");
@@ -484,6 +488,7 @@ bool AP_Arming::compass_checks(bool report)
         check_failed(report, "Compass calibrated requires reboot");
         return false;
     }
+#endif
 
     if ((checks_to_perform) & ARMING_CHECK_ALL ||
         (checks_to_perform) & ARMING_CHECK_COMPASS) {
@@ -779,19 +784,17 @@ bool AP_Arming::mission_checks(bool report)
         AP_Mission *mission = AP::mission();
         if (mission == nullptr) {
             check_failed(ARMING_CHECK_MISSION, report, "No mission library present");
-            #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
-                AP_HAL::panic("Mission checks requested, but no mission was allocated");
-            #endif // CONFIG_HAL_BOARD == HAL_BOARD_SITL
             return false;
         }
+#if HAL_RALLY_ENABLED
         AP_Rally *rally = AP::rally();
         if (rally == nullptr) {
             check_failed(ARMING_CHECK_MISSION, report, "No rally library present");
-            #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
-                AP_HAL::panic("Mission checks requested, but no rally was allocated");
-            #endif // CONFIG_HAL_BOARD == HAL_BOARD_SITL
             return false;
         }
+#else
+        check_failed(ARMING_CHECK_MISSION, report, "No rally library present");
+#endif
 
         const struct MisItemTable {
           MIS_ITEM_CHECK check;
@@ -813,6 +816,7 @@ bool AP_Arming::mission_checks(bool report)
                 }
             }
         }
+#if HAL_RALLY_ENABLED
         if (_required_mission_items & MIS_ITEM_CHECK_RALLY) {
             Location ahrs_loc;
             if (!AP::ahrs().get_location(ahrs_loc)) {
@@ -825,6 +829,7 @@ bool AP_Arming::mission_checks(bool report)
                 return false;
             }
           }
+#endif
     }
 
     return true;
@@ -873,10 +878,12 @@ bool AP_Arming::servo_checks(bool report) const
             const SRV_Channel::Aux_servo_function_t ch_function = c->get_function();
 
             // motors, e-stoppable functions, neopixels and ProfiLEDs may be digital outputs and thus can be disabled
+            // scripting can use its functions as labels for LED setup
             const bool disabled_ok = SRV_Channel::is_motor(ch_function) ||
                                      SRV_Channel::should_e_stop(ch_function) ||
                                      (ch_function >= SRV_Channel::k_LED_neopixel1 && ch_function <= SRV_Channel::k_LED_neopixel4) ||
-                                     (ch_function >= SRV_Channel::k_ProfiLED_1 && ch_function <= SRV_Channel::k_ProfiLED_Clock);
+                                     (ch_function >= SRV_Channel::k_ProfiLED_1 && ch_function <= SRV_Channel::k_ProfiLED_Clock) ||
+                                     (ch_function >= SRV_Channel::k_scripting1 && ch_function <= SRV_Channel::k_scripting16);
 
             // for all other functions raise a pre-arm failure
             if (!disabled_ok) {
@@ -1094,7 +1101,7 @@ bool AP_Arming::proximity_checks(bool report) const
 
 bool AP_Arming::can_checks(bool report)
 {
-#if HAL_MAX_CAN_PROTOCOL_DRIVERS
+#if HAL_MAX_CAN_PROTOCOL_DRIVERS && HAL_CANMANAGER_ENABLED
     if (check_enabled(ARMING_CHECK_SYSTEM)) {
         char fail_msg[50] = {};
         (void)fail_msg; // might be left unused
@@ -1409,6 +1416,16 @@ bool AP_Arming::opendroneid_checks(bool display_failure)
     return true;
 }
 
+//Check for multiple RC in serial protocols
+bool AP_Arming::serial_protocol_checks(bool display_failure)
+{
+    if (AP::serialmanager().have_serial(AP_SerialManager::SerialProtocol_RCIN, 1)) {
+       check_failed(display_failure, "Multiple SERIAL ports configured for RC input");
+       return false;
+    }
+    return true;
+}
+
 bool AP_Arming::pre_arm_checks(bool report)
 {
 #if !APM_BUILD_COPTER_OR_HELI
@@ -1447,7 +1464,8 @@ bool AP_Arming::pre_arm_checks(bool report)
         &  aux_auth_checks(report)
         &  disarm_switch_checks(report)
         &  fence_checks(report)
-        &  opendroneid_checks(report);
+        &  opendroneid_checks(report)
+        &  serial_protocol_checks(report);
 }
 
 bool AP_Arming::arm_checks(AP_Arming::Method method)
@@ -1505,6 +1523,7 @@ bool AP_Arming::mandatory_checks(bool report)
     ret &= opendroneid_checks(report);
 #endif
     ret &= rc_in_calibration_check(report);
+    ret &= serial_protocol_checks(report);
     return ret;
 }
 

@@ -18,7 +18,7 @@
 #include <AP_OSD/AP_OSD.h>
 
 #ifndef HAL_CRSF_TELEM_ENABLED
-#define HAL_CRSF_TELEM_ENABLED !HAL_MINIMIZE_FEATURES
+#define HAL_CRSF_TELEM_ENABLED 1
 #endif
 
 #ifndef HAL_CRSF_TELEM_TEXT_SELECTION_ENABLED
@@ -39,8 +39,7 @@ public:
     ~AP_CRSF_Telem() override;
 
     /* Do not allow copies */
-    AP_CRSF_Telem(const AP_CRSF_Telem &other) = delete;
-    AP_CRSF_Telem &operator=(const AP_CRSF_Telem&) = delete;
+    CLASS_NO_COPY(AP_CRSF_Telem);
 
     // init - perform required initialisation
     virtual bool init() override;

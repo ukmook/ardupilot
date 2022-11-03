@@ -81,11 +81,20 @@ extern AP_Periph_FW periph;
  # define Debug(fmt, args ...)
 #endif
 
+#ifndef HAL_PERIPH_SUPPORT_LONG_CAN_PRINTF
+    // When enabled, can_printf() strings longer than the droneCAN max text length (90 chars)
+    // are split into multiple packets instead of truncating the string. This is
+    // especially helpful with HAL_GCS_ENABLED where libraries use the mavlink
+    // send_text() method where we support strings up to 256 chars by splitting them
+    // up into multiple 50 char mavlink packets.
+    #define HAL_PERIPH_SUPPORT_LONG_CAN_PRINTF (BOARD_FLASH_SIZE >= 1024)
+#endif
+
 static struct instance_t {
     uint8_t index;
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
-    ChibiOS::CANIface* iface;
+    AP_HAL::CANIface* iface;
 #elif CONFIG_HAL_BOARD == HAL_BOARD_SITL
     HALSITL::CANIface* iface;
 #endif
@@ -159,6 +168,9 @@ ChibiOS::CANIface* AP_Periph_FW::can_iface_periph[HAL_NUM_CAN_IFACES];
 HALSITL::CANIface* AP_Periph_FW::can_iface_periph[HAL_NUM_CAN_IFACES];
 #endif
 
+#ifdef HAL_PERIPH_ENABLE_SLCAN
+SLCAN::CANIface AP_Periph_FW::slcan_interface;
+#endif
 
 /*
  * Node status variables
@@ -1516,6 +1528,20 @@ void AP_Periph_FW::can_start()
 #endif
         }
     }
+
+#ifdef HAL_PERIPH_ENABLE_SLCAN
+    const uint8_t slcan_selected_index = g.can_slcan_cport - 1;
+    if (slcan_selected_index < HAL_NUM_CAN_IFACES) {
+        slcan_interface.set_can_iface(can_iface_periph[slcan_selected_index]);
+        instances[slcan_selected_index].iface = (AP_HAL::CANIface*)&slcan_interface;
+
+        // ensure there's a serial port mapped to SLCAN
+        if (!periph.serial_manager.have_serial(AP_SerialManager::SerialProtocol_SLCAN, 0)) {
+            periph.serial_manager.set_protocol_and_baud(SERIALMANAGER_NUM_PORTS-1, AP_SerialManager::SerialProtocol_SLCAN, 1500000);
+        }
+    }
+#endif
+
     canardInit(&dronecan.canard, (uint8_t *)dronecan.canard_memory_pool, sizeof(dronecan.canard_memory_pool),
             onTransferReceived, shouldAcceptTransfer, NULL);
 
@@ -1634,7 +1660,9 @@ void AP_Periph_FW::esc_telem_update()
             pkt.current = nan;
         }
         int16_t temperature;
-        if (esc_telem.get_temperature(i, temperature)) {
+        if (esc_telem.get_motor_temperature(i, temperature)) {
+            pkt.temperature = C_TO_KELVIN(temperature*0.01);
+        } else if (esc_telem.get_temperature(i, temperature)) {
             pkt.temperature = C_TO_KELVIN(temperature*0.01);
         } else {
             pkt.temperature = nan;
@@ -1876,82 +1904,6 @@ void AP_Periph_FW::can_gps_update(void)
         return;
     }
     last_gps_update_ms = gps.last_message_time_ms();
-
-    {
-        /*
-          send Fix packet
-        */
-        uavcan_equipment_gnss_Fix pkt {};
-        const Location &loc = gps.location();
-        const Vector3f &vel = gps.velocity();
-
-        pkt.timestamp.usec = AP_HAL::native_micros64();
-        pkt.gnss_timestamp.usec = gps.time_epoch_usec();
-        if (pkt.gnss_timestamp.usec == 0) {
-            pkt.gnss_time_standard = UAVCAN_EQUIPMENT_GNSS_FIX_GNSS_TIME_STANDARD_NONE;
-        } else {
-            pkt.gnss_time_standard = UAVCAN_EQUIPMENT_GNSS_FIX_GNSS_TIME_STANDARD_UTC;
-        }
-        pkt.longitude_deg_1e8 = uint64_t(loc.lng) * 10ULL;
-        pkt.latitude_deg_1e8 = uint64_t(loc.lat) * 10ULL;
-        pkt.height_msl_mm = loc.alt * 10;
-        pkt.height_ellipsoid_mm = loc.alt * 10;
-        float undulation;
-        if (gps.get_undulation(undulation)) {
-            pkt.height_ellipsoid_mm -= undulation*1000;
-        }
-        for (uint8_t i=0; i<3; i++) {
-            // the canard dsdl compiler doesn't understand float16
-            pkt.ned_velocity[i] = vel[i];
-        }
-        pkt.sats_used = gps.num_sats();
-        switch (gps.status()) {
-        case AP_GPS::GPS_Status::NO_GPS:
-        case AP_GPS::GPS_Status::NO_FIX:
-            pkt.status = UAVCAN_EQUIPMENT_GNSS_FIX_STATUS_NO_FIX;
-            break;
-        case AP_GPS::GPS_Status::GPS_OK_FIX_2D:
-            pkt.status = UAVCAN_EQUIPMENT_GNSS_FIX_STATUS_2D_FIX;
-            break;
-        case AP_GPS::GPS_Status::GPS_OK_FIX_3D:
-        case AP_GPS::GPS_Status::GPS_OK_FIX_3D_DGPS:
-        case AP_GPS::GPS_Status::GPS_OK_FIX_3D_RTK_FLOAT:
-        case AP_GPS::GPS_Status::GPS_OK_FIX_3D_RTK_FIXED:
-            pkt.status = UAVCAN_EQUIPMENT_GNSS_FIX_STATUS_3D_FIX;
-            break;
-        }
-
-        pkt.position_covariance.len = 9;
-
-        float vacc;
-        if (gps.vertical_accuracy(vacc)) {
-            pkt.position_covariance.data[8] = sq(vacc);
-        }
-
-        float hacc;
-        if (gps.horizontal_accuracy(hacc)) {
-            pkt.position_covariance.data[0] = pkt.position_covariance.data[4] = sq(hacc);
-        }
-        check_float16_range(pkt.position_covariance.data, pkt.position_covariance.len);
-
-        pkt.velocity_covariance.len = 9;
-
-        float sacc;
-        if (gps.speed_accuracy(sacc)) {
-            float vc3 = sq(sacc);
-            pkt.velocity_covariance.data[0] = pkt.velocity_covariance.data[4] = pkt.velocity_covariance.data[8] = vc3;
-        }
-        check_float16_range(pkt.velocity_covariance.data, pkt.velocity_covariance.len);
-
-        uint8_t buffer[UAVCAN_EQUIPMENT_GNSS_FIX_MAX_SIZE] {};
-        uint16_t total_size = uavcan_equipment_gnss_Fix_encode(&pkt, buffer, !periph.canfdout());
-
-        canard_broadcast(UAVCAN_EQUIPMENT_GNSS_FIX_SIGNATURE,
-                        UAVCAN_EQUIPMENT_GNSS_FIX_ID,
-                        CANARD_TRANSFER_PRIORITY_LOW,
-                        &buffer[0],
-                        total_size);
-    }
 
     {
         /*
@@ -2603,7 +2555,7 @@ void AP_Periph_FW::can_efi_update(void)
         // assume single set of cylinder status
         pkt.cylinder_status.len = 1;
         auto &c = pkt.cylinder_status.data[0];
-        const auto &state_c = state.cylinder_status[0];
+        const auto &state_c = state.cylinder_status;
         c.ignition_timing_deg = state_c.ignition_timing_deg;
         c.injection_time_ms = state_c.injection_time_ms;
         c.cylinder_head_temperature = state_c.cylinder_head_temperature;
@@ -2627,6 +2579,38 @@ void AP_Periph_FW::can_efi_update(void)
 // printf to CAN LogMessage for debugging
 void can_printf(const char *fmt, ...)
 {
+#if HAL_PERIPH_SUPPORT_LONG_CAN_PRINTF
+    const uint8_t packet_count_max = 4; // how many packets we're willing to break up an over-sized string into
+    const uint8_t packet_data_max = 90; // max single debug string length = sizeof(uavcan_protocol_debug_LogMessage.text.data)
+    uint8_t buffer_data[packet_count_max*packet_data_max] {};
+
+    va_list ap;
+    va_start(ap, fmt);
+    // strip off any negative return errors by treating result as 0
+    uint32_t char_count = MAX(vsnprintf((char*)buffer_data, sizeof(buffer_data), fmt, ap), 0);
+    va_end(ap);
+
+    // send multiple uavcan_protocol_debug_LogMessage packets if the fmt string is too long.
+    uint16_t buffer_offset = 0;
+    for (uint8_t i=0; i<packet_count_max && char_count > 0; i++) {
+        uavcan_protocol_debug_LogMessage pkt {};
+        pkt.text.len = MIN(char_count, sizeof(pkt.text.data));
+        char_count -= pkt.text.len;
+
+        memcpy(pkt.text.data, &buffer_data[buffer_offset], pkt.text.len);
+        buffer_offset += pkt.text.len;
+
+        uint8_t buffer_packet[UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_MAX_SIZE] {};
+        const uint32_t len = uavcan_protocol_debug_LogMessage_encode(&pkt, buffer_packet, !periph.canfdout());
+
+        canard_broadcast(UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_SIGNATURE,
+                        UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_ID,
+                        CANARD_TRANSFER_PRIORITY_LOW,
+                        buffer_packet,
+                        len);
+    }
+    
+#else
     uavcan_protocol_debug_LogMessage pkt {};
     uint8_t buffer[UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_MAX_SIZE] {};
     va_list ap;
@@ -2643,4 +2627,5 @@ void can_printf(const char *fmt, ...)
                     buffer,
                     len);
 
+#endif
 }
