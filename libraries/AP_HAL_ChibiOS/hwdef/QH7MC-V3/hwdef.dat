@@ -14,7 +14,7 @@ OSCILLATOR_HZ 16000000
 # ------ ID ----------------
 
 # board ID for firmware load
-APJ_BOARD_ID 7018
+APJ_BOARD_ID 7019
 
 # ---------- Storage -----------
 
