@@ -10,9 +10,11 @@
 #include <AP_RPM/AP_RPM.h>
 #include <SRV_Channel/SRV_Channel.h>
 #include <AP_Motors/AP_Motors.h>
+#include <AR_Motors/AP_MotorsUGV.h>
 #include <AP_CheckFirmware/AP_CheckFirmware.h>
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
 #include <AP_HAL_ChibiOS/sdcard.h>
+#include <AP_HAL_ChibiOS/hwdef/common/stm32_util.h>
 #endif
 
 #define SCHED_TASK(func, rate_hz, max_time_micros, prio) SCHED_TASK_CLASS(AP_Vehicle, &vehicle, func, rate_hz, max_time_micros, prio)
@@ -362,7 +364,10 @@ const AP_Scheduler::Task AP_Vehicle::scheduler_tasks[] = {
     SCHED_TASK_CLASS(AP_AIS,       &vehicle.ais,            update,                    5, 100, 249),
 #endif
 #if HAL_EFI_ENABLED
-    SCHED_TASK_CLASS(AP_EFI,       &vehicle.efi,            update,                   10, 200, 250),
+    SCHED_TASK_CLASS(AP_EFI,       &vehicle.efi,            update,                   50, 200, 250),
+#endif
+#if HAL_INS_ACCELCAL_ENABLED
+    SCHED_TASK(one_Hz_update,                                                         1, 100, 252),
 #endif
     SCHED_TASK(update_arming,          1,     50, 253),
 };
@@ -453,18 +458,19 @@ bool AP_Vehicle::is_crashed() const
 // update the harmonic notch filter for throttle based notch
 void AP_Vehicle::update_throttle_notch(AP_InertialSensor::HarmonicNotch &notch)
 {
-#if APM_BUILD_TYPE(APM_BUILD_ArduPlane)||APM_BUILD_COPTER_OR_HELI
+#if APM_BUILD_TYPE(APM_BUILD_ArduPlane)||APM_BUILD_COPTER_OR_HELI||APM_BUILD_TYPE(APM_BUILD_Rover)
     const float ref_freq = notch.params.center_freq_hz();
     const float ref = notch.params.reference();
     const float min_ratio = notch.params.freq_min_ratio();
 
+#if APM_BUILD_TYPE(APM_BUILD_ArduPlane)||APM_BUILD_COPTER_OR_HELI
     const AP_Motors* motors = AP::motors();
-    if (motors->get_spool_state() == AP_Motors::SpoolState::SHUT_DOWN) {
-        notch.set_inactive(true);
-    } else {
-        notch.set_inactive(false);
-    }
     const float motors_throttle = motors != nullptr ? MAX(0,motors->get_throttle_out()) : 0;
+#else  // APM_BUILD_Rover
+    const AP_MotorsUGV *motors = AP::motors_ugv();
+    const float motors_throttle = motors != nullptr ? abs(motors->get_throttle() / 100.0f) : 0;
+#endif
+
     float throttle_freq = ref_freq * MAX(min_ratio, sqrtf(motors_throttle / ref));
 
     notch.update_freq_hz(throttle_freq);
@@ -474,7 +480,7 @@ void AP_Vehicle::update_throttle_notch(AP_InertialSensor::HarmonicNotch &notch)
 // update the harmonic notch filter center frequency dynamically
 void AP_Vehicle::update_dynamic_notch(AP_InertialSensor::HarmonicNotch &notch)
 {
-#if APM_BUILD_TYPE(APM_BUILD_ArduPlane)||APM_BUILD_COPTER_OR_HELI
+#if APM_BUILD_TYPE(APM_BUILD_ArduPlane)||APM_BUILD_COPTER_OR_HELI||APM_BUILD_TYPE(APM_BUILD_Rover)
     if (!notch.params.enabled()) {
         return;
     }
@@ -484,6 +490,17 @@ void AP_Vehicle::update_dynamic_notch(AP_InertialSensor::HarmonicNotch &notch)
         notch.update_freq_hz(ref_freq);
         return;
     }
+
+#if APM_BUILD_TYPE(APM_BUILD_ArduPlane)||APM_BUILD_COPTER_OR_HELI
+    const AP_Motors* motors = AP::motors();
+    if (motors != nullptr && motors->get_spool_state() == AP_Motors::SpoolState::SHUT_DOWN) {
+        notch.set_inactive(true);
+    } else {
+        notch.set_inactive(false);
+    }
+#else  // APM_BUILD_Rover: keep notch active
+    notch.set_inactive(false);
+#endif
 
     switch (notch.params.tracking_mode()) {
         case HarmonicNotchDynamicMode::UpdateThrottle: // throttle based tracking
@@ -509,8 +526,8 @@ void AP_Vehicle::update_dynamic_notch(AP_InertialSensor::HarmonicNotch &notch)
             // set the harmonic notch filter frequency scaled on measured frequency
             if (notch.params.hasOption(HarmonicNotchFilterParams::Options::DynamicHarmonic)) {
                 float notches[INS_MAX_NOTCHES];
-                const uint8_t num_notches = AP::esc_telem().get_motor_frequencies_hz(notch.num_dynamic_notches, notches);
                 // ESC telemetry will return 0 for missing data, but only after 1s
+                const uint8_t num_notches = AP::esc_telem().get_motor_frequencies_hz(INS_MAX_NOTCHES, notches);
                 for (uint8_t i = 0; i < num_notches; i++) {
                     if (!is_zero(notches[i])) {
                         notches[i] =  MAX(ref_freq, notches[i]);
@@ -544,9 +561,8 @@ void AP_Vehicle::update_dynamic_notch(AP_InertialSensor::HarmonicNotch &notch)
             notch.update_freq_hz(ref_freq);
             break;
     }
-#endif // APM_BUILD_TYPE(APM_BUILD_ArduPlane)||APM_BUILD_COPTER_OR_HELI
+#endif // APM_BUILD_TYPE(APM_BUILD_ArduPlane)||APM_BUILD_COPTER_OR_HELI||APM_BUILD_TYPE(APM_BUILD_Rover)
 }
-
 
 // run notch update at either loop rate or 200Hz
 void AP_Vehicle::update_dynamic_notch_at_specified_rate()
@@ -631,14 +647,13 @@ void AP_Vehicle::publish_osd_info()
     nav_info.wp_number = mission->get_current_nav_index();
     osd->set_nav_info(nav_info);
 }
+#endif
 
 void AP_Vehicle::get_osd_roll_pitch_rad(float &roll, float &pitch) const
 {
     roll = ahrs.roll;
     pitch = ahrs.pitch;
 }
-
-#endif
 
 #if HAL_INS_ACCELCAL_ENABLED
 
@@ -676,6 +691,36 @@ void AP_Vehicle::accel_cal_update()
 void AP_Vehicle::update_arming()
 {
     AP::arming().update();
+}
+
+/*
+  one Hz checks common to all vehicles
+ */
+void AP_Vehicle::one_Hz_update(void)
+{
+    one_Hz_counter++;
+
+    /*
+      every 10s check if using a 2M firmware on a 1M board
+     */
+    if (one_Hz_counter % 10U == 0) {
+#if defined(BOARD_CHECK_F427_USE_1M) && (BOARD_FLASH_SIZE>1024)
+        if (!hal.util->get_soft_armed() && check_limit_flash_1M()) {
+            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, BOARD_CHECK_F427_USE_1M);
+        }
+#endif
+    }
+
+    /*
+      every 30s check if using a 1M firmware on a 2M board
+     */
+    if (one_Hz_counter % 30U == 0) {
+#if defined(BOARD_CHECK_F427_USE_1M) && (BOARD_FLASH_SIZE<=1024)
+        if (!hal.util->get_soft_armed() && !check_limit_flash_1M()) {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, BOARD_CHECK_F427_USE_2M);
+        }
+#endif
+    }
 }
 
 AP_Vehicle *AP_Vehicle::_singleton = nullptr;

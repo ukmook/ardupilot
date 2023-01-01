@@ -23,6 +23,7 @@
 #include "Plane.h"
 
 #define SCHED_TASK(func, rate_hz, max_time_micros, priority) SCHED_TASK_CLASS(Plane, &plane, func, rate_hz, max_time_micros, priority)
+#define FAST_TASK(func) FAST_TASK_CLASS(Plane, &plane, func)
 
 
 /*
@@ -49,16 +50,18 @@ SCHED_TASK_CLASS arguments:
  - expected time (in MicroSeconds) that the method should take to run
  - priority (0 through 255, lower number meaning higher priority)
 
+FAST_TASK entries are run on every loop even if that means the loop
+overruns its allotted time
  */
 const AP_Scheduler::Task Plane::scheduler_tasks[] = {
                            // Units:   Hz      us
-    SCHED_TASK(ahrs_update,           400,    400,   3),
+    FAST_TASK(ahrs_update),
+    FAST_TASK(update_control_mode),
+    FAST_TASK(stabilize),
+    FAST_TASK(set_servos),
     SCHED_TASK(read_radio,             50,    100,   6),
     SCHED_TASK(check_short_failsafe,   50,    100,   9),
     SCHED_TASK(update_speed_height,    50,    200,  12),
-    SCHED_TASK(update_control_mode,   400,    100,  15),
-    SCHED_TASK(stabilize,             400,    100,  18),
-    SCHED_TASK(set_servos,            400,    100,  21),
     SCHED_TASK(update_throttle_hover, 100,     90,  24),
     SCHED_TASK(read_control_switch,     7,    100,  27),
     SCHED_TASK(update_GPS_50Hz,        50,    300,  30),
@@ -547,16 +550,16 @@ void Plane::update_alt()
             distance_beyond_land_wp = current_loc.get_distance(next_WP_loc);
         }
 
-        float target_alt = relative_target_altitude_cm();
+        tecs_target_alt_cm = relative_target_altitude_cm();
 
         if (control_mode == &mode_rtl && !rtl.done_climb && (g2.rtl_climb_min > 0 || (plane.g2.flight_options & FlightOptions::CLIMB_BEFORE_TURN))) {
             // ensure we do the initial climb in RTL. We add an extra
             // 10m in the demanded height to push TECS to climb
             // quickly
-            target_alt = MAX(target_alt, prev_WP_loc.alt - home.alt) + (g2.rtl_climb_min+10)*100;
+            tecs_target_alt_cm = MAX(tecs_target_alt_cm, prev_WP_loc.alt - home.alt) + (g2.rtl_climb_min+10)*100;
         }
 
-        TECS_controller.update_pitch_throttle(target_alt,
+        TECS_controller.update_pitch_throttle(tecs_target_alt_cm,
                                                  target_airspeed_cm,
                                                  flight_stage,
                                                  distance_beyond_land_wp,
@@ -796,26 +799,21 @@ bool Plane::set_velocity_match(const Vector2f &velocity)
 
 #endif // AP_SCRIPTING_ENABLED
 
-#if OSD_ENABLED
 // correct AHRS pitch for TRIM_PITCH_CD in non-VTOL modes, and return VTOL view in VTOL
 void Plane::get_osd_roll_pitch_rad(float &roll, float &pitch) const
 {
-   pitch = ahrs.pitch;
-   roll = ahrs.roll;
 #if HAL_QUADPLANE_ENABLED
-   if (quadplane.show_vtol_view()) {
-       return;
-   }
+    if (quadplane.show_vtol_view()) {
+        pitch = quadplane.ahrs_view->pitch;
+        roll = quadplane.ahrs_view->roll;
+        return;
+    }
 #endif
-   if (!(g2.flight_options & FlightOptions::OSD_REMOVE_TRIM_PITCH_CD)) {  // correct for TRIM_PITCH_CD
-      pitch -= g.pitch_trim_cd * 0.01 * DEG_TO_RAD;
-      return;
-   }
-#if HAL_QUADPLANE_ENABLED
-   pitch = quadplane.ahrs_view->pitch;
-   roll = quadplane.ahrs_view->roll;
-#endif
+    pitch = ahrs.pitch;
+    roll = ahrs.roll;
+    if (!(g2.flight_options & FlightOptions::OSD_REMOVE_TRIM_PITCH_CD)) {  // correct for TRIM_PITCH_CD
+        pitch -= g.pitch_trim_cd * 0.01 * DEG_TO_RAD;
+    }
 }
-#endif
 
 AP_HAL_MAIN_CALLBACKS(&plane);

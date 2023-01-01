@@ -5,6 +5,7 @@
 #include <AP_Common/AP_Common.h>
 #include <AP_Param/AP_Param.h>
 #include <AP_Math/AP_Math.h>
+#include <AP_Common/Bitmask.h>
 
 #define NUM_RC_CHANNELS 16
 
@@ -124,7 +125,7 @@ public:
         MISSION_RESET =       24, // Reset auto mission to start from first command
         ATTCON_FEEDFWD =      25, // enable/disable the roll and pitch rate feed forward
         ATTCON_ACCEL_LIM =    26, // enable/disable the roll, pitch and yaw accel limiting
-        RETRACT_MOUNT =       27, // Retract Mount
+        RETRACT_MOUNT1 =      27, // Retract Mount1
         RELAY =               28, // Relay pin on/off (only supports first relay)
         LANDING_GEAR =        29, // Landing gear controller
         LOST_VEHICLE_SOUND =  30, // Play lost vehicle sound
@@ -230,6 +231,10 @@ public:
         MOUNT_LOCK =         163, // Mount yaw lock vs follow
         LOG_PAUSE =          164, // Pauses logging if under logging rate control
         ARM_EMERGENCY_STOP = 165, // ARM on high, MOTOR_ESTOP on low
+        CAMERA_REC_VIDEO =   166, // start recording on high, stop recording on low
+        CAMERA_ZOOM =        167, // camera zoom high = zoom in, middle = hold, low = zoom out
+        CAMERA_MANUAL_FOCUS = 168,// camera manual focus.  high = long shot, middle = stop focus, low = close shot
+        CAMERA_AUTO_FOCUS =  169, // camera auto focus
 
         // inputs from 200 will eventually used to replace RCMAP
         ROLL =               201, // roll input
@@ -260,6 +265,9 @@ public:
         SCRIPTING_6 =        305,
         SCRIPTING_7 =        306,
         SCRIPTING_8 =        307,
+
+        // this must be higher than any aux function above
+        AUX_FUNCTION_MAX =   308,
     };
     typedef enum AUX_FUNC aux_func_t;
 
@@ -318,6 +326,10 @@ protected:
     void do_aux_function_avoid_adsb(const AuxSwitchPos ch_flag);
     void do_aux_function_avoid_proximity(const AuxSwitchPos ch_flag);
     void do_aux_function_camera_trigger(const AuxSwitchPos ch_flag);
+    bool do_aux_function_record_video(const AuxSwitchPos ch_flag);
+    bool do_aux_function_camera_zoom(const AuxSwitchPos ch_flag);
+    bool do_aux_function_camera_manual_focus(const AuxSwitchPos ch_flag);
+    bool do_aux_function_camera_auto_focus(const AuxSwitchPos ch_flag);
     void do_aux_function_runcam_control(const AuxSwitchPos ch_flag);
     void do_aux_function_runcam_osd_control(const AuxSwitchPos ch_flag);
     void do_aux_function_fence(const AuxSwitchPos ch_flag);
@@ -577,6 +589,11 @@ public:
     void calibrating(bool b) { gcs_is_calibrating = b; }
     bool calibrating() { return gcs_is_calibrating; }
 
+#if AP_SCRIPTING_ENABLED
+    // get last aux cached value for scripting. Returns false if never set, otherwise 0,1,2
+    bool get_aux_cached(RC_Channel::aux_func_t aux_fn, uint8_t &pos);
+#endif
+    
 protected:
 
     enum class Option {
@@ -618,6 +635,15 @@ private:
 
     // true if GCS is performing a RC calibration
     bool gcs_is_calibrating;
+
+#if AP_SCRIPTING_ENABLED
+    // bitmask of last aux function value, 2 bits per function
+    // value 0 means never set, otherwise level+1
+    HAL_Semaphore aux_cache_sem;
+    Bitmask<unsigned(RC_Channel::AUX_FUNC::AUX_FUNCTION_MAX)*2> aux_cached;
+
+    void set_aux_cached(RC_Channel::aux_func_t aux_fn, RC_Channel::AuxSwitchPos pos);
+#endif
 };
 
 RC_Channels &rc();

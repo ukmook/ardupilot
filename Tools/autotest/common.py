@@ -3398,6 +3398,22 @@ class AutoTest(ABC):
     def get_mission_count(self):
         return self.get_parameter("MIS_TOTAL")
 
+    def run_auxfunc(self,
+                    function,
+                    level,
+                    want_result=mavutil.mavlink.MAV_RESULT_ACCEPTED):
+        self.run_cmd(
+            mavutil.mavlink.MAV_CMD_DO_AUX_FUNCTION,
+            function,  # p1
+            level,  # p2
+            0,  # p3
+            0,  # p4
+            0,  # p5
+            0,  # p6
+            0,  # p7
+            want_result=want_result
+        )
+
     def assert_mission_count(self, expected):
         count = self.get_mission_count()
         if count != expected:
@@ -7643,6 +7659,11 @@ Also, ignores heartbeats not from our target system'''
                                     condition='MISSION_ITEM_INT.mission_type==%u' % mission_type)
             if m is None:
                 raise NotAchievedException("Did not receive MISSION_ITEM_INT")
+            if m.target_system != self.mav.source_system:
+                raise NotAchievedException("Wrong target system (want=%u got=%u)" %
+                                           (self.mav.source_system, m.target_system))
+            if m.target_component != self.mav.source_component:
+                raise NotAchievedException("Wrong target component")
             self.progress("Got (%s)" % str(m))
             if m.mission_type != mission_type:
                 raise NotAchievedException("Received waypoint of wrong type")

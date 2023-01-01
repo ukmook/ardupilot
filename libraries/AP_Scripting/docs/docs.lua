@@ -67,6 +67,117 @@ i2c = {}
 ---@return AP_HAL__I2CDevice_ud
 function i2c:get_device(bus, address, clock, smbus) end
 
+-- EFI state structure
+---@class EFI_State_ud
+local EFI_State_ud = {}
+
+---@return EFI_State_ud
+function EFI_State() end
+
+-- set field
+---@param value Cylinder_Status_ud
+function EFI_State_ud:cylinder_status(value) end
+
+-- set field
+---@param value integer
+function EFI_State_ud:ecu_index(value) end
+
+-- set field
+---@param value integer
+function EFI_State_ud:throttle_position_percent(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:estimated_consumed_fuel_volume_cm3(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:fuel_consumption_rate_cm3pm(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:fuel_pressure(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:oil_temperature(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:oil_pressure(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:coolant_temperature(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:intake_manifold_temperature(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:intake_manifold_pressure_kpa(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:atmospheric_pressure_kpa(value) end
+
+-- set field
+---@param value number
+function EFI_State_ud:spark_dwell_time_ms(value) end
+
+-- set field
+---@param value uint32_t_ud
+function EFI_State_ud:engine_speed_rpm(value) end
+
+-- set field
+---@param value integer
+function EFI_State_ud:engine_load_percent(value) end
+
+-- set field
+---@param value boolean
+function EFI_State_ud:general_error(value) end
+
+-- set field
+---@param value uint32_t_ud
+function EFI_State_ud:last_updated_ms(value) end
+
+
+-- EFI Cylinder_Status structure
+---@class Cylinder_Status_ud
+local Cylinder_Status_ud = {}
+
+---@return Cylinder_Status_ud
+function Cylinder_Status() end
+
+-- set field
+---@param value number
+function Cylinder_Status_ud:lambda_coefficient(value) end
+
+-- set field
+---@param value number
+function Cylinder_Status_ud:exhaust_gas_temperature(value) end
+
+-- set field
+---@param value number
+function Cylinder_Status_ud:cylinder_head_temperature(value) end
+
+-- set field
+---@param value number
+function Cylinder_Status_ud:injection_time_ms(value) end
+
+-- set field
+---@param value number
+function Cylinder_Status_ud:ignition_timing_deg(value) end
+
+-- desc
+---@class efi
+efi = {}
+
+-- EFI handle scripting update
+---@param efi_state EFI_State_ud
+function efi:handle_scripting(efi_state) end
+
 
 -- CAN bus interaction
 ---@class CAN
@@ -626,10 +737,12 @@ local AP_HAL__I2CDevice_ud = {}
 ---@param address integer
 function AP_HAL__I2CDevice_ud:set_address(address) end
 
--- desc
+-- If no read length is provided a single register will be read and returned.
+-- If read length is provided a table of register values are returned.
 ---@param register_num integer
----@return integer|nil
-function AP_HAL__I2CDevice_ud:read_registers(register_num) end
+---@param read_length? integer
+---@return integer|table|nil
+function AP_HAL__I2CDevice_ud:read_registers(register_num, read_length) end
 
 -- desc
 ---@param register_num integer
@@ -1183,6 +1296,11 @@ function rc:get_channel(chan_num) end
 ---@return boolean
 function rc:has_valid_input() end
 
+-- return cached level of aux function
+---@param aux_fn integer
+---@return integer|nil
+function rc:get_aux_cached(aux_fn) end
+
 -- desc
 ---@param aux_fun integer
 ---@param ch_flag integer
@@ -1535,6 +1653,11 @@ function relay:toggle(instance) end
 ---@param instance integer
 ---@return boolean
 function relay:enabled(instance) end
+
+-- return state of a relay
+---@param instance integer
+---@return uint8_t
+function relay:get(instance) end
 
 -- desc
 ---@param instance integer
