@@ -43,6 +43,7 @@
 #include <AP_VisualOdom/AP_VisualOdom.h>
 #include <AP_Parachute/AP_Parachute.h>
 #include <AP_OSD/AP_OSD.h>
+#include <AP_Relay/AP_Relay.h>
 #include <RC_Channel/RC_Channel.h>
 #include <AP_Button/AP_Button.h>
 #include <AP_FETtecOneWire/AP_FETtecOneWire.h>
@@ -549,12 +550,12 @@ bool AP_Arming::gps_checks(bool report)
     if ((checks_to_perform & ARMING_CHECK_ALL) || (checks_to_perform & ARMING_CHECK_GPS)) {
 
         // Any failure messages from GPS backends
-            char failure_msg[50] = {};
-            if (!AP::gps().backends_healthy(failure_msg, ARRAY_SIZE(failure_msg))) {
-                if (failure_msg[0] != '\0') {
-                    check_failed(ARMING_CHECK_GPS, report, "%s", failure_msg);
-                }
-                return false;
+        char failure_msg[50] = {};
+        if (!AP::gps().backends_healthy(failure_msg, ARRAY_SIZE(failure_msg))) {
+            if (failure_msg[0] != '\0') {
+                check_failed(ARMING_CHECK_GPS, report, "%s", failure_msg);
+            }
+            return false;
         }
 
         for (uint8_t i = 0; i < gps.num_sensors(); i++) {
@@ -585,7 +586,7 @@ bool AP_Arming::gps_checks(bool report)
         }
 
         if (!AP::ahrs().home_is_set()) {
-            check_failed(ARMING_CHECK_GPS, report, "GPS: waiting for home");
+            check_failed(ARMING_CHECK_GPS, report, "AHRS: waiting for home");
             return false;
         }
 
@@ -602,13 +603,15 @@ bool AP_Arming::gps_checks(bool report)
         }
 
         // check AHRS and GPS are within 10m of each other
-        const Location gps_loc = gps.location();
-        Location ahrs_loc;
-        if (AP::ahrs().get_location(ahrs_loc)) {
-            const float distance = gps_loc.get_distance(ahrs_loc);
-            if (distance > AP_ARMING_AHRS_GPS_ERROR_MAX) {
-                check_failed(ARMING_CHECK_GPS, report, "GPS and AHRS differ by %4.1fm", (double)distance);
-                return false;
+        if (gps.num_sensors() > 0) {
+            const Location gps_loc = gps.location();
+            Location ahrs_loc;
+            if (AP::ahrs().get_location(ahrs_loc)) {
+                const float distance = gps_loc.get_distance(ahrs_loc);
+                if (distance > AP_ARMING_AHRS_GPS_ERROR_MAX) {
+                    check_failed(ARMING_CHECK_GPS, report, "GPS and AHRS differ by %4.1fm", (double)distance);
+                    return false;
+                }
             }
         }
     }
@@ -787,15 +790,6 @@ bool AP_Arming::mission_checks(bool report)
             check_failed(ARMING_CHECK_MISSION, report, "No mission library present");
             return false;
         }
-#if HAL_RALLY_ENABLED
-        AP_Rally *rally = AP::rally();
-        if (rally == nullptr) {
-            check_failed(ARMING_CHECK_MISSION, report, "No rally library present");
-            return false;
-        }
-#else
-        check_failed(ARMING_CHECK_MISSION, report, "No rally library present");
-#endif
 
         const struct MisItemTable {
           MIS_ITEM_CHECK check;
@@ -817,8 +811,13 @@ bool AP_Arming::mission_checks(bool report)
                 }
             }
         }
-#if HAL_RALLY_ENABLED
         if (_required_mission_items & MIS_ITEM_CHECK_RALLY) {
+#if HAL_RALLY_ENABLED
+            AP_Rally *rally = AP::rally();
+            if (rally == nullptr) {
+                check_failed(ARMING_CHECK_MISSION, report, "No rally library present");
+                return false;
+            }
             Location ahrs_loc;
             if (!AP::ahrs().get_location(ahrs_loc)) {
                 check_failed(ARMING_CHECK_MISSION, report, "Can't check rally without position");
@@ -829,8 +828,11 @@ bool AP_Arming::mission_checks(bool report)
                 check_failed(ARMING_CHECK_MISSION, report, "No sufficently close rally point located");
                 return false;
             }
-          }
+#else
+            check_failed(ARMING_CHECK_MISSION, report, "No rally library present");
+            return false;
 #endif
+        }
     }
 
     return true;
