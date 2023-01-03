@@ -35,16 +35,11 @@ APJ_BOARD_ID 7058
 
 define HAL_CAN_POOL_SIZE 6000
 
-# LEDs
-PA15 LED OUTPUT HIGH
-
-# debugger support
-PA13 JTMS-SWDIO SWD
-PA14 JTCK-SWCLK SWD
+# LEDs (No led)
 
 define DMA_RESERVE_SIZE 2048
 
-#---------------- SERIAL -----------------------------
+#---------------- Ports -----------------------------
 
 # order of UARTs
 #            ---------------------------------------
@@ -56,13 +51,20 @@ SERIAL_ORDER EMPTY USART1 EMPTY USART2
 STDOUT_SERIAL SD1
 STDOUT_BAUDRATE 57600
 
-# USART1 SPARE PORT
+# USART1 SPARE PORT (rangefinder)
 PA9 USART1_TX USART1
 PA10 USART1_RX USART1
 
 # USART2 GPS
 PA2 USART2_TX USART2
 PA3 USART2_RX USART2
+
+# debugger support
+PA13 JTMS-SWDIO SWD
+PA14 JTCK-SWCLK SWD
+
+PA11 CAN1_RX CAN1
+PA12 CAN1_TX CAN1
 
 #-------------------------------------------------------
 
@@ -76,14 +78,51 @@ define HAL_PERIPH_ENABLE_BARO
 define HAL_PERIPH_ENABLE_RANGEFINDER
 define RANGEFINDER_MAX_INSTANCES 1
 
-define HAL_PERIPH_ENABLE_RC_OUT
-define HAL_PERIPH_ENABLE_NOTIFY
 define HAL_HAVE_SAFETY_SWITCH 0
 
-# --------PWMS -----------
+# do direct neopixel LED output to enable on
+# startup
+define HAL_PERIPH_NEOPIXEL_CHAN_WITHOUT_NOTIFY 0
+define HAL_PERIPH_NEOPIXEL_COUNT_WITHOUT_NOTIFY 2
 
+# Enable buzzer PAM
+define HAL_PERIPH_ENABLE_BUZZER_WITHOUT_NOTIFY 1
+
+
+#---------------- I2C -----------------------------
+
+# only one I2C bus in normal config
+PA15 I2C1_SCL I2C1
+PB7 I2C1_SDA I2C1
+
+define HAL_USE_I2C TRUE
+define STM32_I2C_USE_I2C1 TRUE
+
+define HAL_I2C_CLEAR_ON_TIMEOUT 0
+
+define HAL_I2C_INTERNAL_MASK 0
+
+# only one I2C bus
+I2C_ORDER I2C1
+
+# also probe all types of external I2C compasses
+define HAL_PROBE_EXTERNAL_I2C_COMPASSES
+
+#------------------- SENSORS -----------------------------
+
+# one baro
+BARO DPS310 I2C:0:0x76
+
+# one COMPASS
+COMPASS LIS3MDL I2C:0:0x1E false ROTATION_NONE
+
+# --------PWM -----------
+
+PA1 TIM2_CH2 TIM2 PWM(1) # WS2812
 PA8 TIM1_CH1 TIM1 GPIO(77) ALARM
-PA1 TIM2_CH2 TIM2 PWM(4) GPIO(120) # WS2812
+
+
+# ----------------------------------------------------------
 
 define HAL_USE_ADC FALSE
 define STM32_ADC_USE_ADC1 FALSE
@@ -92,9 +131,6 @@ define STM32_ADC_USE_ADC1 FALSE
 define PORT_INT_REQUIRED_STACK 64
 
 define HAL_DISABLE_LOOP_DELAY
-
-PA11 CAN1_RX CAN1
-PA12 CAN1_TX CAN1
 
 define HAL_NO_MONITOR_THREAD
 
