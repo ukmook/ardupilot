@@ -49,6 +49,7 @@
 #include <AP_RPM/AP_RPM.h>
 #include <AP_Mount/AP_Mount.h>
 #include <AP_OpenDroneID/AP_OpenDroneID.h>
+#include <AP_SerialManager/AP_SerialManager.h>
 
 #if HAL_MAX_CAN_PROTOCOL_DRIVERS
   #include <AP_CANManager/AP_CANManager.h>
@@ -264,8 +265,9 @@ bool AP_Arming::barometer_checks(bool report)
 #endif
     if ((checks_to_perform & ARMING_CHECK_ALL) ||
         (checks_to_perform & ARMING_CHECK_BARO)) {
-        if (!AP::baro().all_healthy()) {
-            check_failed(ARMING_CHECK_BARO, report, "Barometer not healthy");
+        char buffer[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1] {};
+        if (!AP::baro().arming_checks(sizeof(buffer), buffer)) {
+            check_failed(ARMING_CHECK_BARO, report, "Baro: %s", buffer);
             return false;
         }
     }
@@ -543,12 +545,12 @@ bool AP_Arming::gps_checks(bool report)
     if ((checks_to_perform & ARMING_CHECK_ALL) || (checks_to_perform & ARMING_CHECK_GPS)) {
 
         // Any failure messages from GPS backends
-            char failure_msg[50] = {};
-            if (!AP::gps().backends_healthy(failure_msg, ARRAY_SIZE(failure_msg))) {
-                if (failure_msg[0] != '\0') {
-                    check_failed(ARMING_CHECK_GPS, report, "%s", failure_msg);
-                }
-                return false;
+        char failure_msg[50] = {};
+        if (!AP::gps().backends_healthy(failure_msg, ARRAY_SIZE(failure_msg))) {
+            if (failure_msg[0] != '\0') {
+                check_failed(ARMING_CHECK_GPS, report, "%s", failure_msg);
+            }
+            return false;
         }
 
         for (uint8_t i = 0; i < gps.num_sensors(); i++) {
@@ -579,7 +581,7 @@ bool AP_Arming::gps_checks(bool report)
         }
 
         if (!AP::ahrs().home_is_set()) {
-            check_failed(ARMING_CHECK_GPS, report, "GPS: waiting for home");
+            check_failed(ARMING_CHECK_GPS, report, "AHRS: waiting for home");
             return false;
         }
 
@@ -596,13 +598,15 @@ bool AP_Arming::gps_checks(bool report)
         }
 
         // check AHRS and GPS are within 10m of each other
-        const Location gps_loc = gps.location();
-        Location ahrs_loc;
-        if (AP::ahrs().get_location(ahrs_loc)) {
-            const float distance = gps_loc.get_distance(ahrs_loc);
-            if (distance > AP_ARMING_AHRS_GPS_ERROR_MAX) {
-                check_failed(ARMING_CHECK_GPS, report, "GPS and AHRS differ by %4.1fm", (double)distance);
-                return false;
+        if (gps.num_sensors() > 0) {
+            const Location gps_loc = gps.location();
+            Location ahrs_loc;
+            if (AP::ahrs().get_location(ahrs_loc)) {
+                const float distance = gps_loc.get_distance(ahrs_loc);
+                if (distance > AP_ARMING_AHRS_GPS_ERROR_MAX) {
+                    check_failed(ARMING_CHECK_GPS, report, "GPS and AHRS differ by %4.1fm", (double)distance);
+                    return false;
+                }
             }
         }
     }
@@ -1406,6 +1410,16 @@ bool AP_Arming::opendroneid_checks(bool display_failure)
     return true;
 }
 
+//Check for multiple RC in serial protocols
+bool AP_Arming::serial_protocol_checks(bool display_failure)
+{
+    if (AP::serialmanager().have_serial(AP_SerialManager::SerialProtocol_RCIN, 1)) {
+       check_failed(display_failure, "Multiple SERIAL ports configured for RC input");
+       return false;
+    }
+    return true;
+}
+
 bool AP_Arming::pre_arm_checks(bool report)
 {
 #if !APM_BUILD_COPTER_OR_HELI
@@ -1444,7 +1458,8 @@ bool AP_Arming::pre_arm_checks(bool report)
         &  aux_auth_checks(report)
         &  disarm_switch_checks(report)
         &  fence_checks(report)
-        &  opendroneid_checks(report);
+        &  opendroneid_checks(report)
+        &  serial_protocol_checks(report);
 }
 
 bool AP_Arming::arm_checks(AP_Arming::Method method)
@@ -1502,6 +1517,7 @@ bool AP_Arming::mandatory_checks(bool report)
     ret &= opendroneid_checks(report);
 #endif
     ret &= rc_in_calibration_check(report);
+    ret &= serial_protocol_checks(report);
     return ret;
 }
 

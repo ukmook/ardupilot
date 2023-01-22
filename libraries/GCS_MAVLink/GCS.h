@@ -27,6 +27,7 @@
 #include <AP_OpenDroneID/AP_OpenDroneID.h>
 #include <AP_Mount/AP_Mount.h>
 #include <AC_Fence/AC_Fence.h>
+#include <AP_Airspeed/AP_Airspeed_config.h>
 
 #include "ap_message.h"
 
@@ -889,7 +890,6 @@ private:
 
     struct ftp_state {
         ObjectBuffer<pending_ftp> *requests;
-        ObjectBuffer<pending_ftp> *replies;
 
         // session specific info, currently only support a single session over all links
         int fd = -1;
@@ -906,7 +906,7 @@ private:
 
     bool ftp_init(void);
     void handle_file_transfer_protocol(const mavlink_message_t &msg);
-    void send_ftp_replies(void);
+    bool send_ftp_reply(const pending_ftp &reply);
     void ftp_worker(void);
     void ftp_push_replies(pending_ftp &reply);
 
