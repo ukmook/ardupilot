@@ -21,31 +21,16 @@
  *
  */
 
-#include <AP_HAL/AP_HAL_Boards.h>
+#include "AP_AHRS_config.h"
+
 #include <AP_HAL/Semaphores.h>
-
-#ifndef HAL_NAVEKF2_AVAILABLE
-// only default to EK2 enabled on boards with over 1M flash
-#define HAL_NAVEKF2_AVAILABLE (BOARD_FLASH_SIZE>1024)
-#endif
-
-#ifndef HAL_NAVEKF3_AVAILABLE
-#define HAL_NAVEKF3_AVAILABLE 1
-#endif
-
-#ifndef AP_AHRS_SIM_ENABLED
-#define AP_AHRS_SIM_ENABLED AP_SIM_ENABLED
-#endif
-
-#if AP_AHRS_SIM_ENABLED
-#include <SITL/SITL.h>
-#endif
 
 #include <AP_NavEKF2/AP_NavEKF2.h>
 #include <AP_NavEKF3/AP_NavEKF3.h>
 #include <AP_NavEKF/AP_Nav_Common.h>              // definitions shared by inertial and ekf nav filters
 
 #include "AP_AHRS_DCM.h"
+#include "AP_AHRS_SIM.h"
 
 // forward declare view class
 class AP_AHRS_View;
@@ -123,7 +108,7 @@ public:
     // wind_estimation_enabled returns true if wind estimation is enabled
     bool get_wind_estimation_enabled() const { return wind_estimation_enabled; }
 
-    // return a wind estimation vector, in m/s
+    // return a wind estimation vector, in m/s; returns 0,0,0 on failure
     Vector3f wind_estimate() const;
 
     // instruct DCM to update its wind estimate:
@@ -756,10 +741,8 @@ private:
     EKFType last_active_ekf_type;
 
 #if AP_AHRS_SIM_ENABLED
-    SITL::SIM *_sitl;
-    uint32_t _last_body_odm_update_ms;
     void update_SITL(void);
-#endif    
+#endif
 
 #if HAL_EXTERNAL_AHRS_ENABLED
     void update_external(void);
@@ -801,6 +784,9 @@ private:
      */
     bool wind_estimation_enabled;
 
+    // return a wind estimation vector, in m/s
+    bool wind_estimate(Vector3f &wind) const WARN_IF_UNUSED;
+
     /*
      * fly_forward is set by the vehicles to indicate the vehicle
      * should generally be moving in the direction of its heading.
@@ -817,6 +803,14 @@ private:
      */
     AP_AHRS_DCM dcm{_kp_yaw, _kp, gps_gain, beta, _gps_use, _gps_minsats};
     struct AP_AHRS_Backend::Estimates dcm_estimates;
+#if AP_AHRS_SIM_ENABLED
+#if HAL_NAVEKF3_AVAILABLE
+    AP_AHRS_SIM sim{EKF3};
+#else
+    AP_AHRS_SIM sim;
+#endif
+    struct AP_AHRS_Backend::Estimates sim_estimates;
+#endif
 
     /*
      * copy results from a backend over AP_AHRS canonical results.

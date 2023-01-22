@@ -2419,6 +2419,7 @@ class AutoTestCopter(AutoTest):
         self.reboot_sitl()
 
         # add a listener that verifies rangefinder innovations look good
+        global alt
         alt = None
 
         def verify_innov(mav, m):
@@ -2427,6 +2428,8 @@ class AutoTestCopter(AutoTest):
                 alt = m.relative_alt * 0.001  # mm -> m
                 return
             if m.get_type() != 'EKF_STATUS_REPORT':
+                return
+            if alt is None:
                 return
             if alt > 1 and alt < 8:  # 8 is very low, but it takes a long time to start to use the rangefinder again
                 zero_variance_wanted = False
@@ -2455,6 +2458,37 @@ class AutoTestCopter(AutoTest):
 
         self.change_mode('LAND')
         self.wait_disarmed()
+
+        self.context_pop()
+
+        self.reboot_sitl()
+
+    def TerrainDBPreArm(self):
+        '''test that pre-arm checks are working corrctly for terrain database'''
+        self.context_push()
+
+        self.progress("# Load msission with terrain alt")
+        # load the waypoint
+        num_wp = self.load_mission("terrain_wp.txt", strict=False)
+        if not num_wp:
+            raise NotAchievedException("load terrain_wp failed")
+
+        self.set_analog_rangefinder_parameters()
+        self.set_parameters({
+            "WPNAV_RFND_USE": 1,
+            "TERRAIN_ENABLE": 1,
+        })
+        self.reboot_sitl()
+        self.wait_ready_to_arm()
+
+        # make sure we can still arm with valid rangefinder and terrain db disabled
+        self.set_parameter("TERRAIN_ENABLE", 0)
+        self.wait_ready_to_arm()
+        self.progress("# Vehicle armed with terrain db disabled")
+
+        # make sure we can't arm with terrain db enabled and no rangefinder in us
+        self.set_parameter("WPNAV_RFND_USE", 0)
+        self.assert_prearm_failure("terrain disabled")
 
         self.context_pop()
 
@@ -5510,6 +5544,55 @@ class AutoTestCopter(AutoTest):
                 break
             freqs.append(m.PkAvg)
         return numpy.median(numpy.asarray(freqs)), len(freqs)
+
+    def ThrottleGainBoost(self):
+        """Use PD and Angle P boost for anti-gravity."""
+        # basic gyro sample rate test
+        self.progress("Flying with Throttle-Gain Boost")
+        self.context_push()
+
+        ex = None
+        try:
+            # magic tridge EKF type that dramatically speeds up the test
+            self.set_parameters({
+                "AHRS_EKF_TYPE": 10,
+                "EK2_ENABLE": 0,
+                "EK3_ENABLE": 0,
+                "INS_FAST_SAMPLE": 0,
+                "LOG_BITMASK": 959,
+                "LOG_DISARMED": 0,
+                "ATC_THR_G_BOOST": 5.0,
+            })
+
+            self.reboot_sitl()
+
+            self.takeoff(10, mode="ALT_HOLD")
+            hover_time = 15
+            self.progress("Hovering for %u seconds" % hover_time)
+            tstart = self.get_sim_time()
+            while self.get_sim_time_cached() < tstart + hover_time:
+                self.mav.recv_match(type='ATTITUDE', blocking=True)
+
+            # fly fast forrest!
+            self.set_rc(3, 1900)
+            self.set_rc(2, 1200)
+            self.wait_groundspeed(5, 1000)
+            self.set_rc(3, 1500)
+            self.set_rc(2, 1500)
+
+            self.do_RTL()
+
+        except Exception as e:
+            self.print_exception_caught(e)
+            ex = e
+
+        self.context_pop()
+
+        # must reboot after we move away from EKF type 10 to EKF2 or EKF3
+        self.reboot_sitl()
+
+        if ex is not None:
+            raise ex
 
     def test_gyro_fft_harmonic(self, averaging):
         """Use dynamic harmonic notch to control motor noise with harmonic matching of the first harmonic."""
@@ -9140,6 +9223,7 @@ class AutoTestCopter(AutoTest):
             "SERVO6_FUNCTION": 34,
             "SERVO7_FUNCTION": 35,
             "SERVO8_FUNCTION": 36,
+            "SIM_ESC_TELEM": 0,
         })
         self.customise_SITL_commandline(["--uartF=sim:fetteconewireesc"])
         self.FETtecESC_safety_switch()
@@ -9522,7 +9606,9 @@ class AutoTestCopter(AutoTest):
             self.WatchAlts,
             self.GuidedEKFLaneChange,
             self.Sprayer,
-            self.EK3_RNG_USE_HGT
+            self.EK3_RNG_USE_HGT,
+            self.TerrainDBPreArm,
+            self.ThrottleGainBoost,
         ])
         return ret
 

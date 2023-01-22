@@ -167,6 +167,12 @@ bool AP_Arming_Copter::board_voltage_checks(bool display_failure)
 // all data loaded
 bool AP_Arming_Copter::terrain_database_required() const
 {
+
+    if (copter.wp_nav->get_terrain_source() == AC_WPNav::TerrainSource::TERRAIN_FROM_RANGEFINDER) {
+        // primary terrain source is from rangefinder, allow arming without terrain database
+        return false;
+    }
+
     if (copter.wp_nav->get_terrain_source() == AC_WPNav::TerrainSource::TERRAIN_FROM_TERRAINDATABASE &&
         copter.mode_rtl.get_alt_type() == ModeRTL::RTLAltType::RTL_ALTTYPE_TERRAIN) {
         return true;
@@ -624,7 +630,7 @@ bool AP_Arming_Copter::arm_checks(AP_Arming::Method method)
         const char *rc_item = "Throttle";
         #endif
         // check throttle is not too high - skips checks if arming from GCS in Guided
-        if (!(method == AP_Arming::Method::MAVLINK && (copter.flightmode->mode_number() == Mode::Number::GUIDED || copter.flightmode->mode_number() == Mode::Number::GUIDED_NOGPS))) {
+        if (!(method == AP_Arming::Method::MAVLINK && (copter.flightmode->mode_number() == Mode::Number::GUIDED || copter.flightmode->mode_number() == Mode::Number::GUIDED_NOGPS || copter.flightmode->mode_number() == Mode::Number::AUTO))) {
             // above top of deadband is too always high
             if (copter.get_pilot_desired_climb_rate(copter.channel_throttle->get_control_in()) > 0.0f) {
                 check_failed(ARMING_CHECK_RC, true, "%s too high", rc_item);

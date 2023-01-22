@@ -1,8 +1,11 @@
 #include <assert.h>
 
+#include "AP_InertialSensor.h"
+
+#if AP_INERTIALSENSOR_ENABLED
+
 #include <AP_Common/AP_Common.h>
 #include <AP_HAL/AP_HAL.h>
-#if AP_INERTIALSENSOR_ENABLED
 #include <AP_HAL/I2CDevice.h>
 #include <AP_HAL/SPIDevice.h>
 #include <AP_HAL/DSP.h>
@@ -19,7 +22,6 @@
 #endif
 #include <GCS_MAVLink/GCS.h>
 
-#include "AP_InertialSensor.h"
 #include "AP_InertialSensor_BMI160.h"
 #include "AP_InertialSensor_BMI270.h"
 #include "AP_InertialSensor_Backend.h"
@@ -548,9 +550,11 @@ const AP_Param::GroupInfo AP_InertialSensor::var_info[] = {
 
     // index 37 was NOTCH_
 
+#if AP_INERTIALSENSOR_BATCHSAMPLER_ENABLED
     // @Group: LOG_
     // @Path: ../AP_InertialSensor/BatchSampler.cpp
     AP_SUBGROUPINFO(batchsampler, "LOG_",  39, AP_InertialSensor, AP_InertialSensor::BatchSampler),
+#endif
 
     // @Param: ENABLE_MASK
     // @DisplayName: IMU enable mask
@@ -887,8 +891,10 @@ AP_InertialSensor::init(uint16_t loop_rate)
     _last_sample_usec = 0;
     _have_sample = false;
 
+#if AP_INERTIALSENSOR_BATCHSAMPLER_ENABLED
     // initialise IMU batch logging
     batchsampler.init();
+#endif
 
 #if HAL_WITH_DSP
     AP_GyroFFT* fft = AP::fft();
@@ -1228,7 +1234,9 @@ AP_InertialSensor::detect_backends(void)
 // ins_periodic: 57500 events, 0 overruns, 208754us elapsed, 3us avg, min 1us max 218us 40.662us rms
 void AP_InertialSensor::periodic()
 {
+#if AP_INERTIALSENSOR_BATCHSAMPLER_ENABLED
     batchsampler.periodic();
+#endif
 }
 
 

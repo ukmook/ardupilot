@@ -1,5 +1,7 @@
 #pragma once
 
+#include "AP_InertialSensor_config.h"
+
 // Gyro and Accelerometer calibration criteria
 #define AP_INERTIAL_SENSOR_ACCEL_TOT_MAX_OFFSET_CHANGE  4.0f
 #define AP_INERTIAL_SENSOR_ACCEL_MAX_OFFSET             250.0f
@@ -328,6 +330,7 @@ public:
         IMU_SENSOR_TYPE_GYRO = 1,
     };
 
+#if AP_INERTIALSENSOR_BATCHSAMPLER_ENABLED
     class BatchSampler {
     public:
         BatchSampler(const AP_InertialSensor &imu) :
@@ -413,6 +416,7 @@ public:
         const AP_InertialSensor &_imu;
     };
     BatchSampler batchsampler{*this};
+#endif
 
 #if HAL_EXTERNAL_AHRS_ENABLED
     // handle external AHRS data

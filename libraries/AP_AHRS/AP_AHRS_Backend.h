@@ -117,7 +117,7 @@ public:
     virtual bool get_hagl(float &height) const WARN_IF_UNUSED { return false; }
 
     // return a wind estimation vector, in m/s
-    virtual Vector3f wind_estimate(void) const = 0;
+    virtual bool wind_estimate(Vector3f &wind) const = 0;
 
     // return an airspeed estimate if available. return true
     // if we have an estimate
@@ -139,12 +139,6 @@ public:
     virtual bool airspeed_vector_true(Vector3f &vec) const WARN_IF_UNUSED {
         return false;
     }
-
-    // return a synthetic airspeed estimate (one derived from sensors
-    // other than an actual airspeed sensor), if available. return
-    // true if we have a synthetic airspeed.  ret will not be modified
-    // on failure.
-    virtual bool synthetic_airspeed(float &ret) const WARN_IF_UNUSED = 0;
 
     // get apparent to true airspeed ratio
     float get_EAS2TAS(void) const;
@@ -325,4 +319,5 @@ public:
     // this is not related to terrain following
     virtual void set_terrain_hgt_stable(bool stable) {}
 
+    virtual void get_control_limits(float &ekfGndSpdLimit, float &controlScaleXY) const = 0;
 };

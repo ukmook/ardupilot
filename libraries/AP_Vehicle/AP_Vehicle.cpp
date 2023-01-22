@@ -145,6 +145,9 @@ void AP_Vehicle::setup()
     check_firmware_print();
 #endif
 
+    // validate the static parameter table, then load persistent
+    // values from storage:
+    AP_Param::check_var_info();
     load_parameters();
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
@@ -277,6 +280,10 @@ void AP_Vehicle::setup()
         esc_noise[i].set_cutoff_frequency(2);
     }
 #endif
+
+    // invalidate count in case an enable parameter changed during
+    // initialisation
+    AP_Param::invalidate_count();
 
     gcs().send_text(MAV_SEVERITY_INFO, "ArduPilot Ready");
 }

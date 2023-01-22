@@ -38,6 +38,7 @@
 // macros used to determine if a message will fit in the space available.
 
 void gcs_out_of_space_to_send(mavlink_channel_t chan);
+bool check_payload_size(mavlink_channel_t chan, uint16_t max_payload_len);
 
 // important note: despite the names, these messages do NOT check to
 // see if the payload will fit in the buffer.  They check to see if
@@ -61,7 +62,7 @@ void gcs_out_of_space_to_send(mavlink_channel_t chan);
 // immediately return false from the current function if there is no
 // room to fit the mavlink message with id id on the current object's
 // output
-#define CHECK_PAYLOAD_SIZE(id) if (txspace() < unsigned(packet_overhead()+MAVLINK_MSG_ID_ ## id ## _LEN)) { gcs_out_of_space_to_send(chan); return false; }
+#define CHECK_PAYLOAD_SIZE(id) if (!check_payload_size(MAVLINK_MSG_ID_ ## id ## _LEN)) return false
 
 // CHECK_PAYLOAD_SIZE2 - macro which inserts code which will
 // immediately return false from the current function if there is no
@@ -186,6 +187,8 @@ public:
         // a single loop):
         return MIN(_port->txspace(), 8192U);
     }
+
+    bool check_payload_size(uint16_t max_payload_len);
 
     // this is called when we discover we'd like to send something but can't:
     void out_of_space_to_send() { out_of_space_to_send_count++; }
@@ -903,7 +906,6 @@ private:
 
     struct ftp_state {
         ObjectBuffer<pending_ftp> *requests;
-        ObjectBuffer<pending_ftp> *replies;
 
         // session specific info, currently only support a single session over all links
         int fd = -1;
@@ -920,7 +922,7 @@ private:
 
     bool ftp_init(void);
     void handle_file_transfer_protocol(const mavlink_message_t &msg);
-    void send_ftp_replies(void);
+    bool send_ftp_reply(const pending_ftp &reply);
     void ftp_worker(void);
     void ftp_push_replies(pending_ftp &reply);
 

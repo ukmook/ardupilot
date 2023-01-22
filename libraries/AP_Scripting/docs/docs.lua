@@ -1304,6 +1304,11 @@ function mission:get_current_nav_index() end
 ---@return integer
 function mission:state() end
 
+-- desc
+---@param cmd integer
+---@return boolean
+function mission:cmd_has_location(cmd)end
+
 
 -- desc
 ---@class param
@@ -2361,3 +2366,19 @@ function follow:get_last_update_ms() end
 -- desc
 ---@return boolean
 function follow:have_target() end
+
+-- desc
+---@class scripting
+scripting = {}
+
+-- desc
+function scripting:restart_all() end
+
+-- desc
+--@param directoryname
+--@return list of filenames
+function dirlist(directoryname) end
+
+--desc
+--@param filename
+function remove(filename) end

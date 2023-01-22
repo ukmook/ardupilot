@@ -123,7 +123,7 @@ void AC_PID::slew_limit(float smax)
 //  target and error are filtered
 //  the derivative is then calculated and filtered
 //  the integral is then updated based on the setting of the limit flag
-float AC_PID::update_all(float target, float measurement, float dt, bool limit)
+float AC_PID::update_all(float target, float measurement, float dt, bool limit, float boost)
 {
     // don't process inf or NaN
     if (!isfinite(target) || !isfinite(measurement)) {
@@ -160,6 +160,10 @@ float AC_PID::update_all(float target, float measurement, float dt, bool limit)
 
     P_out *= _pid_info.Dmod;
     D_out *= _pid_info.Dmod;
+
+    // boost output if required
+    P_out *= boost;
+    D_out *= boost;
 
     _pid_info.target = _target;
     _pid_info.actual = measurement;
@@ -264,7 +268,6 @@ float AC_PID::get_ff()
 void AC_PID::reset_I()
 {
     _integrator = 0.0;
-    _pid_info.I = 0.0;
 }
 
 void AC_PID::load_gains()
@@ -332,13 +335,11 @@ void AC_PID::set_integrator(float target, float measurement, float integrator)
 void AC_PID::set_integrator(float error, float integrator)
 {
     _integrator = constrain_float(integrator - error * _kp, -_kimax, _kimax);
-    _pid_info.I = _integrator;
 }
 
 void AC_PID::set_integrator(float integrator)
 {
     _integrator = constrain_float(integrator, -_kimax, _kimax);
-    _pid_info.I = _integrator;
 }
 
 void AC_PID::relax_integrator(float integrator, float dt, float time_constant)
@@ -347,5 +348,4 @@ void AC_PID::relax_integrator(float integrator, float dt, float time_constant)
     if (is_positive(dt)) {
         _integrator = _integrator + (integrator - _integrator) * (dt / (dt + time_constant));
     }
-    _pid_info.I = _integrator;
 }

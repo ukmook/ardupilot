@@ -691,7 +691,7 @@ private:
     bool get_wp_distance_m(float &distance) const override;
     bool get_wp_bearing_deg(float &bearing) const override;
     bool get_wp_crosstrack_error_m(float &xtrack_error) const override;
-    bool get_rate_bf_targets(Vector3f& rate_bf_targets) const override;
+    bool get_rate_ef_targets(Vector3f& rate_ef_targets) const override;
 
     // Attitude.cpp
     void update_throttle_hover();
@@ -879,7 +879,6 @@ private:
 #endif
     void convert_lgr_parameters(void);
     void convert_tradheli_parameters(void) const;
-    void convert_fs_options_params(void) const;
 
     // precision_landing.cpp
     void init_precland();

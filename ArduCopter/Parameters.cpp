@@ -20,14 +20,6 @@
  *
  */
 
-#define GSCALAR(v, name, def) { copter.g.v.vtype, name, Parameters::k_param_ ## v, &copter.g.v, {def_value : def} }
-#define ASCALAR(v, name, def) { copter.aparm.v.vtype, name, Parameters::k_param_ ## v, (const void *)&copter.aparm.v, {def_value : def} }
-#define GGROUP(v, name, class) { AP_PARAM_GROUP, name, Parameters::k_param_ ## v, &copter.g.v, {group_info : class::var_info} }
-#define GOBJECT(v, name, class) { AP_PARAM_GROUP, name, Parameters::k_param_ ## v, (const void *)&copter.v, {group_info : class::var_info} }
-#define GOBJECTPTR(v, name, class) { AP_PARAM_GROUP, name, Parameters::k_param_ ## v, (const void *)&copter.v, {group_info : class::var_info}, AP_PARAM_FLAG_POINTER }
-#define GOBJECTVARPTR(v, name, var_info_ptr) { AP_PARAM_GROUP, name, Parameters::k_param_ ## v, (const void *)&copter.v, {group_info_ptr : var_info_ptr}, AP_PARAM_FLAG_POINTER | AP_PARAM_FLAG_INFO_POINTER }
-#define GOBJECTN(v, pname, name, class) { AP_PARAM_GROUP, name, Parameters::k_param_ ## pname, (const void *)&copter.v, {group_info : class::var_info} }
-
 #if FRAME_CONFIG == HELI_FRAME
 // 6 here is AP_Motors::MOTOR_FRAME_HELI
 #define DEFAULT_FRAME_CLASS 6
@@ -725,7 +717,7 @@ const AP_Param::Info Copter::var_info[] = {
 
     // @Group:
     // @Path: ../libraries/AP_Vehicle/AP_Vehicle.cpp
-    { AP_PARAM_GROUP, "", Parameters::k_param_vehicle, (const void *)&copter, {group_info : AP_Vehicle::var_info} },
+    PARAM_VEHICLE_INFO,
 
     AP_VAREND
 };
@@ -1316,11 +1308,6 @@ const AP_Param::ConversionInfo conversion_table[] = {
 
 void Copter::load_parameters(void)
 {
-    if (!AP_Param::check_var_info()) {
-        DEV_PRINTF("Bad var table\n");
-        AP_HAL::panic("Bad var table");
-    }
-
     hal.util->set_soft_armed(false);
 
     if (!g.format_version.load() ||
@@ -1347,10 +1334,6 @@ void Copter::load_parameters(void)
     // PARAMETER_CONVERSION - Added: Nov-2018
     convert_lgr_parameters();
 #endif
-
-    // convert fs_options parameters
-    // PARAMETER_CONVERSION - Added: Nov-2019
-    convert_fs_options_params();
 
 #if MODE_RTL_ENABLED == ENABLED
     // PARAMETER_CONVERSION - Added: Sep-2021
@@ -1880,35 +1863,3 @@ void Copter::convert_tradheli_parameters(void) const
 
 }
 #endif
-
-void Copter::convert_fs_options_params(void) const
-{
-    // PARAMETER_CONVERSION - Added: Nov-2019
-
-    // If FS_OPTIONS has already been configured and we don't change it.
-    enum ap_var_type ptype;
-    AP_Int32 *fs_opt = (AP_Int32 *)AP_Param::find("FS_OPTIONS", &ptype);
-
-    if (fs_opt == nullptr || fs_opt->configured() || ptype != AP_PARAM_INT32) {
-        return;
-    }
-
-    // Variable to capture the new FS_OPTIONS setting
-    int32_t fs_options_converted = (int32_t)FailsafeOption::GCS_CONTINUE_IF_PILOT_CONTROL;
-
-    // If FS_THR_ENABLED is 2 (continue mission), change to RTL and add continue mission to the new FS_OPTIONS parameter
-    if (g.failsafe_throttle == FS_THR_ENABLED_CONTINUE_MISSION) {
-        fs_options_converted |= int32_t(FailsafeOption::RC_CONTINUE_IF_AUTO);
-        AP_Param::set_and_save_by_name("FS_THR_ENABLE", FS_THR_ENABLED_ALWAYS_RTL);
-    }
-
-    // If FS_GCS_ENABLED is 2 (continue mission), change to RTL and add continue mission to the new FS_OPTIONS parameter
-    if (g.failsafe_gcs == FS_GCS_ENABLED_CONTINUE_MISSION) {
-        fs_options_converted |= int32_t(FailsafeOption::GCS_CONTINUE_IF_AUTO);
-        AP_Param::set_and_save_by_name("FS_GCS_ENABLE", FS_GCS_ENABLED_ALWAYS_RTL);
-    }
-
-    // Write the new value to FS_OPTIONS
-    // AP_Param::set_and_save_by_name("FS_OPTIONS", fs_options_converted);
-    fs_opt->set_and_save(fs_options_converted);
-}
