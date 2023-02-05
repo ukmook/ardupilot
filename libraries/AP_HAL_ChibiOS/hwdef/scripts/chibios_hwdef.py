@@ -1113,6 +1113,7 @@ def write_mcu_config(f):
 #define HAL_USE_EMPTY_STORAGE 1
 #ifndef HAL_STORAGE_SIZE
 #define HAL_STORAGE_SIZE 16384
+#define DISABLE_WATCHDOG 1
 #endif
 ''')
         else:
@@ -1149,6 +1150,7 @@ def write_mcu_config(f):
 #define HAL_USE_RTC FALSE
 #define DISABLE_SERIAL_ESC_COMM TRUE
 #define CH_CFG_USE_DYNAMIC FALSE
+#define DISABLE_WATCHDOG 1
 ''')
         if not env_vars['EXT_FLASH_SIZE_MB'] and not args.signed_fw:
             f.write('''
@@ -2989,6 +2991,11 @@ def add_apperiph_defaults(f):
 #ifndef AP_FENCE_ENABLED
 #define AP_FENCE_ENABLED 0
 #endif
+
+// periph does not save temperature cals etc:
+#ifndef HAL_ENABLE_SAVE_PERSISTENT_PARAMS
+#define HAL_ENABLE_SAVE_PERSISTENT_PARAMS 0
+#endif
 ''')
 
 def add_bootloader_defaults(f):
@@ -3018,6 +3025,15 @@ def add_bootloader_defaults(f):
 #endif
 
 #define HAL_MAX_CAN_PROTOCOL_DRIVERS 0
+
+// bootloader does not save temperature cals etc:
+#ifndef HAL_ENABLE_SAVE_PERSISTENT_PARAMS
+#define HAL_ENABLE_SAVE_PERSISTENT_PARAMS 0
+#endif
+
+#ifndef HAL_GCS_ENABLED
+#define HAL_GCS_ENABLED 0
+#endif
 ''')
 
 def add_iomcu_firmware_defaults(f):

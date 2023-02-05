@@ -705,13 +705,13 @@ private:
 
     // 3D Location vectors
     // Location structure defined in AP_Common
-    const struct Location &home = ahrs.get_home();
+    const Location &home = ahrs.get_home();
 
     // The location of the previous waypoint.  Used for track following and altitude ramp calculations
     Location prev_WP_loc {};
 
     // The plane's current location
-    struct Location current_loc {};
+    Location current_loc {};
 
     // The location of the current/active waypoint.  Used for altitude ramp, track following and loiter calculations.
     Location next_WP_loc {};
@@ -889,7 +889,7 @@ private:
     void load_parameters(void) override;
 
     // commands_logic.cpp
-    void set_next_WP(const struct Location &loc);
+    void set_next_WP(const Location &loc);
     void do_RTL(int32_t alt);
     bool verify_takeoff();
     bool verify_loiter_unlim(const AP_Mission::Mission_Command &cmd);
@@ -968,8 +968,10 @@ private:
     void autotune_restore(void);
     void autotune_enable(bool enable);
     bool fly_inverted(void);
+    bool mode_allows_autotuning(void);
     uint8_t get_mode() const override { return (uint8_t)control_mode->mode_number(); }
     Mode *mode_from_mode_num(const enum Mode::Number num);
+    bool autotuning;
 
     // events.cpp
     void failsafe_short_on_event(enum failsafe_state fstype, ModeReason reason);

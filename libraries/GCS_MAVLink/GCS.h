@@ -232,6 +232,9 @@ public:
     virtual uint8_t sysid_my_gcs() const = 0;
     virtual bool sysid_enforce() const { return false; }
 
+    // NOTE: param_name here must point to a 16+1 byte buffer - so do
+    // NOT try to pass in a static-char-* unless it does have that
+    // length!
     void send_parameter_value(const char *param_name,
                               ap_var_type param_type,
                               float param_value);
@@ -990,7 +993,7 @@ private:
     
     // we cache the current location and send it even if the AHRS has
     // no idea where we are:
-    struct Location global_position_current_loc;
+    Location global_position_current_loc;
 
     uint8_t last_tx_seq;
     uint16_t send_packet_count;
