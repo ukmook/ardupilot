@@ -34,12 +34,16 @@ class ExtractFeatures(object):
         # FEATURE_NAME will have substitutions made from the match.
         # the substitutions will be upper-cased
         self.features = [
+            ('AP_ADVANCEDFAILSAFE_ENABLED', 'AP::advancedfailsafe',),
             ('AP_AIRSPEED_ENABLED', 'AP_Airspeed::AP_Airspeed',),
             ('AP_AIRSPEED_{type}_ENABLED', r'AP_Airspeed_(?P<type>.*)::init',),
 
             ('HAL_ADSB_ENABLED', 'AP_ADSB::AP_ADSB',),
             ('HAL_ADSB_{type}_ENABLED', r'AP_ADSB_(?P<type>.*)::update',),
             ('HAL_ADSB_UCP_ENABLED', 'AP_ADSB_uAvionix_UCP::update',),
+
+            ('AP_COMPASS_{type}_ENABLED', r'AP_Compass_(?P<type>.*)::read\b',),
+
             ('AP_AIS_ENABLED', 'AP_AIS::AP_AIS',),
 
             ('HAL_EFI_ENABLED', 'AP_EFI::AP_EFI',),
@@ -104,6 +108,7 @@ class ExtractFeatures(object):
             ('AP_ICENGINE_ENABLED', 'AP_ICEngine::AP_ICEngine',),
             ('HAL_EFI_ENABLED', 'AP_RPM_EFI::AP_RPM_EFI',),
             ('HAL_EFI_NWPWU_ENABLED', r'AP_EFI_NWPMU::update\b',),
+            ('HAL_EFI_CURRAWONG_ECU_ENABLED', r'AP_EFI_Currawong_ECU::update\b',),
             ('HAL_GENERATOR_ENABLED', 'AP_Generator::AP_Generator',),
             ('AP_GENERATOR_{type}_ENABLED', r'AP_Generator_(?P<type>.*)::update',),
 
@@ -112,6 +117,7 @@ class ExtractFeatures(object):
             ('OSD_PARAM_ENABLED', 'AP_OSD_ParamScreen::AP_OSD_ParamScreen',),
             ('HAL_OSD_SIDEBAR_ENABLE', 'AP_OSD_Screen::draw_sidebars',),
 
+            ('AP_VIDEOTX_ENABLED', 'AP_VideoTX::AP_VideoTX',),
             ('AP_SMARTAUDIO_ENABLED', 'AP_SmartAudio::AP_SmartAudio',),
             ('AP_TRAMP_ENABLED', 'AP_Tramp::AP_Tramp',),
 
@@ -291,7 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('firmware_file', help='firmware binary')
     parser.add_argument('-nm', type=str, default="arm-none-eabi-nm", help='nm binary to use.')
     args = parser.parse_args()
-    print(args.firmware_file, args.nm)
+    # print(args.firmware_file, args.nm)
 
     ef = ExtractFeatures(args.firmware_file, args.nm)
     ef.run()

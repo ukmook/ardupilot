@@ -299,6 +299,7 @@
 #else
     # define MODE_AUTOROTATE_ENABLED DISABLED
 #endif
+
 //////////////////////////////////////////////////////////////////////////////
 
 // Beacon support - support for local positioning systems

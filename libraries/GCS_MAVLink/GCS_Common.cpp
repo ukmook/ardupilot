@@ -2708,11 +2708,11 @@ MAV_RESULT GCS::set_message_interval(uint8_t port_num, uint32_t msg_id, int32_t 
 {
     uint8_t channel = get_channel_from_port_number(port_num);
 
-    if ((channel < MAVLINK_COMM_NUM_BUFFERS) && (chan(channel) != nullptr)) {
-        return chan(channel)->set_message_interval(msg_id, interval_us);
+    GCS_MAVLINK *link = chan(channel);
+    if (link == nullptr) {
+        return MAV_RESULT_FAILED;
     }
-
-    return MAV_RESULT_FAILED;
+    return link->set_message_interval(msg_id, interval_us);
 }
 
 uint8_t GCS::get_channel_from_port_number(uint8_t port_num)
@@ -3048,6 +3048,7 @@ MAV_RESULT GCS_MAVLINK::handle_preflight_reboot(const mavlink_command_long_t &pa
  */
 MAV_RESULT GCS_MAVLINK::handle_flight_termination(const mavlink_command_long_t &packet)
 {
+#if AP_ADVANCEDFAILSAFE_ENABLED
     AP_AdvancedFailsafe *failsafe = AP::advancedfailsafe();
     if (failsafe == nullptr) {
         return MAV_RESULT_UNSUPPORTED;
@@ -3059,6 +3060,9 @@ MAV_RESULT GCS_MAVLINK::handle_flight_termination(const mavlink_command_long_t &
         return MAV_RESULT_ACCEPTED;
     }
     return MAV_RESULT_FAILED;
+#else
+    return MAV_RESULT_UNSUPPORTED;
+#endif
 }
 
 /*
@@ -6249,11 +6253,13 @@ uint64_t GCS_MAVLINK::capabilities() const
         ret |= MAV_PROTOCOL_CAPABILITY_MAVLINK2;
     }
 
+#if AP_ADVANCEDFAILSAFE_ENABLED
     AP_AdvancedFailsafe *failsafe = AP::advancedfailsafe();
     if (failsafe != nullptr && failsafe->enabled()) {
         // Copter and Sub may also set this bit as they can always terminate
         ret |= MAV_PROTOCOL_CAPABILITY_FLIGHT_TERMINATION;
     }
+#endif
 
 #if HAL_RALLY_ENABLED
     if (AP::rally()) {

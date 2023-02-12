@@ -7,6 +7,7 @@
 
 #if HAL_GCS_ENABLED
 
+#include <AP_AdvancedFailsafe/AP_AdvancedFailsafe_config.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Common/AP_Common.h>
 #include "GCS_MAVLink.h"
@@ -92,16 +93,14 @@ bool check_payload_size(mavlink_channel_t chan, uint16_t max_payload_len);
 // then call its own specific methods on
 #define GCS_MAVLINK_CHAN_METHOD_DEFINITIONS(subclass_name) \
     subclass_name *chan(const uint8_t ofs) override {                   \
-        if (ofs > _num_gcs) {                                           \
-            INTERNAL_ERROR(AP_InternalError::error_t::gcs_offset);      \
+        if (ofs >= _num_gcs) {                                           \
             return nullptr;                                             \
         }                                                               \
         return (subclass_name *)_chan[ofs];                        \
     }                                                                   \
                                                                         \
     const subclass_name *chan(const uint8_t ofs) const override { \
-        if (ofs > _num_gcs) {                                           \
-            INTERNAL_ERROR(AP_InternalError::error_t::gcs_offset);      \
+        if (ofs >= _num_gcs) {                                           \
             return nullptr;                                             \
         }                                                               \
         return (subclass_name *)_chan[ofs];                        \
@@ -533,6 +532,7 @@ protected:
     MAV_RESULT handle_command_request_message(const mavlink_command_long_t &packet);
 
     MAV_RESULT handle_rc_bind(const mavlink_command_long_t &packet);
+
     virtual MAV_RESULT handle_flight_termination(const mavlink_command_long_t &packet);
 
     void handle_send_autopilot_version(const mavlink_message_t &msg);
@@ -1151,7 +1151,13 @@ public:
     bool install_alternative_protocol(mavlink_channel_t chan, GCS_MAVLINK::protocol_handler_fn_t handler);
 
     // get the VFR_HUD throttle
-    int16_t get_hud_throttle(void) const { return num_gcs()>0?chan(0)->vfr_hud_throttle():0; }
+    int16_t get_hud_throttle(void) const {
+        const GCS_MAVLINK *link = chan(0);
+        if (link == nullptr) {
+            return 0;
+        }
+        return link->vfr_hud_throttle();
+    }
 
     // update uart pass-thru
     void update_passthru();

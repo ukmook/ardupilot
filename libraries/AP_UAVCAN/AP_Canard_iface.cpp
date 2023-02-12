@@ -269,10 +269,15 @@ void CanardInterface::process(uint32_t duration_ms) {
     }
 #else
     const uint64_t deadline = AP_HAL::native_micros64() + duration_ms*1000;
-    while (AP_HAL::native_micros64() < deadline) {
+    while (true) {
         processRx();
         processTx();
-        _event_handle.wait(deadline - AP_HAL::native_micros64());
+        uint64_t now = AP_HAL::native_micros64();
+        if (now < deadline) {
+            _event_handle.wait(deadline - now);
+        } else {
+            break;
+        }
     }
 #endif
 }

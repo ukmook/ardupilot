@@ -884,7 +884,7 @@ void AP_UAVCAN::handle_ESC_status(const CanardRxTransfer& transfer, const uavcan
         .current = msg.current,
     };
 
-    update_rpm(esc_index, msg.rpm);
+    update_rpm(esc_index, msg.rpm, msg.error_count);
     update_telem_data(esc_index, t,
         (isnanf(msg.current) ? 0 : AP_ESC_Telem_Backend::TelemetryType::CURRENT)
             | (isnanf(msg.voltage) ? 0 : AP_ESC_Telem_Backend::TelemetryType::VOLTAGE)

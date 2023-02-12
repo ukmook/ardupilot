@@ -131,15 +131,16 @@ void GCS::enable_high_latency_connections(bool enabled)
  */
 bool GCS::install_alternative_protocol(mavlink_channel_t c, GCS_MAVLINK::protocol_handler_fn_t handler)
 {
-    if (c >= num_gcs()) {
+    GCS_MAVLINK *link = chan(c);
+    if (link == nullptr) {
         return false;
     }
-    if (chan(c)->alternative.handler && handler) {
+    if (link->alternative.handler && handler) {
         // already have one installed - we may need to add support for
         // multiple alternative handlers
         return false;
     }
-    chan(c)->alternative.handler = handler;
+    link->alternative.handler = handler;
     return true;
 }
 
@@ -354,7 +355,11 @@ bool GCS::out_of_time() const
 
 void gcs_out_of_space_to_send(mavlink_channel_t chan)
 {
-    gcs().chan(chan)->out_of_space_to_send();
+    GCS_MAVLINK *link = gcs().chan(chan);
+    if (link == nullptr) {
+        return;
+    }
+    link->out_of_space_to_send();
 }
 
 /*
