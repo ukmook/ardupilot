@@ -60,8 +60,8 @@ PA1 VDD_5V_SENS ADC1 SCALE(2)
 # define default battery setup
 define HAL_BATT_VOLT_PIN 11
 define HAL_BATT_CURR_PIN 10
-define HAL_BATT_VOLT_SCALE 9.3
-define HAL_BATT_CURR_SCALE 10.0
+define HAL_BATT_VOLT_SCALE 9.24
+define HAL_BATT_CURR_SCALE 43.75
 
 
 # ---------CAN (J3)-----------
