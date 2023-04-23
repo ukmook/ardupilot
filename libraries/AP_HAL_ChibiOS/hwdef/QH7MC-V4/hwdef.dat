@@ -1,22 +1,22 @@
 # hw definition file for processing by chibios_hwdef.py
-# for H743 bootloader QMWV7
+# for H743 bootloader QH7MC
 
 # ------- CPU --------------
 
 # MCU class and specific type
 MCU STM32H7xx STM32H743xx
 
-# ------------ Clocks ----------
+# ------- Clocks ----------
 
 # crystal frequency
 OSCILLATOR_HZ 16000000
 
-# ------ ID ----------------
+# ------- ID ----------------
 
 # board ID for firmware load
 APJ_BOARD_ID 7020
 
-# ---------- Storage -----------
+# ------- Storage -----------
 
 FLASH_SIZE_KB 2048
 env OPTIMIZE -Os
@@ -30,12 +30,12 @@ define HAL_STORAGE_SIZE 16384
 # H743 has 16 pages of 128k each
 # define STORAGE_FLASH_PAGE 14
 
-# --------- Board Timer ---------
+# ------- Board Timer ---------
 
 define STM32_ST_USE_TIMER 5
 define CH_CFG_ST_RESOLUTION 32
 
-# ---------I2C-------------------
+# ------- I2C -------------------
 
 I2C_ORDER I2C4
 
@@ -44,12 +44,12 @@ PB6 I2C4_SCL I2C4
 PB7 I2C4_SDA I2C4
 
 
-# -----# RCIN-----------
+# ------- RCIN-----------
 
-# --------BUZZ-----------
+# ------- BUZZ-----------
 
 
-# ---------ADC---------------
+# ------- ADC ---------------
 
 # analog pins for V1
 PC1 BATT_VOLTAGE_SENS ADC1 SCALE(1)
@@ -64,11 +64,11 @@ define HAL_BATT_VOLT_SCALE 9.24
 define HAL_BATT_CURR_SCALE 43.75
 
 
-# ---------CAN (J3)-----------
+# -------- CAN (J3) -----------
 PD0 CAN1_RX CAN1
 PD1 CAN1_TX CAN1
 
-# ---------UARTS-----------
+# -------- UARTS -----------
 
 # order of UARTs (and USB)
 # Order      USB   sr1    sr2    sr3    sr4  sr5   sr6
@@ -97,7 +97,7 @@ PB8 UART4_RX UART4
 PE8 UART7_TX UART7
 PE7 UART7_RX UART7
 
-# --------SPI-------------
+# -------- SPI -------------
 
 # SPI6
 # spi bus for BMI088 and BARO
@@ -109,7 +109,7 @@ PD3 BMI088_GYRO_CS CS
 PE0 BMI088_ACCEL_CS CS
 PA15 DPS310_CS CS
 
-# --------PWM------------
+# -------- PWM ------------
 
 # PWM out pins 1 - 4 blheli telem capable via usart3
 PB0 TIM3_CH3 TIM3 PWM(1) GPIO(50) BIDIR
@@ -119,11 +119,11 @@ PE11 TIM1_CH2 TIM1 PWM(4) GPIO(53) BIDIR
 
 define BOARD_PWM_COUNT_DEFAULT 4
 
-# --------VTX Switch------------
+# -------- VTX Switch ------------
 
 # Removed for V4
 
-# --------LED-----------
+# -------- LED -----------
 define HAL_HAVE_PIXRACER_LED
 
 define HAL_GPIO_LED_ON  0
@@ -138,7 +138,7 @@ define HAL_GPIO_A_LED_PIN 0
 define HAL_GPIO_B_LED_PIN 1
 define HAL_GPIO_C_LED_PIN 2
 
-# --------SENSORS-----------
+# -------- SENSORS -----------
 
 # One IMU BMI088
 IMU BMI088 SPI:bmi088_a SPI:bmi088_g ROTATION_PITCH_180
@@ -146,7 +146,7 @@ IMU BMI088 SPI:bmi088_a SPI:bmi088_g ROTATION_PITCH_180
 # One Baro BMP280 or DPS310
 BARO DPS310 SPI:dps310
 
-# No Mag
+# No Onboard Mag
 
 define HAL_PROBE_EXTERNAL_I2C_COMPASSES
 define HAL_I2C_INTERNAL_MASK 0
@@ -158,7 +158,7 @@ SPIDEV bmi088_a    SPI1 DEVID4  BMI088_ACCEL_CS     MODE3 10*MHZ 10*MHZ
 SPIDEV dps310      SPI1 DEVID3  DPS310_CS           MODE0 20*MHZ 20*MHZ
 
 
-# --------SD CARD-----------
+# -------- SD CARD -----------
 
 # Setup microSD card
 PC8 SDMMC1_D0 SDMMC1
@@ -174,16 +174,16 @@ define HAL_OS_FATFS_IO 1
 define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
 define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
-# -----------DMA PRIORITY---------------
+# -------- DMA PRIORITY ---------------
 
 # DMA_NOSHARE TIM4* USART3_TX USART1_TX USART2_TX SPI4* SPI2*
 
-# -----------DJI OSD---------------
-# -----------wtf.osd---------------
+# -------- DJI OSD ---------------
+# -------- wtf.osd ---------------
 define OSD_ENABLED 1
 define HAL_OSD_TYPE_DEFAULT 5 # wtf.osd
 
-# -----------Debug---------------
+# -------- Debug ---------------
 
 # define CH_DBG_ENABLE_ASSERTS TRUE
 # define CH_DBG_ENABLE_CHECKS TRUE
@@ -195,5 +195,3 @@ define HAL_OSD_TYPE_DEFAULT 5 # wtf.osd
 
 # PA13 JTMS-SWDIO SWD
 # PA14 JTCK-SWCLK SW
-
-# define STM32_PWM_USE_ADVANCED TRUE
