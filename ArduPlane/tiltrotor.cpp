@@ -54,7 +54,7 @@ const AP_Param::GroupInfo Tiltrotor::var_info[] = {
 
     // @Param: YAW_ANGLE
     // @DisplayName: Tilt minimum angle for vectored yaw
-    // @Description: This is the angle of the tilt servos when in VTOL mode and at minimum output. This needs to be set for Q_TILT_TYPE=3 to enable vectored control for yaw of tricopter tilt quadplanes. This is also used to limit the forwards travel of bicopter tilts when in VTOL modes
+    // @Description: This is the angle of the tilt servos when in VTOL mode and at minimum output (fully back). This needs to be set in addition to Q_TILT_TYPE=2, to enable vectored control for yaw in tilt quadplanes. This is also used to limit the forward travel of bicopter tilts(Q_TILT_TYPE=3) when in VTOL modes.
     // @Range: 0 30
     AP_GROUPINFO("YAW_ANGLE", 7, Tiltrotor, tilt_yaw_angle, 0),
 
@@ -167,7 +167,7 @@ float Tiltrotor::tilt_max_change(bool up, bool in_flap_range) const
         if (plane.control_mode == &plane.mode_manual) {
             fast_tilt = true;
         }
-        if (hal.util->get_soft_armed() && !quadplane.in_vtol_mode() && !quadplane.assisted_flight) {
+        if (plane.arming.is_armed_and_safety_off() && !quadplane.in_vtol_mode() && !quadplane.assisted_flight) {
             fast_tilt = true;
         }
         if (fast_tilt) {
@@ -217,12 +217,12 @@ void Tiltrotor::continuous_update(void)
     // the maximum rate of throttle change
     float max_change;
 
-    if (!quadplane.in_vtol_mode() && (!hal.util->get_soft_armed() || !quadplane.assisted_flight)) {
+    if (!quadplane.in_vtol_mode() && (!plane.arming.is_armed_and_safety_off() || !quadplane.assisted_flight)) {
         // we are in pure fixed wing mode. Move the tiltable motors all the way forward and run them as
         // a forward motor
 
         // option set then if disarmed move to VTOL position to prevent ground strikes, allow tilt forward in manual mode for testing
-        const bool disarmed_tilt_up = !hal.util->get_soft_armed() && (plane.control_mode != &plane.mode_manual) && quadplane.option_is_set(QuadPlane::OPTION::DISARMED_TILT_UP);
+        const bool disarmed_tilt_up = !plane.arming.is_armed_and_safety_off() && (plane.control_mode != &plane.mode_manual) && quadplane.option_is_set(QuadPlane::OPTION::DISARMED_TILT_UP);
         slew(disarmed_tilt_up ? 0.0 : get_forward_flight_tilt());
 
         max_change = tilt_max_change(false);
@@ -235,7 +235,7 @@ void Tiltrotor::continuous_update(void)
         } else {
             current_throttle = new_throttle;
         }
-        if (!hal.util->get_soft_armed()) {
+        if (!plane.arming.is_armed_and_safety_off()) {
             current_throttle = 0;
         } else {
             // prevent motor shutdown
@@ -512,7 +512,7 @@ void Tiltrotor::vectoring(void)
     // Wait TILT_DELAY_MS after disarming to allow props to spin down first.
     constexpr uint32_t TILT_DELAY_MS = 3000;
     uint32_t now = AP_HAL::millis();
-    if (!hal.util->get_soft_armed() && plane.quadplane.option_is_set(QuadPlane::OPTION::DISARMED_TILT)) {
+    if (!plane.arming.is_armed_and_safety_off() && plane.quadplane.option_is_set(QuadPlane::OPTION::DISARMED_TILT)) {
         // this test is subject to wrapping at ~49 days, but the consequences are insignificant
         if ((now - hal.util->get_last_armed_change()) > TILT_DELAY_MS) {
             if (quadplane.in_vtol_mode()) {
@@ -581,7 +581,14 @@ void Tiltrotor::vectoring(void)
         // we need to use the same factor here to keep the same roll
         // gains when tilted as we have when not tilted
         const float avg_roll_factor = 0.5;
-        const float tilt_offset = (throttle_scaler * yaw_out * cos_tilt + avg_roll_factor * roll_out * sin_tilt) * yaw_range;
+        float tilt_scale = throttle_scaler * yaw_out * cos_tilt + avg_roll_factor * roll_out * sin_tilt;
+
+        if (fabsf(tilt_scale) > 1.0) {
+            tilt_scale = constrain_float(tilt_scale, -1.0, 1.0);
+            motors->limit.yaw = true;
+        }
+
+        const float tilt_offset = tilt_scale * yaw_range;
 
         float left_tilt = base_output + tilt_offset;
         float right_tilt = base_output - tilt_offset;

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 ArduPilot automatic test suite.
 
@@ -21,6 +21,7 @@ import sys
 import time
 import traceback
 
+import blimp
 import rover
 import arducopter
 import arduplane
@@ -380,6 +381,7 @@ def find_specific_test_to_run(step):
 
 
 tester_class_map = {
+    "test.Blimp": blimp.AutoTestBlimp,
     "test.Copter": arducopter.AutoTestCopter,
     "test.CopterTests1a": arducopter.AutoTestCopterTests1a, # 8m43s
     "test.CopterTests1b": arducopter.AutoTestCopterTests1b, # 8m5s
@@ -399,7 +401,7 @@ tester_class_map = {
     "test.CAN": arducopter.AutoTestCAN,
 }
 
-suplementary_test_binary_map = {
+supplementary_test_binary_map = {
     "test.CAN": ["sitl_periph_gps.AP_Periph", "sitl_periph_gps.AP_Periph.1"],
 }
 
@@ -415,7 +417,7 @@ def run_specific_test(step, *args, **kwargs):
     global tester
     tester = tester_class(*args, **kwargs)
 
-    print("Got %s" % str(tester))
+    # print("Got %s" % str(tester))
     for a in tester.tests():
         if type(a) != Test:
             a = Test(a)
@@ -444,9 +446,11 @@ def run_step(step):
         "postype_single": opts.postype_single,
         "extra_configure_args": opts.waf_configure_args,
         "coverage": opts.coverage,
-        "sitl_32bit" : opts.sitl_32bit,
+        "force_32bit" : opts.force_32bit,
         "ubsan" : opts.ubsan,
         "ubsan_abort" : opts.ubsan_abort,
+        "num_aux_imus" : opts.num_aux_imus,
+        "dronecan_tests" : opts.dronecan_tests,
     }
 
     if opts.Werror:
@@ -483,6 +487,11 @@ def run_step(step):
         return util.build_replay(board='SITL')
 
     if vehicle_binary is not None:
+        try:
+            binary = binary_path(step, debug=opts.debug)
+            os.unlink(binary)
+        except (FileNotFoundError, ValueError):
+            pass
         if len(vehicle_binary.split(".")) == 1:
             return util.build_SITL(vehicle_binary, **build_opts)
         else:
@@ -497,24 +506,28 @@ def run_step(step):
     if step.startswith("defaults"):
         vehicle = step[9:]
         return get_default_params(vehicle, binary)
+
+    # see if we need any supplementary binaries
     supplementary_binaries = []
-    if step in suplementary_test_binary_map:
-        for supplementary_test_binary in suplementary_test_binary_map[step]:
-            config_name = supplementary_test_binary.split('.')[0]
-            binary_name = supplementary_test_binary.split('.')[1]
-            instance_num = 0
-            if len(supplementary_test_binary.split('.')) >= 3:
-                instance_num = int(supplementary_test_binary.split('.')[2])
-            supplementary_binaries.append([util.reltopdir(os.path.join('build',
-                                                                       config_name,
-                                                                       'bin',
-                                                                       binary_name)),
-                                          '-I {}'.format(instance_num)])
-        # we are running in conjunction with a supplementary app
-        # can't have speedup
-        opts.speedup = 1.0
-    else:
-        supplementary_binaries = []
+    for k in supplementary_test_binary_map.keys():
+        if step.startswith(k):
+            # this test needs to use supplementary binaries
+            for supplementary_test_binary in supplementary_test_binary_map[k]:
+                config_name = supplementary_test_binary.split('.')[0]
+                binary_name = supplementary_test_binary.split('.')[1]
+                instance_num = 0
+                if len(supplementary_test_binary.split('.')) >= 3:
+                    instance_num = int(supplementary_test_binary.split('.')[2])
+                supplementary_binaries.append([util.reltopdir(os.path.join('build',
+                                                                           config_name,
+                                                                           'bin',
+                                                                           binary_name)),
+                                              '-I {}'.format(instance_num)])
+            # we are running in conjunction with a supplementary app
+            # can't have speedup
+            opts.speedup = 1.0
+            break
+
     fly_opts = {
         "viewerip": opts.viewerip,
         "use_map": opts.map,
@@ -529,6 +542,7 @@ def run_step(step):
         "frame": opts.frame,
         "_show_test_timings": opts.show_test_timings,
         "force_ahrs_type": opts.force_ahrs_type,
+        "num_aux_imus" : opts.num_aux_imus,
         "replay": opts.replay,
         "logs_dir": buildlogs_dirpath(),
         "sup_binaries": supplementary_binaries,
@@ -799,7 +813,7 @@ def run_tests(steps):
     return passed
 
 
-vehicle_list = ['Sub', 'Copter', 'Plane', 'Tracker', 'Rover', 'QuadPlane', 'BalanceBot', 'Helicopter', 'Sailboat']
+vehicle_list = ['Sub', 'Copter', 'Plane', 'Tracker', 'Rover', 'QuadPlane', 'BalanceBot', 'Helicopter', 'Sailboat', 'Blimp']
 
 
 def list_subtests():
@@ -810,11 +824,9 @@ def list_subtests():
         subtests = tester.tests()
         sorted_list = []
         for subtest in subtests:
-            if type(subtest) is tuple:
-                (name, description, function) = subtest
-                sorted_list.append([name, description])
-            else:
-                sorted_list.append([subtest.name, subtest.description])
+            if str(type(subtest)) == "<class 'method'>":
+                subtest = Test(subtest)
+            sorted_list.append([subtest.name, subtest.description])
         sorted_list.sort()
 
         print("%s:" % vehicle)
@@ -958,10 +970,10 @@ if __name__ == "__main__":
                            action="store_true",
                            dest="ekf_single",
                            help="force single precision EKF")
-    group_build.add_option("--sitl-32bit",
+    group_build.add_option("--force-32bit",
                            default=False,
                            action='store_true',
-                           dest="sitl_32bit",
+                           dest="force_32bit",
                            help="compile sitl using 32-bit")
     group_build.add_option("", "--ubsan",
                            default=False,
@@ -973,6 +985,16 @@ if __name__ == "__main__":
                            action='store_true',
                            dest="ubsan_abort",
                            help="compile sitl with undefined behaviour sanitiser and abort on error")
+    group_build.add_option("--num-aux-imus",
+                           dest="num_aux_imus",
+                           default=0,
+                           type='int',
+                           help='number of auxiliary IMUs to simulate')
+    group_build.add_option("--enable-dronecan-tests",
+                           default=False,
+                           action='store_true',
+                           dest="dronecan_tests",
+                           help="enable dronecan tests")
     parser.add_option_group(group_build)
 
     group_sim = optparse.OptionGroup(parser, "Simulation options")
@@ -1104,6 +1126,7 @@ if __name__ == "__main__":
 
         'build.Blimp',
         'defaults.Blimp',
+        'test.Blimp',
 
         'build.SITLPeriphGPS',
         'test.CAN',

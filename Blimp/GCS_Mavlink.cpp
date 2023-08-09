@@ -417,9 +417,9 @@ void GCS_MAVLINK_Blimp::send_banner()
     send_text(MAV_SEVERITY_INFO, "Frame: %s", blimp.get_frame_string());
 }
 
-MAV_RESULT GCS_MAVLINK_Blimp::_handle_command_preflight_calibration(const mavlink_command_long_t &packet)
+MAV_RESULT GCS_MAVLINK_Blimp::_handle_command_preflight_calibration(const mavlink_command_long_t &packet, const mavlink_message_t &msg)
 {
-    return GCS_MAVLINK::_handle_command_preflight_calibration(packet);
+    return GCS_MAVLINK::_handle_command_preflight_calibration(packet, msg);
 }
 
 
@@ -469,24 +469,11 @@ MAV_RESULT GCS_MAVLINK_Blimp::handle_command_int_do_reposition(const mavlink_com
 MAV_RESULT GCS_MAVLINK_Blimp::handle_command_int_packet(const mavlink_command_int_t &packet)
 {
     switch (packet.command) {
-    case MAV_CMD_DO_FOLLOW:
-        return MAV_RESULT_UNSUPPORTED;
-
     case MAV_CMD_DO_REPOSITION:
         return handle_command_int_do_reposition(packet);
     default:
         return GCS_MAVLINK::handle_command_int_packet(packet);
     }
-}
-
-MAV_RESULT GCS_MAVLINK_Blimp::handle_command_mount(const mavlink_command_long_t &packet)
-{
-    // if the mount doesn't do pan control then yaw the entire vehicle instead:
-    switch (packet.command) {
-    default:
-        break;
-    }
-    return GCS_MAVLINK::handle_command_mount(packet);
 }
 
 MAV_RESULT GCS_MAVLINK_Blimp::handle_command_long_packet(const mavlink_command_long_t &packet)

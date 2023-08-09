@@ -11,8 +11,10 @@ import sys
 import emit_html
 import emit_rst
 import emit_xml
+import emit_md
 
 import enum_parse
+from enum_parse import EnumDocco
 
 topdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../../')
 topdir = os.path.realpath(topdir)
@@ -22,7 +24,6 @@ re_commentline = re.compile(r"\s*//")
 re_description = re.compile(r"\s*//\s*@Description\s*:\s*(.*)")
 re_url = re.compile(r"\s*//\s*@URL\s*:\s*(.*)")
 re_field = re.compile(r"\s*//\s*@Field\s*:\s*(\w+):\s*(.*)")
-re_fieldbits = re.compile(r"\s*//\s*@FieldBits\s*:\s*(\w+):\s*(.*)")
 re_fieldbits = re.compile(r"\s*//\s*@FieldBits\s*:\s*(\w+):\s*(.*)")
 re_fieldbitmaskenum = re.compile(r"\s*//\s*@FieldBitmaskEnum\s*:\s*(\w+):\s*(.*)")
 re_fieldvalueenum = re.compile(r"\s*//\s*@FieldValueEnum\s*:\s*(\w+):\s*(.*)")
@@ -50,6 +51,7 @@ class LoggerDocco(object):
             emit_html.HTMLEmitter(),
             emit_rst.RSTEmitter(),
             emit_xml.XMLEmitter(),
+            emit_md.MDEmitter(),
         ]
 
     class Docco(object):
@@ -61,6 +63,7 @@ class LoggerDocco(object):
             self.fields = {}
             self.fields_order = []
             self.vehicles = None
+            self.bits_enums = []
 
         def set_description(self, desc):
             self.description = desc
@@ -81,8 +84,16 @@ class LoggerDocco(object):
             self.fields[field]["description"] = description
 
         def set_field_bits(self, field, bits):
+            bits = bits.split(",")
+            count = 0
+            entries = []
+            for bit in bits:
+                entries.append(EnumDocco.EnumEntry(bit, 1<<count, None))
+                count += 1
+            bitmask_name = self.name + field
+            self.bits_enums.append(EnumDocco.Enumeration(bitmask_name, entries))
             self.ensure_field(field)
-            self.fields[field]["bits"] = bits
+            self.fields[field]["bitmaskenum"] = bitmask_name
 
         def set_fieldbitmaskenum(self, field, bits):
             self.ensure_field(field)
@@ -199,6 +210,7 @@ class LoggerDocco(object):
 
     def finalise_docco(self, docco):
         self.doccos.append(docco)
+        self.enumerations += docco.bits_enums
 
 
 if __name__ == '__main__':

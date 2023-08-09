@@ -312,14 +312,16 @@ public:
     AP_AdvancedFailsafe_Rover afs;
 #endif
 
+#if AP_BEACON_ENABLED
     AP_Beacon beacon;
-
-    // Motor library
-    AP_MotorsUGV motors;
+#endif
 
     // wheel encoders
     AP_WheelEncoder wheel_encoder;
     AP_WheelRateControl wheel_rate_control;
+
+    // Motor library
+    AP_MotorsUGV motors;
 
     // steering and throttle controller
     AR_AttitudeControl attitude_control;
@@ -433,6 +435,11 @@ public:
 
     // manual mode steering expo
     AP_Float manual_steering_expo;
+
+    // FS GCS timeout trigger time
+    AP_Float fs_gcs_timeout;
+
+    class ModeCircle mode_circle;
 };
 
 extern const AP_Param::Info var_info[];

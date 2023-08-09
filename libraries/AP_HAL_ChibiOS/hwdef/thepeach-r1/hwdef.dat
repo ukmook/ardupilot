@@ -85,7 +85,7 @@ PA7 SPI1_MOSI SPI1
 # This defines an output pin which will default to output LOW. It is a
 # pin that enables peripheral power on this board.
 
-PA8 VDD_5V_PERIPH_EN OUTPUT LOW
+PA8 nVDD_5V_PERIPH_EN OUTPUT LOW
 
 # This is the pin that senses USB being connected. It is an input pin
 # setup as OPENDRAIN.
@@ -246,10 +246,6 @@ BARO MS56XX SPI:ms5611
 # a #define in the hwdef.h header.
 define HAL_CHIBIOS_ARCH_FMUV3 1
 define BOARD_TYPE_DEFAULT 3
-
-# Nnow some defines for logging and terrain data files.
-define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
-define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
 # We need to tell HAL_ChibiOS/Storage.cpp how much storage is
 # available (in bytes).

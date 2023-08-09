@@ -53,7 +53,7 @@ bool ModeAuto::init(bool ignore_checks)
         // reset flag indicating if pilot has applied roll or pitch inputs during landing
         copter.ap.land_repo_active = false;
 
-#if PRECISION_LANDING == ENABLED
+#if AC_PRECLAND_ENABLED
         // initialise precland state machine
         copter.precland_statemachine.init();
 #endif
@@ -136,7 +136,7 @@ void ModeAuto::run()
 
     case SubMode::NAVGUIDED:
     case SubMode::NAV_SCRIPT_TIME:
-#if NAV_GUIDED == ENABLED || AP_SCRIPTING_ENABLED
+#if AC_NAV_GUIDED == ENABLED || AP_SCRIPTING_ENABLED
         nav_guided_run();
 #endif
         break;
@@ -433,7 +433,7 @@ void ModeAuto::land_start()
 
 // auto_circle_movetoedge_start - initialise waypoint controller to move to edge of a circle with it's center at the specified location
 //  we assume the caller has performed all required GPS_ok checks
-void ModeAuto::circle_movetoedge_start(const Location &circle_center, float radius_m)
+void ModeAuto::circle_movetoedge_start(const Location &circle_center, float radius_m, bool ccw_turn)
 {
     // set circle center
     copter.circle_nav->set_center(circle_center);
@@ -442,6 +442,11 @@ void ModeAuto::circle_movetoedge_start(const Location &circle_center, float radi
     if (!is_zero(radius_m)) {
         copter.circle_nav->set_radius_cm(radius_m * 100.0f);
     }
+
+    // set circle direction by using rate
+    float current_rate = copter.circle_nav->get_rate();
+    current_rate = ccw_turn ? -fabsf(current_rate) : fabsf(current_rate);
+    copter.circle_nav->set_rate(current_rate);
 
     // check our distance from edge of circle
     Vector3f circle_edge_neu;
@@ -487,7 +492,7 @@ void ModeAuto::circle_movetoedge_start(const Location &circle_center, float radi
 void ModeAuto::circle_start()
 {
     // initialise circle controller
-    copter.circle_nav->init(copter.circle_nav->get_center(), copter.circle_nav->center_is_terrain_alt());
+    copter.circle_nav->init(copter.circle_nav->get_center(), copter.circle_nav->center_is_terrain_alt(), copter.circle_nav->get_rate());
 
     if (auto_yaw.mode() != AutoYaw::Mode::ROI) {
         auto_yaw.set_mode(AutoYaw::Mode::CIRCLE);
@@ -497,7 +502,7 @@ void ModeAuto::circle_start()
     set_submode(SubMode::CIRCLE);
 }
 
-#if NAV_GUIDED == ENABLED
+#if AC_NAV_GUIDED == ENABLED
 // auto_nav_guided_start - hand over control to external navigation controller in AUTO mode
 void ModeAuto::nav_guided_start()
 {
@@ -514,7 +519,7 @@ void ModeAuto::nav_guided_start()
     // set submode
     set_submode(SubMode::NAVGUIDED);
 }
-#endif //NAV_GUIDED
+#endif //AC_NAV_GUIDED
 
 bool ModeAuto::is_landing() const
 {
@@ -642,7 +647,7 @@ bool ModeAuto::start_command(const AP_Mission::Mission_Command& cmd)
         do_spline_wp(cmd);
         break;
 
-#if NAV_GUIDED == ENABLED
+#if AC_NAV_GUIDED == ENABLED
     case MAV_CMD_NAV_GUIDED_ENABLE:             // 92  accept navigation commands from external nav computer
         do_nav_guided_enable(cmd);
         break;
@@ -714,13 +719,13 @@ bool ModeAuto::start_command(const AP_Mission::Mission_Command& cmd)
 #endif //AP_FENCE_ENABLED
         break;
 
-#if NAV_GUIDED == ENABLED
+#if AC_NAV_GUIDED == ENABLED
     case MAV_CMD_DO_GUIDED_LIMITS:                      // 220  accept guided mode limits
         do_guided_limits(cmd);
         break;
 #endif
 
-#if WINCH_ENABLED == ENABLED
+#if AP_WINCH_ENABLED
     case MAV_CMD_DO_WINCH:                             // Mission command to control winch
         do_winch(cmd);
         break;
@@ -887,7 +892,7 @@ bool ModeAuto::verify_command(const AP_Mission::Mission_Command& cmd)
         cmd_complete = verify_spline_wp(cmd);
         break;
 
-#if NAV_GUIDED == ENABLED
+#if AC_NAV_GUIDED == ENABLED
     case MAV_CMD_NAV_GUIDED_ENABLE:
         cmd_complete = verify_nav_guided_enable(cmd);
         break;
@@ -1028,7 +1033,7 @@ void ModeAuto::circle_run()
     attitude_control->input_thrust_vector_heading(pos_control->get_thrust_vector(), auto_yaw.get_heading());
 }
 
-#if NAV_GUIDED == ENABLED || AP_SCRIPTING_ENABLED
+#if AC_NAV_GUIDED == ENABLED || AP_SCRIPTING_ENABLED
 // auto_nav_guided_run - allows control by external navigation controller
 //      called by auto_run at 100hz or more
 void ModeAuto::nav_guided_run()
@@ -1036,7 +1041,7 @@ void ModeAuto::nav_guided_run()
     // call regular guided flight mode run function
     copter.mode_guided.run();
 }
-#endif  // NAV_GUIDED || AP_SCRIPTING_ENABLED
+#endif  // AC_NAV_GUIDED || AP_SCRIPTING_ENABLED
 
 // auto_loiter_run - loiter in AUTO flight mode
 //      called by auto_run at 100hz or more
@@ -1631,8 +1636,11 @@ void ModeAuto::do_circle(const AP_Mission::Mission_Command& cmd)
         circle_radius_m *= 10;
     }
 
+    // true if circle should be ccw
+    const bool circle_direction_ccw = cmd.content.location.loiter_ccw;
+
     // move to edge of circle (verify_circle) will ensure we begin circling once we reach the edge
-    circle_movetoedge_start(circle_center, circle_radius_m);
+    circle_movetoedge_start(circle_center, circle_radius_m, circle_direction_ccw);
 }
 
 // do_loiter_time - initiate loitering at a point for a given time period
@@ -1743,7 +1751,7 @@ void ModeAuto::get_spline_from_cmd(const AP_Mission::Mission_Command& cmd, const
     }
 }
 
-#if NAV_GUIDED == ENABLED
+#if AC_NAV_GUIDED == ENABLED
 // do_nav_guided_enable - initiate accepting commands from external nav computer
 void ModeAuto::do_nav_guided_enable(const AP_Mission::Mission_Command& cmd)
 {
@@ -1762,7 +1770,7 @@ void ModeAuto::do_guided_limits(const AP_Mission::Mission_Command& cmd)
         cmd.content.guided_limits.alt_max * 100.0f,    // convert meters to cm
         cmd.content.guided_limits.horiz_max * 100.0f); // convert meters to cm
 }
-#endif  // NAV_GUIDED
+#endif  // AC_NAV_GUIDED
 
 // do_nav_delay - Delay the next navigation command
 void ModeAuto::do_nav_delay(const AP_Mission::Mission_Command& cmd)
@@ -1884,7 +1892,7 @@ void ModeAuto::do_mount_control(const AP_Mission::Mission_Command& cmd)
 {
 #if HAL_MOUNT_ENABLED
     // if vehicle has a camera mount but it doesn't do pan control then yaw the entire vehicle instead
-    if ((copter.camera_mount.get_mount_type() != copter.camera_mount.MountType::Mount_Type_None) &&
+    if ((copter.camera_mount.get_mount_type() != AP_Mount::Type::None) &&
         !copter.camera_mount.has_pan_control()) {
         auto_yaw.set_yaw_angle_rate(cmd.content.mount_control.yaw,0.0f);
     }
@@ -1893,7 +1901,7 @@ void ModeAuto::do_mount_control(const AP_Mission::Mission_Command& cmd)
 #endif
 }
 
-#if WINCH_ENABLED == ENABLED
+#if AP_WINCH_ENABLED
 // control winch based on mission command
 void ModeAuto::do_winch(const AP_Mission::Mission_Command& cmd)
 {
@@ -2180,7 +2188,7 @@ bool ModeAuto::verify_spline_wp(const AP_Mission::Mission_Command& cmd)
     return false;
 }
 
-#if NAV_GUIDED == ENABLED
+#if AC_NAV_GUIDED == ENABLED
 // verify_nav_guided - check if we have breached any limits
 bool ModeAuto::verify_nav_guided_enable(const AP_Mission::Mission_Command& cmd)
 {
@@ -2192,7 +2200,7 @@ bool ModeAuto::verify_nav_guided_enable(const AP_Mission::Mission_Command& cmd)
     // check time and position limits
     return copter.mode_guided.limit_check();
 }
-#endif  // NAV_GUIDED
+#endif  // AC_NAV_GUIDED
 
 // verify_nav_delay - check if we have waited long enough
 bool ModeAuto::verify_nav_delay(const AP_Mission::Mission_Command& cmd)
@@ -2227,8 +2235,8 @@ bool ModeAuto::verify_nav_attitude_time(const AP_Mission::Mission_Command& cmd)
 // pause - Prevent aircraft from progressing along the track
 bool ModeAuto::pause()
 {
-    // do not pause if already paused or not in the WP sub mode or already reached to the destination
-    if(wp_nav->paused() || _mode != SubMode::WP || wp_nav->reached_wp_destination()) {
+    // do not pause if not in the WP sub mode or already reached to the destination
+    if (_mode != SubMode::WP || wp_nav->reached_wp_destination()) {
         return false;
     }
 
@@ -2239,13 +2247,13 @@ bool ModeAuto::pause()
 // resume - Allow aircraft to progress along the track
 bool ModeAuto::resume()
 {
-    // do not resume if not paused before
-    if(!wp_nav->paused()) {
-        return false;
-    }
-
     wp_nav->set_resume();
     return true;
+}
+
+bool ModeAuto::paused() const
+{
+    return wp_nav->paused();
 }
 
 #endif

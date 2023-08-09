@@ -19,7 +19,7 @@
 
 #include "AP_SLCANIface.h"
 
-#if HAL_MAX_CAN_PROTOCOL_DRIVERS
+#if AP_CAN_SLCAN_ENABLED
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Common/AP_Common.h>
 
@@ -658,6 +658,9 @@ bool SLCAN::CANIface::select(bool &read, bool &write, const AP_HAL::CANFrame* co
         return ret;
     }
 
+    // ensure we own the UART. Locking is handled at the CAN interface level
+    _port->begin_locked(0, 0, 0, _serial_lock_key);
+    
     // if under passthrough, we only do send when can_iface also allows it
     if (_port->available_locked(_serial_lock_key) || rx_queue_.available()) {
         // allow for receiving messages over slcan
@@ -721,11 +724,11 @@ int16_t SLCAN::CANIface::receive(AP_HAL::CANFrame& out_frame, uint64_t& rx_time,
         uint32_t num_bytes = _port->available_locked(_serial_lock_key);
         // flush bytes from port
         while (num_bytes--) {
-            int16_t ret = _port->read_locked(_serial_lock_key);
-            if (ret < 0) {
+            uint8_t b;
+            if (_port->read_locked(&b, 1, _serial_lock_key) != 1) {
                 break;
             }
-            addByte(ret);
+            addByte(b);
             if (!rx_queue_.space()) {
                 break;
             }
@@ -770,4 +773,4 @@ void SLCAN::CANIface::reset_params()
 {
     _slcan_ser_port.set_and_save(-1);
 }
-#endif
+#endif  // AP_CAN_SLCAN_ENABLED

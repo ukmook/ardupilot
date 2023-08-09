@@ -2,8 +2,14 @@
 
 #include "AP_Airspeed_config.h"
 
+#if AP_AIRSPEED_ENABLED
+
 #include <AP_Param/AP_Param.h>
 #include <AP_Math/AP_Math.h>
+
+#if AP_AIRSPEED_MSP_ENABLED
+#include <AP_MSP/msp.h>
+#endif
 
 class AP_Airspeed_Backend;
 
@@ -201,7 +207,16 @@ public:
 #if AP_AIRSPEED_MSP_ENABLED
     void handle_msp(const MSP::msp_airspeed_data_message_t &pkt);
 #endif
-    
+
+    enum class CalibrationState {
+        NOT_STARTED,
+        IN_PROGRESS,
+        SUCCESS,
+        FAILED
+    };
+    // get aggregate calibration state for the Airspeed library:
+    CalibrationState get_calibration_state() const;
+
 private:
     static AP_Airspeed *_singleton;
 
@@ -216,6 +231,8 @@ private:
     AP_Float _wind_gate;
 
     AP_Airspeed_Params param[AIRSPEED_MAX_SENSORS];
+
+    CalibrationState calibration_state[AIRSPEED_MAX_SENSORS];
 
     struct airspeed_state {
         float   raw_airspeed;
@@ -317,3 +334,5 @@ private:
 namespace AP {
     AP_Airspeed *airspeed();
 };
+
+#endif  // AP_AIRSPEED_ENABLED
