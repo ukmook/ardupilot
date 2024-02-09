@@ -16,7 +16,7 @@ class Board(object):
         self.name = name
         self.is_ap_periph = False
         self.autobuild_targets = [
-            'Tracker',
+            'AntennaTracker',
             'Blimp',
             'Copter',
             'Heli',
@@ -70,6 +70,7 @@ class BoardList(object):
             Board("bbbmini"),
             Board("blue"),
             Board("pxfmini"),
+            Board("canzero"),
             Board("SITL_x86_64_linux_gnu"),
             Board("SITL_arm_linux_gnueabihf"),
         ]

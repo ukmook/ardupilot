@@ -76,6 +76,9 @@ void AP_Mount_Viewpro::update()
     // send vehicle attitude and position
     send_m_ahrs();
 
+    // change to RC_TARGETING mode if RC input has changed
+    set_rctargeting_on_rcinput_change();
+
     // if tracking is active we do not send new targets to the gimbal
     if (_last_tracking_status == TrackingStatus::SEARCHING || _last_tracking_status == TrackingStatus::TRACKING) {
         return;
@@ -370,6 +373,9 @@ void AP_Mount_Viewpro::process_packet()
 
         // get optical zoom times
         _zoom_times = UINT16_VALUE(_msg_buff[_msg_buff_data_start+39], _msg_buff[_msg_buff_data_start+40]) * 0.1;
+
+        // get laser rangefinder distance
+        _rangefinder_dist_m = UINT16_VALUE(_msg_buff[_msg_buff_data_start+33], _msg_buff[_msg_buff_data_start+34]) * 0.1;
         break;
     }
 
@@ -538,7 +544,7 @@ bool AP_Mount_Viewpro::send_target_angles(float pitch_rad, float yaw_rad, bool y
     }
 
     // convert yaw angle to body-frame
-    float yaw_bf_rad = yaw_is_ef ? wrap_PI(yaw_rad - AP::ahrs().yaw) : yaw_rad;
+    float yaw_bf_rad = yaw_is_ef ? wrap_PI(yaw_rad - AP::ahrs().get_yaw()) : yaw_rad;
 
     // enforce body-frame yaw angle limits.  If beyond limits always use body-frame control
     const float yaw_bf_min = radians(_params.yaw_angle_min);
@@ -665,14 +671,19 @@ bool AP_Mount_Viewpro::send_m_ahrs()
         return false;
     }
 
+#if AP_RTC_ENABLED
     // get date and time
     uint16_t year, ms;
     uint8_t month, day, hour, min, sec;
     if (!AP::rtc().get_date_and_time_utc(year, month, day, hour, min, sec, ms)) {
-        year = month = day = hour = min = sec = 0;
+        year = month = day = hour = min = sec = ms = 0;
     }
-    uint16_t date = ((year-2000) & 0x7f) | (((month+1) & 0x0F) << 7) | ((day & 0x0F) << 11);
+    uint16_t date = ((year-2000) & 0x7f) | (((month+1) & 0x0F) << 7) | ((day & 0x1F) << 11);
     uint64_t second_hundredths = (((hour * 60 * 60) + (min * 60) + sec) * 100) + (ms * 0.1);
+#else
+    const uint16_t date = 0;
+    const uint64_t second_hundredths = 0;
+#endif
 
     // get vehicle velocity in m/s in NED Frame
     Vector3f vel_NED;
@@ -889,7 +900,8 @@ void AP_Mount_Viewpro::send_camera_information(mavlink_channel_t chan) const
         0,                      // lens_id uint8_t
         flags,                  // flags uint32_t (CAMERA_CAP_FLAGS)
         0,                      // cam_definition_version uint16_t
-        cam_definition_uri);    // cam_definition_uri char[140]
+        cam_definition_uri,     // cam_definition_uri char[140]
+        _instance + 1);         // gimbal_device_id uint8_t
 }
 
 // send camera settings message to GCS
@@ -912,6 +924,19 @@ void AP_Mount_Viewpro::send_camera_settings(mavlink_channel_t chan) const
         _recording ? CAMERA_MODE_VIDEO : CAMERA_MODE_IMAGE, // camera mode (0:image, 1:video, 2:image survey)
         zoom_level,         // zoomLevel float, percentage from 0 to 100, NaN if unknown
         NaN);               // focusLevel float, percentage from 0 to 100, NaN if unknown
+}
+
+// get rangefinder distance.  Returns true on success
+bool AP_Mount_Viewpro::get_rangefinder_distance(float& distance_m) const
+{
+    // if not healthy or zero distance return false
+    // healthy() checks attitude timeout which is in same message as rangefinder distance
+    if (!healthy()) {
+        return false;
+    }
+
+    distance_m = _rangefinder_dist_m;
+    return true;
 }
 
 #endif // HAL_MOUNT_VIEWPRO_ENABLED

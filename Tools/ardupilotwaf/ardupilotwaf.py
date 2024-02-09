@@ -115,6 +115,7 @@ COMMON_VEHICLE_DEPENDENT_LIBRARIES = [
     'AP_AIS',
     'AP_OpenDroneID',
     'AP_CheckFirmware',
+    'AP_ExternalControl',
 ]
 
 def get_legacy_defines(sketch_name, bld):
@@ -237,6 +238,7 @@ def ap_get_all_libraries(bld):
             continue
         libraries.append(name)
     libraries.extend(['AP_HAL', 'AP_HAL_Empty'])
+    libraries.append('AP_PiccoloCAN/piccolo_protocol')
     return libraries
 
 @conf

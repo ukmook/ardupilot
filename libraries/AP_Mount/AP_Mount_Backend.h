@@ -67,11 +67,17 @@ public:
     // yaw is in body-frame.
     virtual bool get_attitude_quaternion(Quaternion& att_quat) = 0;
 
+    // get angular velocity of mount. Only available on some backends
+    virtual bool get_angular_velocity(Vector3f& rates) { return false; }
+
+    // returns true if mode is a valid mode, false otherwise:
+    bool valid_mode(MAV_MOUNT_MODE mode) const;
+
     // get mount's mode
     enum MAV_MOUNT_MODE get_mode() const { return _mode; }
 
     // set mount's mode
-    void set_mode(enum MAV_MOUNT_MODE mode) { _mode = mode; }
+    bool set_mode(enum MAV_MOUNT_MODE mode);
 
     // set yaw_lock.  If true, the gimbal's yaw target is maintained in earth-frame meaning it will lock onto an earth-frame heading (e.g. North)
     // If false (aka "follow") the gimbal's yaw is maintained in body-frame meaning it will rotate with the vehicle
@@ -94,17 +100,21 @@ public:
     void set_target_sysid(uint8_t sysid);
 
     // handle do_mount_control command.  Returns MAV_RESULT_ACCEPTED on success
-    MAV_RESULT handle_command_do_mount_control(const mavlink_command_long_t &packet);
+    MAV_RESULT handle_command_do_mount_control(const mavlink_command_int_t &packet);
 
     // handle do_gimbal_manager_configure.  Returns MAV_RESULT_ACCEPTED on success
     // requires original message in order to extract caller's sysid and compid
-    MAV_RESULT handle_command_do_gimbal_manager_configure(const mavlink_command_long_t &packet, const mavlink_message_t &msg);
-    
+    MAV_RESULT handle_command_do_gimbal_manager_configure(const mavlink_command_int_t &packet, const mavlink_message_t &msg);
+
+#if AP_MAVLINK_MSG_MOUNT_CONFIGURE_ENABLED
     // process MOUNT_CONFIGURE messages received from GCS. deprecated.
     void handle_mount_configure(const mavlink_mount_configure_t &msg);
+#endif
 
+#if AP_MAVLINK_MSG_MOUNT_CONTROL_ENABLED
     // process MOUNT_CONTROL messages received from GCS. deprecated.
     void handle_mount_control(const mavlink_mount_control_t &packet);
+#endif
 
     // send a GIMBAL_DEVICE_ATTITUDE_STATUS message to GCS
     void send_gimbal_device_attitude_status(mavlink_channel_t chan);
@@ -178,6 +188,21 @@ public:
     // send camera settings message to GCS
     virtual void send_camera_settings(mavlink_channel_t chan) const {}
 
+    // send camera capture status message to GCS
+    virtual void send_camera_capture_status(mavlink_channel_t chan) const {}
+
+#if AP_MOUNT_POI_TO_LATLONALT_ENABLED
+    // get poi information.  Returns true on success and fills in gimbal attitude, location and poi location
+    bool get_poi(uint8_t instance, Quaternion &quat, Location &loc, Location &poi_loc);
+#endif
+
+    //
+    // rangefinder
+    //
+
+    // get rangefinder distance.  Returns true on success
+    virtual bool get_rangefinder_distance(float& distance_m) const { return false; }
+
 protected:
 
     enum class MountTargetType {
@@ -209,6 +234,15 @@ protected:
 
     // returns true if mavlink heartbeat should be suppressed for this gimbal (only used by Solo gimbal)
     virtual bool suppress_heartbeat() const { return false; }
+
+#if AP_MOUNT_POI_TO_LATLONALT_ENABLED
+    // calculate the Location that the gimbal is pointing at
+    void calculate_poi();
+#endif
+
+    // change to RC_TARGETTING mode if rc inputs have changed by more than the dead zone
+    // should be called on every update
+    void set_rctargeting_on_rcinput_change();
 
     // get pilot input (in the range -1 to +1) received through RC
     void get_rc_input(float& roll_in, float& pitch_in, float& yaw_in) const;
@@ -258,6 +292,17 @@ protected:
         MountTarget rate_rads;      // rate target in rad/s
     } mnt_target;
 
+#if AP_MOUNT_POI_TO_LATLONALT_ENABLED
+    struct {
+        HAL_Semaphore sem;        // semaphore protecting this structure
+        uint32_t poi_request_ms;  // system time POI was last requested
+        uint32_t poi_update_ms;   // system time POI was calculated
+        Location loc;             // gimbal location used for poi calculation
+        Location poi_loc;         // location of the POI
+        Quaternion att_quat;      // attitude quaternion of the gimbal
+    } poi_calculation;
+#endif
+
     Location _roi_target;           // roi target location
     bool _roi_target_set;           // true if the roi target has been set
 
@@ -267,11 +312,22 @@ protected:
 
     uint32_t _last_warning_ms;      // system time of last warning sent to GCS
 
+    // structure holding the last RC inputs
+    struct {
+        int16_t roll_in;
+        int16_t pitch_in;
+        int16_t yaw_in;
+    } last_rc_input;
+
     // structure holding mavlink sysid and compid of controller of this gimbal
     // see MAV_CMD_DO_GIMBAL_MANAGER_CONFIGURE and GIMBAL_MANAGER_STATUS
-    struct {
+    struct mavlink_control_id_t {
         uint8_t sysid;
         uint8_t compid;
+
+        // equality operators
+        bool operator==(const mavlink_control_id_t &rhs) const { return (sysid == rhs.sysid && compid == rhs.compid); }
+        bool operator!=(const mavlink_control_id_t &rhs) const { return !(*this == rhs); }
     } mavlink_control_id;
 };
 

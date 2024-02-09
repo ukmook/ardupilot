@@ -42,7 +42,9 @@ public:
 #if AP_RCPROTOCOL_SBUS_NI_ENABLED
         SBUS_NI    =  3,
 #endif
+#if AP_RCPROTOCOL_DSM_ENABLED
         DSM        =  4,
+#endif
 #if AP_RCPROTOCOL_SUMD_ENABLED
         SUMD       =  5,
 #endif
@@ -66,6 +68,12 @@ public:
 #endif
 #if AP_RCPROTOCOL_FASTSBUS_ENABLED
         FASTSBUS   = 12,
+#endif
+#if AP_RCPROTOCOL_DRONECAN_ENABLED
+        DRONECAN   = 13,
+#endif
+#if AP_RCPROTOCOL_GHST_ENABLED
+        GHST       = 14,
 #endif
         NONE    //last enum always is None
     };
@@ -105,7 +113,9 @@ public:
     // for protocols without strong CRCs we require 3 good frames to lock on
     bool requires_3_frames(enum rcprotocol_t p) {
         switch (p) {
+#if AP_RCPROTOCOL_DSM_ENABLED
         case DSM:
+#endif
 #if AP_RCPROTOCOL_FASTSBUS_ENABLED
         case FASTSBUS:
 #endif
@@ -127,6 +137,9 @@ public:
 #if AP_RCPROTOCOL_CRSF_ENABLED
         case CRSF:
 #endif
+#if AP_RCPROTOCOL_GHST_ENABLED
+        case GHST:
+#endif
             return true;
 #if AP_RCPROTOCOL_IBUS_ENABLED
         case IBUS:
@@ -142,6 +155,9 @@ public:
 #endif
 #if AP_RCPROTOCOL_ST24_ENABLED
         case ST24:
+#endif
+#if AP_RCPROTOCOL_DRONECAN_ENABLED
+        case DRONECAN:
 #endif
         case NONE:
             return false;

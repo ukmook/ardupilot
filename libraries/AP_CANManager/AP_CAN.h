@@ -27,5 +27,8 @@ public:
         Scripting = 10,
         Benewake = 11,
         Scripting2 = 12,
+        TOFSenseP = 13,
+        NanoRadar_NRA24 = 14,
+        MR72 = 15,
     };
 };

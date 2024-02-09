@@ -383,6 +383,8 @@ public:
         // 254,255: reserved
 
         k_param_vehicle = 257, // vehicle common block of parameters
+        k_param_throw_altitude_min,
+        k_param_throw_altitude_max,
 
         // the k_param_* space is 9-bits in size
         // 511: reserved
@@ -463,6 +465,8 @@ public:
 
 #if MODE_THROW_ENABLED == ENABLED
     AP_Enum<ModeThrow::PreThrowMotorState>         throw_motor_start;
+    AP_Int16         throw_altitude_min; // minimum altitude in m above which a throw can be detected
+    AP_Int16         throw_altitude_max; // maximum altitude in m below which a throw can be detected
 #endif
 
     AP_Int16                rc_speed; // speed of fast RC Channels in Hz
@@ -504,11 +508,6 @@ public:
     AP_Button *button_ptr;
 #endif
 
-#if STATS_ENABLED == ENABLED
-    // vehicle statistics
-    AP_Stats stats;
-#endif
-
 #if AP_GRIPPER_ENABLED
     AP_Gripper gripper;
 #endif
@@ -522,8 +521,10 @@ public:
     // ground effect compensation enable/disable
     AP_Int8 gndeffect_comp_enabled;
 
+#if AP_TEMPCALIBRATION_ENABLED
     // temperature calibration handling
     AP_TempCalibration temp_calibration;
+#endif
 
 #if AP_BEACON_ENABLED
     // beacon (non-GPS positioning) library
@@ -589,7 +590,7 @@ public:
     AP_Follow follow;
 #endif
 
-#ifdef USER_PARAMS_ENABLED
+#if USER_PARAMS_ENABLED == ENABLED
     // User custom parameters
     UserParameters user_parameters;
 #endif
@@ -598,10 +599,6 @@ public:
     // we need a pointer to autotune for the G2 table
     void *autotune_ptr;
 #endif
-
-#if AP_SCRIPTING_ENABLED
-    AP_Scripting scripting;
-#endif // AP_SCRIPTING_ENABLED
 
     AP_Float tuning_min;
     AP_Float tuning_max;
@@ -683,6 +680,9 @@ public:
     AP_Int16 takeoff_rpm_min;
     AP_Int16 takeoff_rpm_max;
 #endif
+
+    // EKF variance filter cutoff
+    AP_Float fs_ekf_filt_hz;
 
 #if WEATHERVANE_ENABLED == ENABLED
     AC_WeatherVane weathervane;

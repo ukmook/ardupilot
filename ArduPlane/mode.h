@@ -8,6 +8,7 @@
 #include <AP_Vehicle/ModeReason.h>
 #include "quadplane.h"
 #include <AP_AHRS/AP_AHRS.h>
+#include <AP_Mission/AP_Mission.h>
 
 class AC_PosControl;
 class AC_AttitudeControl_Multi;
@@ -134,6 +135,11 @@ public:
     // true if is taking 
     virtual bool is_taking_off() const;
 
+    // true if throttle min/max limits should be applied
+    bool use_throttle_limits() const;
+
+    // true if voltage correction should be applied to throttle
+    bool use_battery_compensation() const;
 
 protected:
 
@@ -148,6 +154,9 @@ protected:
 
     // Helper to output to both k_rudder and k_steering servo functions
     void output_rudder_and_steering(float val);
+
+    // Output pilot throttle, this is used in stabilized modes without auto throttle control
+    void output_pilot_throttle();
 
 #if HAL_QUADPLANE_ENABLED
     // References for convenience, used by QModes
@@ -220,12 +229,26 @@ public:
     bool mode_allows_autotuning() const override { return true; }
 
     bool is_landing() const override;
-    
+
+    void do_nav_delay(const AP_Mission::Mission_Command& cmd);
+    bool verify_nav_delay(const AP_Mission::Mission_Command& cmd);
+
+    void run() override;
+
 protected:
 
     bool _enter() override;
     void _exit() override;
     bool _pre_arm_checks(size_t buflen, char *buffer) const override;
+
+private:
+
+    // Delay the next navigation command
+    struct {
+        uint32_t time_max_ms;
+        uint32_t time_start_ms;
+    } nav_delay;
+
 };
 
 
@@ -241,6 +264,8 @@ public:
     void update() override;
     
     bool mode_allows_autotuning() const override { return true; }
+
+    void run() override;
 
 protected:
 
@@ -472,6 +497,8 @@ public:
     void update() override;
     
     bool mode_allows_autotuning() const override { return true; }
+
+    void run() override;
 
 };
 
@@ -768,7 +795,7 @@ protected:
     AP_Int16 target_dist;
     AP_Int8 level_pitch;
 
-    bool takeoff_started;
+    bool takeoff_mode_setup;
     Location start_loc;
 
     bool _enter() override;
