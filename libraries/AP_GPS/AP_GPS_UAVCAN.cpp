@@ -436,10 +436,11 @@ void AP_GPS_UAVCAN::handle_fix2_msg(const Fix2Cb &cb)
         Location loc = { };
         loc.lat = cb.msg->latitude_deg_1e8 / 10;
         loc.lng = cb.msg->longitude_deg_1e8 / 10;
-        loc.alt = cb.msg->height_msl_mm / 10;
+        const int32_t alt_amsl_cm = cb.msg->height_msl_mm / 10;
         interim_state.have_undulation = true;
         interim_state.undulation = (cb.msg->height_msl_mm - cb.msg->height_ellipsoid_mm) * 0.001;
         interim_state.location = loc;
+        set_alt_amsl_cm(interim_state, alt_amsl_cm);
 
         handle_velocity(cb.msg->ned_velocity[0], cb.msg->ned_velocity[1], cb.msg->ned_velocity[2]);
 
@@ -820,9 +821,12 @@ void AP_GPS_UAVCAN::inject_data(const uint8_t *data, uint16_t len)
     // using a different uavcan instance than the first GPS, as we
     // send the data as broadcast on all UAVCAN devive ports and we
     // don't want to send duplicates
+    const uint32_t now_ms = AP_HAL::millis();
     if (_detected_module == 0 ||
-        _detected_modules[_detected_module].ap_uavcan != _detected_modules[0].ap_uavcan) {
+        _detected_modules[_detected_module].ap_uavcan != _detected_modules[0].ap_uavcan ||
+        now_ms - _detected_modules[0].last_inject_ms > 2000) {
         _detected_modules[_detected_module].ap_uavcan->send_RTCMStream(data, len);
+        _detected_modules[_detected_module].last_inject_ms = now_ms;
     }
 }
 

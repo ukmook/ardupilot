@@ -56,6 +56,7 @@ bool Mode::enter()
     plane.guided_state.target_heading_type = GUIDED_HEADING_NONE;
     plane.guided_state.target_airspeed_cm = -1; // same as above, although an airspeed of -1 is rare on plane.
     plane.guided_state.target_alt = -1; // same as above, although a target alt of -1 is rare on plane.
+    plane.guided_state.target_alt_time_ms = 0;
     plane.guided_state.last_target_alt = 0;
 #endif
 
@@ -88,6 +89,10 @@ bool Mode::enter()
 
 #if HAL_QUADPLANE_ENABLED
     quadplane.mode_enter();
+#endif
+
+#if AP_TERRAIN_AVAILABLE
+    plane.target_altitude.terrain_following_pending = false;
 #endif
 
     bool enter_result = _enter();
