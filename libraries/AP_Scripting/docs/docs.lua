@@ -1691,6 +1691,19 @@ function sub:is_button_pressed(index) end
 ---@return integer
 function sub:get_and_clear_button_count(index) end
 
+-- Return true if rangefinder is healthy, includes a check for good signal quality
+---@return boolean
+function sub:rangefinder_alt_ok() end
+
+-- SURFTRAK mode: return the rangefinder target in cm
+---@return float
+function sub:get_rangefinder_target_cm() end
+
+-- SURFTRAK mode: set the rangefinder target in cm, return true if successful
+---@param new_target_cm float
+---@return boolean
+function sub:set_rangefinder_target_cm(new_target_cm) end
+
 
 -- desc
 ---@class quadplane
@@ -3410,6 +3423,10 @@ function fs:format() end
 -- Get the current status of a format. 0=NOT_STARTED, 1=PENDING, 2=IN_PROGRESS, 3=SUCCESS, 4=FAILURE
 ---@return number
 function fs:get_format_status() end
+
+-- Get crc32 checksum of a file with given name
+---@return uint32_t_ud|nil
+function fs:crc32(file_name) end
 
 -- desc
 ---@class networking

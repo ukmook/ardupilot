@@ -37,6 +37,8 @@
 #include <AP_ExternalControl/AP_ExternalControl_config.h>
 #include <AP_GPS/AP_GPS.h>
 #include <AP_Generator/AP_Generator.h>
+#include <AP_Logger/AP_Logger.h>
+#include <AP_InertialSensor/AP_InertialSensor.h>
 #include <AP_Notify/AP_Notify.h>                    // Notify library
 #include <AP_Param/AP_Param.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>
@@ -71,6 +73,11 @@
 #include <AP_Stats/AP_Stats.h>              // statistics library
 #if AP_SCRIPTING_ENABLED
 #include <AP_Scripting/AP_Scripting.h>
+#endif
+
+#include <AP_Gripper/AP_Gripper_config.h>
+#if AP_GRIPPER_ENABLED
+#include <AP_Gripper/AP_Gripper.h>
 #endif
 
 class AP_DDS_Client;
@@ -123,7 +130,9 @@ public:
     void get_common_scheduler_tasks(const AP_Scheduler::Task*& tasks, uint8_t& num_tasks);
     // implementations *MUST* fill in all passed-in fields or we get
     // Valgrind errors
+#if AP_SCHEDULER_ENABLED
     virtual void get_scheduler_tasks(const AP_Scheduler::Task *&tasks, uint8_t &task_count, uint32_t &log_bit) = 0;
+#endif
 
     /*
       set the "likely flying" flag. This is not guaranteed to be
@@ -284,6 +293,8 @@ protected:
 
     virtual void init_ardupilot() = 0;
     virtual void load_parameters() = 0;
+    void load_parameters(AP_Int16 &format_version, const uint16_t expected_format_version);
+
     virtual void set_control_channels() {}
 
     // board specific config
@@ -307,11 +318,26 @@ protected:
 #endif
     AP_Baro barometer;
     Compass compass;
+#if AP_INERTIALSENSOR_ENABLED
     AP_InertialSensor ins;
+#endif
 #if HAL_BUTTON_ENABLED
     AP_Button button;
 #endif
     RangeFinder rangefinder;
+
+#if HAL_LOGGING_ENABLED
+    AP_Logger logger;
+    AP_Int32 bitmask_unused;
+    // method supplied by vehicle to provide log bitmask:
+    virtual const AP_Int32 &get_log_bitmask() { return bitmask_unused; }
+    virtual const struct LogStructure *get_log_structures() const { return nullptr; }
+    virtual uint8_t get_num_log_structures() const { return 0; }
+#endif
+
+#if AP_GRIPPER_ENABLED
+    AP_Gripper gripper;
+#endif
 
 #if AP_RSSI_ENABLED
     AP_RSSI rssi;
@@ -340,8 +366,10 @@ protected:
     // false disables external leds)
     AP_Notify notify;
 
+#if AP_AHRS_ENABLED
     // Inertial Navigation EKF
     AP_AHRS ahrs;
+#endif
 
 #if HAL_HOTT_TELEM_ENABLED
     AP_Hott_Telem hott_telem;
@@ -464,6 +492,7 @@ private:
     // statustext:
     void send_watchdog_reset_statustext();
 
+#if AP_INERTIALSENSOR_ENABLED
     // update the harmonic notch for throttle based notch
     void update_throttle_notch(AP_InertialSensor::HarmonicNotch &notch);
 
@@ -472,6 +501,7 @@ private:
 
     // run notch update at either loop rate or 200Hz
     void update_dynamic_notch_at_specified_rate();
+#endif
 
     // decimation for 1Hz update
     uint8_t one_Hz_counter;

@@ -136,10 +136,10 @@ public:
     virtual bool is_taking_off() const;
 
     // true if throttle min/max limits should be applied
-    bool use_throttle_limits() const;
+    virtual bool use_throttle_limits() const;
 
     // true if voltage correction should be applied to throttle
-    bool use_battery_compensation() const;
+    virtual bool use_battery_compensation() const;
 
 protected:
 
@@ -343,6 +343,7 @@ public:
     void navigate() override;
 
     bool isHeadingLinedUp(const Location loiterCenterLoc, const Location targetLoc);
+    bool isHeadingLinedUp_cd(const int32_t bearing_cd, const int32_t heading_cd);
     bool isHeadingLinedUp_cd(const int32_t bearing_cd);
 
     bool allows_throttle_nudging() const override { return true; }
@@ -397,6 +398,13 @@ public:
     void update() override;
 
     void run() override;
+
+    // true if throttle min/max limits should be applied
+    bool use_throttle_limits() const override { return false; }
+
+    // true if voltage correction should be applied to throttle
+    bool use_battery_compensation() const override { return false; }
+
 };
 
 

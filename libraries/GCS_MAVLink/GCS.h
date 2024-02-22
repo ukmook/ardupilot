@@ -25,6 +25,7 @@
 #include <AP_SerialManager/AP_SerialManager.h>
 #include <AP_RangeFinder/AP_RangeFinder_config.h>
 #include <AP_Winch/AP_Winch_config.h>
+#include <AP_Arming/AP_Arming_config.h>
 
 #include "ap_message.h"
 
@@ -527,7 +528,9 @@ protected:
     virtual bool set_home_to_current_location(bool lock) = 0;
     virtual bool set_home(const Location& loc, bool lock) = 0;
 
+#if AP_ARMING_ENABLED
     virtual MAV_RESULT handle_command_component_arm_disarm(const mavlink_command_int_t &packet);
+#endif
     MAV_RESULT handle_command_do_aux_function(const mavlink_command_int_t &packet);
     MAV_RESULT handle_command_storage_format(const mavlink_command_int_t &packet, const mavlink_message_t &msg);
     void handle_mission_request_list(const mavlink_message_t &msg);
@@ -1281,10 +1284,12 @@ private:
 
     char statustext_printf_buffer[256+1];
 
+#if AP_GPS_ENABLED
     virtual AP_GPS::GPS_Status min_status_for_gps_healthy() const {
         // NO_FIX simply excludes NO_GPS
         return AP_GPS::GPS_Status::NO_FIX;
     }
+#endif
 
     void update_sensor_status_flags();
 
@@ -1341,9 +1346,9 @@ GCS &gcs();
 #define AP_HAVE_GCS_SEND_TEXT 1
 #else
 extern "C" {
-void can_printf(const char *fmt, ...);
+    void can_printf_severity(uint8_t severity, const char *fmt, ...);
 }
-#define GCS_SEND_TEXT(severity, format, args...) (void)severity; can_printf(format, ##args)
+#define GCS_SEND_TEXT(severity, format, args...) can_printf_severity(severity, format, ##args)
 #define AP_HAVE_GCS_SEND_TEXT 1
 #endif
 
@@ -1353,11 +1358,30 @@ void can_printf(const char *fmt, ...);
 
 // map send text to can_printf() on larger AP_Periph boards
 extern "C" {
-void can_printf(const char *fmt, ...);
+    void can_printf_severity(uint8_t severity, const char *fmt, ...);
 }
-#define GCS_SEND_TEXT(severity, format, args...) can_printf(format, ##args)
+#define GCS_SEND_TEXT(severity, format, args...) can_printf_severity(severity, format, ##args)
 #define GCS_SEND_MESSAGE(msg)
 #define AP_HAVE_GCS_SEND_TEXT 1
+
+/*
+  we need a severity enum for the can_printf_severity function with no GCS present
+ */
+#ifndef HAVE_ENUM_MAV_SEVERITY
+enum MAV_SEVERITY
+{
+    MAV_SEVERITY_EMERGENCY=0,
+    MAV_SEVERITY_ALERT=1,
+    MAV_SEVERITY_CRITICAL=2,
+    MAV_SEVERITY_ERROR=3,
+    MAV_SEVERITY_WARNING=4,
+    MAV_SEVERITY_NOTICE=5,
+    MAV_SEVERITY_INFO=6,
+    MAV_SEVERITY_DEBUG=7,
+    MAV_SEVERITY_ENUM_END=8,
+};
+#define HAVE_ENUM_MAV_SEVERITY
+#endif
 
 #else // HAL_GCS_ENABLED
 // empty send text when we have no GCS

@@ -1,3 +1,31 @@
+Release 4.5.0-beta2 14th February 2024
+--------------------------------------
+
+Changes from 4.5.0-beta1:
+
+1) New Autopilots supported
+ - YJUAV_A6Ultra
+ - AnyLeaf H7
+
+2) System level changes
+ - fixed float rounding issue in HAL_Linux millis and micros functions
+ - fixed loading of defaults.parm parameters for dynamic parameter subtrees
+ - fixed discrimination between GHST and CRSF protocols
+ - fixed bug in DroneCAN packet parsing for corrupt packets that could cause a crash
+ - fixed handling of network sockets in scripting when used after close
+ - fixed bit timing of CANFD buses
+
+3) Plane specific changes
+ - fixed handling of force arming when safety is enabled for VTOL motor state
+
+4) Camera and gimbal enhancements
+ - wait for non-zero camera version in SIYI driver
+
+5) Miscellaneous
+ - do relay parameter conversion for parachute parameters if ever has been used
+ - broaden acceptance criteria for GPS yaw measurement for moving baseline yaw
+
+
 Release 4.5.0-beta1 30th January 2024
 -------------------------------------
 
@@ -134,6 +162,18 @@ Changes from 4.4.4
     - ROLL_LIMIT_DEG replaces LIM_ROLL_CD
     - RTL_ALTITUDE replaces ALT_HOLD_RTL
 8) ROS2 / DDS support
+    - Added support for EProsima MicroXRCEDDS as a transport in SITL and hardware
+    - Added sensor data topic support such as NavSatStatus and BatteryState
+    - Added a new AP_ExternalControl library for generic control support in SI units
+    - Added support for building ArduPilot with the colcon build system
+    - Added high level goal interface (waypoints) similar to MAVLink global position
+    - DDS topics comply with ROS REP-147
+    - Added Gazebo Garden and Gazebo Harmonic simulation with examples
+    - Added support for ROS 2 services such as Arm and Mode control
+    - Added high level goal interface for waypoints
+    - Wiki updated to support ROS 2
+    - Added ROS 2 launch scripts for SITL, MAVProxy and micro-ROS agent
+    - Add pytests for DDS client and ROS 2 launch scripts and integrate into CI
 9) Camera and gimbal enhancements
     - Calculates location where camera gimbal is pointing (see CAMERA_FOV_STATUS)
     - CAMx_MNT_INST allows specifying which mount camera is in

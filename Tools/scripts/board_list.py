@@ -16,7 +16,7 @@ class Board(object):
         self.name = name
         self.is_ap_periph = False
         self.autobuild_targets = [
-            'AntennaTracker',
+            'Tracker',
             'Blimp',
             'Copter',
             'Heli',
@@ -179,7 +179,6 @@ class BoardList(object):
             "f103-HWESC",
             "f103-Trigger",
             "G4-ESC",
-            "HerePro",
         ]
         ret = []
         for x in self.boards:

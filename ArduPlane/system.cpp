@@ -64,10 +64,6 @@ void Plane::init_ardupilot()
     osd.init();
 #endif
 
-#if HAL_LOGGING_ENABLED
-    log_init();
-#endif
-
     AP::compass().set_log_bit(MASK_LOG_COMPASS);
     AP::compass().init();
 
@@ -135,11 +131,6 @@ void Plane::init_ardupilot()
     if (optflow.enabled()) {
         optflow.init(-1);
     }
-#endif
-
-// init cargo gripper
-#if AP_GRIPPER_ENABLED
-    g2.gripper.init();
 #endif
 }
 

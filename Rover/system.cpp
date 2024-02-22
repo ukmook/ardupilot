@@ -14,11 +14,6 @@ static void failsafe_check_static()
 
 void Rover::init_ardupilot()
 {
-    // init gripper
-#if AP_GRIPPER_ENABLED
-    g2.gripper.init();
-#endif
-
     // initialise notify system
     notify.init();
     notify_mode(control_mode);
@@ -42,10 +37,6 @@ void Rover::init_ardupilot()
 
 #if OSD_ENABLED == ENABLED
     osd.init();
-#endif
-
-#if HAL_LOGGING_ENABLED
-    log_init();
 #endif
 
     // initialise compass

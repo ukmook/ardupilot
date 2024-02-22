@@ -15,11 +15,6 @@ static void failsafe_check_static()
 
 void Copter::init_ardupilot()
 {
-    // init cargo gripper
-#if AP_GRIPPER_ENABLED
-    g2.gripper.init();
-#endif
-
     // init winch
 #if AP_WINCH_ENABLED
     g2.winch.init();
@@ -42,10 +37,6 @@ void Copter::init_ardupilot()
 
 #if OSD_ENABLED == ENABLED
     osd.init();
-#endif
-
-#if HAL_LOGGING_ENABLED
-    log_init();
 #endif
 
     // update motor interlock state
