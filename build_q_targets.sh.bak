@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Define the vehicle type to build for
+vehicle="copter" # Adjust this as necessary
+
+# List all targets, filter those starting with 'Q'
+targets=$(./waf list_boards | grep '^Q')
+
+# Convert string to array
+readarray -t targetsArray <<< "$targets"
+
+# Check if there are any targets to build for
+if [ ${#targetsArray[@]} -eq 0 ]; then
+    echo "No targets starting with 'Q' found."
+    exit 1
+fi
+
+# Loop through each target starting with 'Q'
+for target in "${targetsArray[@]}"
+do
+    echo "Processing target: $target"
+
+    # Attempt to build firmware
+    output=$(./waf configure --board $target 2>&1 && ./waf $vehicle 2>&1)
+
+    # Check if the bootloader error was encountered
+    if echo "$output" | grep -q "Bootloader (.*) does not exist and AP_BOOTBOOTLOADER_FLASHING_ENABLED"; then
+        # Extract the specific bootloader build command from the error message
+        bootloader_build_command=$(echo "$output" | grep -oP "Please run: \K.*")
+
+        # If a bootloader build command is extracted, execute it
+        if [ ! -z "$bootloader_build_command" ]; then
+            echo "Building bootloader with: $bootloader_build_command"
+            eval "$bootloader_build_command"
+
+            # Retry building the firmware after building the bootloader
+            ./waf configure --board $target && ./waf $vehicle
+        else
+            echo "Could not extract bootloader build command for target: $target"
+        fi
+    else
+        # If no bootloader error, just print the output
+        echo "$output"
+    fi
+done
+
+echo "Build process for all 'Q' targets completed."
