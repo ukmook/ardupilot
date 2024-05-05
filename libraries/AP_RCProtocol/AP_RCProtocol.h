@@ -15,46 +15,78 @@
  * Code by Andrew Tridgell and Siddharth Bharat Purohit
  */
 #pragma once
+
+#include "AP_RCProtocol_config.h"
+
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Common/AP_Common.h>
 
 #define MAX_RCIN_CHANNELS 18
 #define MIN_RCIN_CHANNELS  5
 
-#ifndef AP_RCPROTOCOL_FASTSBUS_ENABLED
-  #ifdef IOMCU_FW
-    #define AP_RCPROTOCOL_FASTSBUS_ENABLED 0
-  #else
-    #define AP_RCPROTOCOL_FASTSBUS_ENABLED 1
-  #endif
-#endif
-
 class AP_RCProtocol_Backend;
 
 class AP_RCProtocol {
 public:
+
+    enum rcprotocol_t {
+#if AP_RCPROTOCOL_PPMSUM_ENABLED
+        PPMSUM     =  0,
+#endif
+#if AP_RCPROTOCOL_IBUS_ENABLED
+        IBUS       =  1,
+#endif
+#if AP_RCPROTOCOL_SBUS_ENABLED
+        SBUS       =  2,
+#endif
+#if AP_RCPROTOCOL_SBUS_NI_ENABLED
+        SBUS_NI    =  3,
+#endif
+#if AP_RCPROTOCOL_DSM_ENABLED
+        DSM        =  4,
+#endif
+#if AP_RCPROTOCOL_SUMD_ENABLED
+        SUMD       =  5,
+#endif
+#if AP_RCPROTOCOL_SRXL_ENABLED
+        SRXL       =  6,
+#endif
+#if AP_RCPROTOCOL_SRXL2_ENABLED
+        SRXL2      =  7,
+#endif
+#if AP_RCPROTOCOL_CRSF_ENABLED
+        CRSF       =  8,
+#endif
+#if AP_RCPROTOCOL_ST24_ENABLED
+        ST24       =  9,
+#endif
+#if AP_RCPROTOCOL_FPORT_ENABLED
+        FPORT      = 10,
+#endif
+#if AP_RCPROTOCOL_FPORT2_ENABLED
+        FPORT2     = 11,
+#endif
+#if AP_RCPROTOCOL_FASTSBUS_ENABLED
+        FASTSBUS   = 12,
+#endif
+#if AP_RCPROTOCOL_DRONECAN_ENABLED
+        DRONECAN   = 13,
+#endif
+#if AP_RCPROTOCOL_GHST_ENABLED
+        GHST       = 14,
+#endif
+        NONE    //last enum always is None
+    };
+
+    // return protocol name as a string
+    static const char *protocol_name_from_protocol(rcprotocol_t protocol);
+
+#if AP_RCPROTOCOL_ENABLED
+
     AP_RCProtocol() {}
     ~AP_RCProtocol();
     friend class AP_RCProtocol_Backend;
 
-    enum rcprotocol_t {
-        PPM        =  0,
-        IBUS       =  1,
-        SBUS       =  2,
-        SBUS_NI    =  3,
-        DSM        =  4,
-        SUMD       =  5,
-        SRXL       =  6,
-        SRXL2      =  7,
-        CRSF       =  8,
-        ST24       =  9,
-        FPORT      = 10,
-        FPORT2     = 11,
-#if AP_RCPROTOCOL_FASTSBUS_ENABLED
-        FASTSBUS   = 12,
-#endif
-        NONE    //last enum always is None
-    };
     void init();
     bool valid_serial_prot() const
     {
@@ -81,22 +113,52 @@ public:
     // for protocols without strong CRCs we require 3 good frames to lock on
     bool requires_3_frames(enum rcprotocol_t p) {
         switch (p) {
+#if AP_RCPROTOCOL_DSM_ENABLED
         case DSM:
+#endif
 #if AP_RCPROTOCOL_FASTSBUS_ENABLED
         case FASTSBUS:
 #endif
+#if AP_RCPROTOCOL_SBUS_ENABLED
         case SBUS:
+#endif
+#if AP_RCPROTOCOL_SBUS_NI_ENABLED
         case SBUS_NI:
-        case PPM:
+#endif
+#if AP_RCPROTOCOL_PPMSUM_ENABLED
+        case PPMSUM:
+#endif
+#if AP_RCPROTOCOL_FPORT_ENABLED
         case FPORT:
+#endif
+#if AP_RCPROTOCOL_FPORT2_ENABLED
         case FPORT2:
-            return true;
-        case IBUS:
-        case SUMD:
-        case SRXL:
-        case SRXL2:
+#endif
+#if AP_RCPROTOCOL_CRSF_ENABLED
         case CRSF:
+#endif
+#if AP_RCPROTOCOL_GHST_ENABLED
+        case GHST:
+#endif
+            return true;
+#if AP_RCPROTOCOL_IBUS_ENABLED
+        case IBUS:
+#endif
+#if AP_RCPROTOCOL_SUMD_ENABLED
+        case SUMD:
+#endif
+#if AP_RCPROTOCOL_SRXL_ENABLED
+        case SRXL:
+#endif
+#if AP_RCPROTOCOL_SRXL2_ENABLED
+        case SRXL2:
+#endif
+#if AP_RCPROTOCOL_ST24_ENABLED
         case ST24:
+#endif
+#if AP_RCPROTOCOL_DRONECAN_ENABLED
+        case DRONECAN:
+#endif
         case NONE:
             return false;
         }
@@ -112,9 +174,6 @@ public:
     int16_t get_rx_link_quality(void) const;
 
     // return protocol name as a string
-    static const char *protocol_name_from_protocol(rcprotocol_t protocol);
-
-    // return protocol name as a string
     const char *protocol_name(void) const;
 
     // return detected protocol
@@ -124,13 +183,12 @@ public:
 
     // add a UART for RCIN
     void add_uart(AP_HAL::UARTDriver* uart);
+    bool has_uart() const { return added.uart != nullptr; }
 
-#ifdef IOMCU_FW
     // set allowed RC protocols
     void set_rc_protocols(uint32_t mask) {
         rc_protocols_mask = mask;
     }
-#endif
 
     class SerialConfig {
     public:
@@ -153,6 +211,11 @@ private:
     // return true if a specific protocol is enabled
     bool protocol_enabled(enum rcprotocol_t protocol) const;
 
+    // explicitly investigate a backend for data, as opposed to
+    // feeding the backend a byte (or pulse-train) at a time and
+    // having them make an "add_input" callback):
+    bool detect_async_protocol(rcprotocol_t protocol);
+
     enum rcprotocol_t _detected_protocol = NONE;
     uint16_t _disabled_for_pulses;
     bool _detected_with_bytes;
@@ -172,10 +235,15 @@ private:
 
     // allowed RC protocols mask (first bit means "all")
     uint32_t rc_protocols_mask;
+
+#endif  // AP_RCPROTCOL_ENABLED
+
 };
 
+#if AP_RCPROTOCOL_ENABLED
 namespace AP {
     AP_RCProtocol &RC();
 };
 
 #include "AP_RCProtocol_Backend.h"
+#endif  // AP_RCProtocol_enabled

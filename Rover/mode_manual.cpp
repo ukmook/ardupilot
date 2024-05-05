@@ -12,6 +12,9 @@ void ModeManual::update()
     get_pilot_desired_steering_and_throttle(desired_steering, desired_throttle);
     get_pilot_desired_lateral(desired_lateral);
 
+    // apply manual steering expo
+    desired_steering = 4500.0 * input_expo(desired_steering / 4500, g2.manual_steering_expo);
+
     // if vehicle is balance bot, calculate actual throttle required for balancing
     if (rover.is_balancebot()) {
         rover.balancebot_pitch_control(desired_throttle);
@@ -26,13 +29,7 @@ void ModeManual::update()
     g2.motors.set_walking_height(desired_walking_height);
 
     // set sailboat sails
-    float desired_mainsail;
-    float desired_wingsail;
-    float desired_mast_rotation;
-    g2.sailboat.get_pilot_desired_mainsail(desired_mainsail, desired_wingsail, desired_mast_rotation);
-    g2.motors.set_mainsail(desired_mainsail);
-    g2.motors.set_wingsail(desired_wingsail);
-    g2.motors.set_mast_rotation(desired_wingsail);
+    g2.sailboat.set_pilot_desired_mainsail();
 
     // copy RC scaled inputs to outputs
     g2.motors.set_throttle(desired_throttle);

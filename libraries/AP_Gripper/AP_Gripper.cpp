@@ -1,5 +1,7 @@
 #include "AP_Gripper.h"
 
+#if AP_GRIPPER_ENABLED
+
 #include "AP_Gripper_Servo.h"
 #include "AP_Gripper_EPM.h"
 
@@ -109,12 +111,16 @@ void AP_Gripper::init()
     switch(config.type.get()) {
     case 0:
         break;
+#if AP_GRIPPER_SERVO_ENABLED
     case 1:
         backend = new AP_Gripper_Servo(config);
         break;
+#endif
+#if AP_GRIPPER_EPM_ENABLED
     case 2:
         backend = new AP_Gripper_EPM(config);
         break;
+#endif
     default:
         break;
     }
@@ -162,9 +168,11 @@ PASS_TO_BACKEND(grabbed)
 
 namespace AP {
 
-AP_Gripper *gripper()
+AP_Gripper &gripper()
 {
-    return AP_Gripper::get_singleton();
+    return *AP_Gripper::get_singleton();
 }
 
 };
+
+#endif  // AP_GRIPPER_ENABLED

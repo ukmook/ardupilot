@@ -14,6 +14,10 @@
  */
 #pragma once
 
+#include "AP_RSSI_config.h"
+
+#if AP_RSSI_ENABLED
+
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Param/AP_Param.h>
 #include <AP_Math/AP_Math.h>
@@ -33,8 +37,7 @@ public:
     AP_RSSI();
 
     /* Do not allow copies */
-    AP_RSSI(const AP_RSSI &other) = delete;
-    AP_RSSI &operator=(const AP_RSSI&) = delete;
+    CLASS_NO_COPY(AP_RSSI);
 
     // destructor
     ~AP_RSSI(void);
@@ -103,3 +106,5 @@ private:
 namespace AP {
     AP_RSSI *rssi();
 };
+
+#endif  // AP_RSSI_ENABLED

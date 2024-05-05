@@ -34,6 +34,7 @@ COMMON_VEHICLE_DEPENDENT_LIBRARIES = [
     'AP_HAL',
     'AP_HAL_Empty',
     'AP_InertialSensor',
+    'AP_KDECAN',
     'AP_Math',
     'AP_Mission',
     'AP_DAL',
@@ -63,6 +64,7 @@ COMMON_VEHICLE_DEPENDENT_LIBRARIES = [
     'AP_Module',
     'AP_Button',
     'AP_ICEngine',
+    'AP_Networking',
     'AP_Frsky_Telem',
     'AP_FlashStorage',
     'AP_Relay',
@@ -107,11 +109,14 @@ COMMON_VEHICLE_DEPENDENT_LIBRARIES = [
     'AP_ExternalAHRS',
     'AP_VideoTX',
     'AP_FETtecOneWire',
+    'AP_TemperatureSensor',
     'AP_Torqeedo',
     'AP_CustomRotations',
     'AP_AIS',
     'AP_OpenDroneID',
     'AP_CheckFirmware',
+    'AP_ExternalControl',
+    'AP_JSON',
 ]
 
 def get_legacy_defines(sketch_name, bld):
@@ -133,6 +138,7 @@ def get_legacy_defines(sketch_name, bld):
 IGNORED_AP_LIBRARIES = [
     'doc',
     'AP_Scripting', # this gets explicitly included when it is needed and should otherwise never be globbed in
+    'AP_DDS',
 ]
 
 
@@ -233,6 +239,7 @@ def ap_get_all_libraries(bld):
             continue
         libraries.append(name)
     libraries.extend(['AP_HAL', 'AP_HAL_Empty'])
+    libraries.append('AP_PiccoloCAN/piccolo_protocol')
     return libraries
 
 @conf
@@ -255,6 +262,7 @@ def ap_program(bld,
                program_dir=None,
                use_legacy_defines=True,
                program_name=None,
+               vehicle_binary=True,
                **kw):
     if 'target' in kw:
         bld.fatal('Do not pass target for program')
@@ -293,6 +301,9 @@ def ap_program(bld,
         program_dir=program_dir,
         **kw
     )
+
+    tg.env.vehicle_binary = vehicle_binary
+
     if 'use' in kw and bld.env.STATIC_LINKING:
         # ensure we link against vehicle library
         tg.env.STLIB += [kw['use']]
@@ -300,11 +311,13 @@ def ap_program(bld,
     for group in program_groups:
         _grouped_programs.setdefault(group, {}).update({tg.name : tg})
 
+    return tg
+
 
 @conf
 def ap_example(bld, **kw):
     kw['program_groups'] = 'examples'
-    ap_program(bld, use_legacy_defines=False, **kw)
+    ap_program(bld, use_legacy_defines=False, vehicle_binary=False, **kw)
 
 def unique_list(items):
     '''remove duplicate elements from a list while maintaining ordering'''
@@ -322,6 +335,9 @@ def ap_stlib(bld, **kw):
     kw['ap_libraries'] = unique_list(kw['ap_libraries'] + bld.env.AP_LIBRARIES)
     for l in kw['ap_libraries']:
         bld.ap_library(l, kw['ap_vehicle'])
+
+    if 'dynamic_source' not in kw:
+        kw['dynamic_source'] = 'modules/DroneCAN/libcanard/dsdlc_generated/src/**.c'
 
     kw['features'] = kw.get('features', []) + ['cxx', 'cxxstlib']
     kw['target'] = kw['name']
@@ -348,7 +364,7 @@ def ap_stlib_target(self):
     self.target = '#%s' % os.path.join('lib', self.target)
 
 @conf
-def ap_find_tests(bld, use=[]):
+def ap_find_tests(bld, use=[], DOUBLE_PRECISION_SOURCES=[]):
     if not bld.env.HAS_GTEST:
         return
 
@@ -362,7 +378,7 @@ def ap_find_tests(bld, use=[]):
     includes = [bld.srcnode.abspath() + '/tests/']
 
     for f in bld.path.ant_glob(incl='*.cpp'):
-        ap_program(
+        t = ap_program(
             bld,
             features=features,
             includes=includes,
@@ -371,8 +387,19 @@ def ap_find_tests(bld, use=[]):
             program_name=f.change_ext('').name,
             program_groups='tests',
             use_legacy_defines=False,
+            vehicle_binary=False,
             cxxflags=['-Wno-undef'],
         )
+        filename = os.path.basename(f.abspath())
+        if filename in DOUBLE_PRECISION_SOURCES:
+            t.env.CXXFLAGS = t.env.CXXFLAGS[:]
+            single_precision_option='-fsingle-precision-constant'
+            if single_precision_option in t.env.CXXFLAGS:
+                t.env.CXXFLAGS.remove(single_precision_option)
+            single_precision_option='-cl-single-precision-constant'
+            if single_precision_option in t.env.CXXFLAGS:
+                t.env.CXXFLAGS.remove(single_precision_option)
+            t.env.CXXFLAGS.append("-DALLOW_DOUBLE_MATH_FUNCTIONS")
 
 _versions = []
 
@@ -422,6 +449,7 @@ def ap_find_benchmarks(bld, use=[]):
             includes=includes,
             source=[f],
             use=use,
+            vehicle_binary=False,
             program_name=f.change_ext('').name,
             program_groups='benchmarks',
             use_legacy_defines=False,
@@ -557,6 +585,11 @@ arducopter and upload it to my board".
         dest='upload_port',
         default=None,
         help='''Specify the port to be used with the --upload option. For example a port of /dev/ttyS10 indicates that serial port 10 shuld be used.
+''')
+
+    g.add_option('--upload-force',
+        action='store_true',
+        help='''Override board type check and continue loading. Same as using uploader.py --force.
 ''')
 
     g = opt.ap_groups['check']

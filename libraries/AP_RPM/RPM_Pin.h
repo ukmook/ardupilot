@@ -14,17 +14,19 @@
  */
 #pragma once
 
-#include "AP_RPM.h"
+#include "AP_RPM_config.h"
+
+#if AP_RPM_PIN_ENABLED
 
 #include "RPM_Backend.h"
+
 #include <Filter/Filter.h>
-#include <AP_Math/AP_Math.h>
 
 class AP_RPM_Pin : public AP_RPM_Backend
 {
 public:
-    // constructor
-    AP_RPM_Pin(AP_RPM &ranger, uint8_t instance, AP_RPM::RPM_State &_state);
+
+    using AP_RPM_Backend::AP_RPM_Backend;
 
     // update state
     void update(void) override;
@@ -46,3 +48,5 @@ private:
                      uint32_t timestamp);
 
 };
+
+#endif  // AP_RPM_PIN_ENABLED

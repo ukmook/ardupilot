@@ -28,16 +28,18 @@ extern const AP_HAL::HAL &hal;
 
 void AP_Periph_FW::rcout_init()
 {
+#if AP_PERIPH_SAFETY_SWITCH_ENABLED
     // start up with safety enabled. This disables the pwm output until we receive an packet from the rempte system
     hal.rcout->force_safety_on();
+#else
+    hal.rcout->force_safety_off();
+#endif
 
 #if HAL_WITH_ESC_TELEM && !HAL_GCS_ENABLED
     if (g.esc_telem_port >= 0) {
         serial_manager.set_protocol_and_baud(g.esc_telem_port, AP_SerialManager::SerialProtocol_ESCTelemetry, 115200);
     }
 #endif
-
-    SRV_Channels::init();
 
 #if HAL_PWM_COUNT > 0
     for (uint8_t i=0; i<HAL_PWM_COUNT; i++) {
@@ -58,20 +60,17 @@ void AP_Periph_FW::rcout_init()
         }
     }
 
-    // setup ESCs with the desired PWM type, allowing for DShot
-    const auto esc_type = (AP_HAL::RCOutput::output_mode)g.esc_pwm_type.get();
-    hal.rcout->set_output_mode(esc_mask, esc_type);
-
-    if (esc_type >= AP_HAL::RCOutput::MODE_PWM_DSHOT150 &&
-        esc_type <= AP_HAL::RCOutput::MODE_PWM_DSHOT1200) {
-        SRV_Channels::set_digital_outputs(esc_mask, 0);
-    }
-
     // run this once and at 1Hz to configure aux and esc ranges
     rcout_init_1Hz();
 
+    // setup ESCs with the desired PWM type, allowing for DShot
+    SRV_Channels::init(esc_mask, (AP_HAL::RCOutput::output_mode)g.esc_pwm_type.get());
+
     // run DShot at 1kHz
-    hal.rcout->set_dshot_rate(0, 400);
+    hal.rcout->set_dshot_rate(SRV_Channels::get_dshot_rate(), 400);
+#if HAL_WITH_ESC_TELEM
+    esc_telem_update_period_ms = 1000 / constrain_int32(g.esc_telem_rate.get(), 1, 1000);
+#endif
 }
 
 void AP_Periph_FW::rcout_init_1Hz()
@@ -99,11 +98,21 @@ void AP_Periph_FW::rcout_esc(int16_t *rc, uint8_t num_channels)
     rcout_has_new_data_to_update = true;
 }
 
-void AP_Periph_FW::rcout_srv(uint8_t actuator_id, const float command_value)
+void AP_Periph_FW::rcout_srv_unitless(uint8_t actuator_id, const float command_value)
 {
 #if HAL_PWM_COUNT > 0
     const SRV_Channel::Aux_servo_function_t function = SRV_Channel::Aux_servo_function_t(SRV_Channel::k_rcin1 + actuator_id - 1);
     SRV_Channels::set_output_norm(function, command_value);
+
+    rcout_has_new_data_to_update = true;
+#endif
+}
+
+void AP_Periph_FW::rcout_srv_PWM(uint8_t actuator_id, const float command_value)
+{
+#if HAL_PWM_COUNT > 0
+    const SRV_Channel::Aux_servo_function_t function = SRV_Channel::Aux_servo_function_t(SRV_Channel::k_rcin1 + actuator_id - 1);
+    SRV_Channels::set_output_pwm(function, uint16_t(command_value+0.5));
 
     rcout_has_new_data_to_update = true;
 #endif
@@ -121,6 +130,20 @@ void AP_Periph_FW::rcout_handle_safety_state(uint8_t safety_state)
 
 void AP_Periph_FW::rcout_update()
 {
+    uint32_t now_ms = AP_HAL::millis();
+
+    const uint16_t esc_timeout_ms = g.esc_command_timeout_ms >= 0 ? g.esc_command_timeout_ms : 0; // Don't allow negative timeouts!
+    const bool has_esc_rawcommand_timed_out = esc_timeout_ms != 0 && ((now_ms - last_esc_raw_command_ms) >= esc_timeout_ms);
+    if (last_esc_num_channels > 0 && has_esc_rawcommand_timed_out) {
+        // If we've seen ESCs previously, and a timeout has occurred, then zero the outputs
+        int16_t esc_output[last_esc_num_channels];
+        memset(esc_output, 0, sizeof(esc_output));
+        rcout_esc(esc_output, last_esc_num_channels);
+
+        // register that the output has been changed
+        rcout_has_new_data_to_update = true;
+    }
+
     if (!rcout_has_new_data_to_update) {
         return;
     }
@@ -131,8 +154,7 @@ void AP_Periph_FW::rcout_update()
     SRV_Channels::output_ch_all();
     SRV_Channels::push();
 #if HAL_WITH_ESC_TELEM
-    uint32_t now_ms = AP_HAL::millis();
-    if (now_ms - last_esc_telem_update_ms >= 20) {
+    if (now_ms - last_esc_telem_update_ms >= esc_telem_update_period_ms) {
         last_esc_telem_update_ms = now_ms;
         esc_telem_update();
     }
@@ -140,4 +162,3 @@ void AP_Periph_FW::rcout_update()
 }
 
 #endif // HAL_PERIPH_ENABLE_RC_OUT
-

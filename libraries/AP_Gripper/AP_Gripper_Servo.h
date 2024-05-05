@@ -16,7 +16,8 @@
 #pragma once
 
 #include <AP_Gripper/AP_Gripper_Backend.h>
-#include <SRV_Channel/SRV_Channel.h>
+
+#if AP_GRIPPER_SERVO_ENABLED
 
 #define SERVO_ACTUATION_TIME    500         // Time for servo to move to target position during grab or release in milliseconds
 
@@ -43,7 +44,7 @@ public:
 
 protected:
 
-    // type-specific intiailisations:
+    // type-specific initializations:
     void init_gripper() override;
 
     // type-specific periodic updates:
@@ -53,3 +54,5 @@ private:
 
     bool has_state_pwm(const uint16_t pwm) const;
 };
+
+#endif  // AP_GRIPPER_SERVO_ENABLED

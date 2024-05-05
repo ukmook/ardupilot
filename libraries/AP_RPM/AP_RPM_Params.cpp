@@ -20,7 +20,7 @@ const AP_Param::GroupInfo AP_RPM_Params::var_info[] = {
     // @Param: TYPE
     // @DisplayName: RPM type
     // @Description: What type of RPM sensor is connected
-    // @Values: 0:None,1:Not Used,2:GPIO,3:EFI,4:Harmonic Notch,5:ESC Telemetry Motors Bitmask
+    // @Values: 0:None,1:Not Used,2:GPIO,3:EFI,4:Harmonic Notch,5:ESC Telemetry Motors Bitmask,6:Generator
     // @User: Standard
     AP_GROUPINFO_FLAGS("TYPE", 1, AP_RPM_Params, type, 0, AP_PARAM_FLAG_ENABLE),
     // Note, 1 was previously for type = PWM. This has been removed from docs to make setup less confusing for users.
@@ -67,6 +67,16 @@ const AP_Param::GroupInfo AP_RPM_Params::var_info[] = {
     // @Bitmask: 0:Channel1,1:Channel2,2:Channel3,3:Channel4,4:Channel5,5:Channel6,6:Channel7,7:Channel8,8:Channel9,9:Channel10,10:Channel11,11:Channel12,12:Channel13,13:Channel14,14:Channel15,15:Channel16
     // @User: Advanced
     AP_GROUPINFO("ESC_MASK", 7, AP_RPM_Params, esc_mask, 0),
+
+#if AP_RPM_ESC_TELEM_OUTBOUND_ENABLED
+    // @Param: ESC_INDEX
+    // @DisplayName: ESC Telemetry Index to write RPM to
+    // @Description: ESC Telemetry Index to write RPM to. Use 0 to disable.
+    // @Range: 0 10
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("ESC_INDEX", 8, AP_RPM_Params, esc_telem_outbound_index, 0),
+#endif
 
     AP_GROUPEND
 };

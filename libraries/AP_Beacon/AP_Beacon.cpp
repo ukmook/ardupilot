@@ -14,6 +14,9 @@
  */
 
 #include "AP_Beacon.h"
+
+#if AP_BEACON_ENABLED
+
 #include "AP_Beacon_Backend.h"
 #include "AP_Beacon_Pozyx.h"
 #include "AP_Beacon_Marvelmind.h"
@@ -388,6 +391,7 @@ bool AP_Beacon::device_ready(void) const
     return ((_driver != nullptr) && (_type != AP_BeaconType_None));
 }
 
+#if HAL_LOGGING_ENABLED
 // Write beacon sensor (position) data
 void AP_Beacon::log()
 {
@@ -414,6 +418,7 @@ void AP_Beacon::log()
     };
     AP::logger().WriteBlock(&pkt_beacon, sizeof(pkt_beacon));
 }
+#endif
 
 // singleton instance
 AP_Beacon *AP_Beacon::_singleton;
@@ -426,3 +431,5 @@ AP_Beacon *beacon()
 }
 
 }
+
+#endif

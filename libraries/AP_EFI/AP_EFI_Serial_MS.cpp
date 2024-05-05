@@ -12,13 +12,16 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
- 
-#include <AP_HAL/AP_HAL.h>
-#include "AP_EFI_Serial_MS.h"
 
-#if HAL_EFI_ENABLED
+#include "AP_EFI_config.h"
+
+#if AP_EFI_SERIAL_MS_ENABLED
+
+#include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
 #include <AP_SerialManager/AP_SerialManager.h>
+
+#include "AP_EFI_Serial_MS.h"
 
 extern const AP_HAL::HAL &hal;
 
@@ -40,12 +43,15 @@ void AP_EFI_Serial_MS::update()
 
     const uint32_t expected_bytes = 2 + (RT_LAST_OFFSET - RT_FIRST_OFFSET) + 4;
     if (port->available() >= expected_bytes && read_incoming_realtime_data()) {
-        last_response_ms = now;
         copy_to_frontend();
     }
 
-    if (port->available() == 0 || now - last_response_ms > 200) {
+    const uint32_t last_request_delta = (now - last_request_ms);
+    const uint32_t available = port->available();
+    if (((last_request_delta > 150) && (available > 0)) || // nothing in our input buffer 150 ms after request
+        ((last_request_delta > 90)  && (available == 0))) { // we requested something over 90 ms ago, but didn't get any data
         port->discard_input();
+        last_request_ms = now;
         // Request an update from the realtime table (7).
         // The data we need start at offset 6 and ends at 129
         send_request(7, RT_FIRST_OFFSET, RT_LAST_OFFSET);
@@ -56,7 +62,7 @@ bool AP_EFI_Serial_MS::read_incoming_realtime_data()
 {
     // Data is parsed directly from the buffer, otherwise we would need to allocate
     // several hundred bytes for the entire realtime data table or request every
-    // value individiually
+    // value individually
     uint16_t message_length = 0;
 
     // reset checksum before reading new data
@@ -81,12 +87,12 @@ bool AP_EFI_Serial_MS::read_incoming_realtime_data()
     }
     
     // Iterate over the payload bytes 
-    for ( uint8_t offset=RT_FIRST_OFFSET; offset < (RT_FIRST_OFFSET + message_length - 1); offset++) {
+    for (uint16_t offset=RT_FIRST_OFFSET; offset < (RT_FIRST_OFFSET + message_length - 1); offset++) {
         uint8_t data = read_byte_CRC32();
         float temp_float;
         switch (offset) {
             case PW1_MSB:
-                internal_state.cylinder_status[0].injection_time_ms = (float)((data << 8) + read_byte_CRC32())/1000.0f;
+                internal_state.cylinder_status.injection_time_ms = (float)((data << 8) + read_byte_CRC32())/1000.0f;
                 offset++;  // increment the counter because we read a byte in the previous line
                 break;
             case RPM_MSB:
@@ -95,7 +101,7 @@ bool AP_EFI_Serial_MS::read_incoming_realtime_data()
                 offset++;
                 break;
             case ADVANCE_MSB:
-                internal_state.cylinder_status[0].ignition_timing_deg = (float)((data << 8) + read_byte_CRC32())/10.0f;
+                internal_state.cylinder_status.ignition_timing_deg = (float)((data << 8) + read_byte_CRC32())/10.0f;
                 offset++;
                 break;
             case ENGINE_BM:
@@ -116,7 +122,7 @@ bool AP_EFI_Serial_MS::read_incoming_realtime_data()
             case CHT_MSB:
                 temp_float = (float)((data << 8) + read_byte_CRC32())/10.0f;
                 offset++;
-                internal_state.cylinder_status[0].cylinder_head_temperature = degF_to_Kelvin(temp_float);
+                internal_state.cylinder_status.cylinder_head_temperature = degF_to_Kelvin(temp_float);
                 break;
             case TPS_MSB:
                 temp_float = (float)((data << 8) + read_byte_CRC32())/10.0f;
@@ -126,7 +132,7 @@ bool AP_EFI_Serial_MS::read_incoming_realtime_data()
             case AFR1_MSB:
                 temp_float = (float)((data << 8) + read_byte_CRC32())/10.0f;
                 offset++;
-                internal_state.cylinder_status[0].lambda_coefficient = temp_float;
+                internal_state.cylinder_status.lambda_coefficient = temp_float;
                 break;
             case DWELL_MSB:
                 temp_float = (float)((data << 8) + read_byte_CRC32())/10.0f;
@@ -160,7 +166,7 @@ bool AP_EFI_Serial_MS::read_incoming_realtime_data()
 
     // Calculate Fuel Consumption 
     // Duty Cycle (Percent, because that's how HFE gives us the calibration coefficients)
-    float duty_cycle = (internal_state.cylinder_status[0].injection_time_ms * internal_state.engine_speed_rpm)/600.0f;
+    float duty_cycle = (internal_state.cylinder_status.injection_time_ms * internal_state.engine_speed_rpm)/600.0f;
     uint32_t current_time = AP_HAL::millis();
     // Super Simplified integration method - Error Analysis TBD
     // This calculation gives erroneous results when the engine isn't running
@@ -230,4 +236,4 @@ uint32_t AP_EFI_Serial_MS::CRC32_compute_byte(uint32_t crc, uint8_t data)
     return crc;
 }
 
-#endif // HAL_EFI_ENABLED
+#endif  // AP_EFI_SERIAL_MS_ENABLED

@@ -16,6 +16,8 @@
 
 #include "AP_RPM.h"
 
+#if AP_RPM_ENABLED
+
 class AP_RPM_Backend
 {
 public:
@@ -36,8 +38,12 @@ public:
         return ap_rpm._params[state.instance].pin.get();
     }
 
+    void update_esc_telem_outbound();
+
 protected:
 
     AP_RPM &ap_rpm;
     AP_RPM::RPM_State &state;
 };
+
+#endif   // AP_RPM_ENABLED

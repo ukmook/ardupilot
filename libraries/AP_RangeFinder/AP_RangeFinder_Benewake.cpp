@@ -59,13 +59,11 @@ bool AP_RangeFinder_Benewake::get_reading(float &reading_m)
     uint16_t count_out_of_range = 0;
 
     // read any available lines from the lidar
-    int16_t nbytes = uart->available();
-    while (nbytes-- > 0) {
-        int16_t r = uart->read();
-        if (r < 0) {
-            continue;
+    for (auto j=0; j<8192; j++) {
+        uint8_t c;
+        if (!uart->read(c)) {
+            break;
         }
-        uint8_t c = (uint8_t)r;
         // if buffer is empty and this byte is 0x59, add to buffer
         if (linebuf_len == 0) {
             if (c == BENEWAKE_FRAME_HEADER) {
@@ -93,8 +91,12 @@ bool AP_RangeFinder_Benewake::get_reading(float &reading_m)
                 if (checksum == linebuf[BENEWAKE_FRAME_LENGTH-1]) {
                     // calculate distance
                     uint16_t dist = ((uint16_t)linebuf[3] << 8) | linebuf[2];
-                    if (dist >= BENEWAKE_DIST_MAX_CM) {
-                        // this reading is out of range
+                    if (dist >= BENEWAKE_DIST_MAX_CM || dist == uint16_t(model_dist_max_cm())) {
+                        // this reading is out of range. Note that we
+                        // consider getting exactly the model dist max
+                        // is out of range. This fixes an issue with
+                        // the TF03 which can give exactly 18000 cm
+                        // when out of range
                         count_out_of_range++;
                     } else if (!has_signal_byte()) {
                         // no signal byte from TFmini so add distance to sum

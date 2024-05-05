@@ -35,8 +35,6 @@
 #include "version.h"
 #undef FORCE_VERSION_H_INCLUDE
 
-#include "AP_Gripper/AP_Gripper.h"
-
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 
 #define SCHED_TASK(func, _interval_ticks, _max_time_micros, _priority) SCHED_TASK_CLASS(Rover, &rover, func, _interval_ticks, _max_time_micros, _priority)
@@ -73,55 +71,64 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
     SCHED_TASK(read_radio,             50,    200,   3),
     SCHED_TASK(ahrs_update,           400,    400,   6),
     SCHED_TASK(read_rangefinders,      50,    200,   9),
+#if AP_OPTICALFLOW_ENABLED
+    SCHED_TASK_CLASS(AP_OpticalFlow,      &rover.optflow,          update,         200, 160,  11),
+#endif
     SCHED_TASK(update_current_mode,   400,    200,  12),
     SCHED_TASK(set_servos,            400,    200,  15),
     SCHED_TASK_CLASS(AP_GPS,              &rover.gps,              update,         50,  300,  18),
     SCHED_TASK_CLASS(AP_Baro,             &rover.barometer,        update,         10,  200,  21),
+#if AP_BEACON_ENABLED
     SCHED_TASK_CLASS(AP_Beacon,           &rover.g2.beacon,        update,         50,  200,  24),
+#endif
 #if HAL_PROXIMITY_ENABLED
     SCHED_TASK_CLASS(AP_Proximity,        &rover.g2.proximity,     update,         50,  200,  27),
 #endif
     SCHED_TASK_CLASS(AP_WindVane,         &rover.g2.windvane,      update,         20,  100,  30),
     SCHED_TASK(update_wheel_encoder,   50,    200,  36),
     SCHED_TASK(update_compass,         10,    200,  39),
+#if HAL_LOGGING_ENABLED
     SCHED_TASK(update_logging1,        10,    200,  45),
     SCHED_TASK(update_logging2,        10,    200,  48),
+#endif
     SCHED_TASK_CLASS(GCS,                 (GCS*)&rover._gcs,       update_receive,                    400,    500,  51),
     SCHED_TASK_CLASS(GCS,                 (GCS*)&rover._gcs,       update_send,                       400,   1000,  54),
     SCHED_TASK_CLASS(RC_Channels,         (RC_Channels*)&rover.g2.rc_channels, read_mode_switch,        7,    200,  57),
     SCHED_TASK_CLASS(RC_Channels,         (RC_Channels*)&rover.g2.rc_channels, read_aux_all,           10,    200,  60),
     SCHED_TASK_CLASS(AP_BattMonitor,      &rover.battery,          read,           10,  300,  63),
+#if AP_SERVORELAYEVENTS_ENABLED
     SCHED_TASK_CLASS(AP_ServoRelayEvents, &rover.ServoRelayEvents, update_events,  50,  200,  66),
-#if GRIPPER_ENABLED == ENABLED
-    SCHED_TASK_CLASS(AP_Gripper,          &rover.g2.gripper,       update,         10,   75,  69),
 #endif
+#if AC_PRECLAND_ENABLED
+    SCHED_TASK(update_precland,      400,     50,  70),
+#endif
+#if AP_RPM_ENABLED
     SCHED_TASK_CLASS(AP_RPM,              &rover.rpm_sensor,       update,         10,  100,  72),
+#endif
 #if HAL_MOUNT_ENABLED
     SCHED_TASK_CLASS(AP_Mount,            &rover.camera_mount,     update,         50,  200,  75),
 #endif
-#if CAMERA == ENABLED
+#if AP_CAMERA_ENABLED
     SCHED_TASK_CLASS(AP_Camera,           &rover.camera,           update,         50,  200,  78),
 #endif
     SCHED_TASK(gcs_failsafe_check,     10,    200,  81),
     SCHED_TASK(fence_check,            10,    200,  84),
     SCHED_TASK(ekf_check,              10,    100,  87),
     SCHED_TASK_CLASS(ModeSmartRTL,        &rover.mode_smartrtl,    save_position,   3,  200,  90),
-    SCHED_TASK_CLASS(AP_Notify,           &rover.notify,           update,         50,  300,  93),
     SCHED_TASK(one_second_loop,         1,   1500,  96),
 #if HAL_SPRAYER_ENABLED
     SCHED_TASK_CLASS(AC_Sprayer,          &rover.g2.sprayer,       update,          3,  90,  99),
 #endif
     SCHED_TASK(compass_save,            0.1,  200, 105),
-#if LOGGING_ENABLED == ENABLED
+#if HAL_LOGGING_ENABLED
     SCHED_TASK_CLASS(AP_Logger,           &rover.logger,           periodic_tasks, 50,  300, 108),
 #endif
     SCHED_TASK_CLASS(AP_InertialSensor,   &rover.ins,              periodic,      400,  200, 111),
+#if HAL_LOGGING_ENABLED
     SCHED_TASK_CLASS(AP_Scheduler,        &rover.scheduler,        update_logging, 0.1, 200, 114),
+#endif
 #if HAL_BUTTON_ENABLED
     SCHED_TASK_CLASS(AP_Button,           &rover.button,           update,          5,  200, 117),
-#endif
-#if STATS_ENABLED == ENABLED
-    SCHED_TASK(stats_update,            1,    200, 120),
 #endif
     SCHED_TASK(crash_check,            10,    200, 123),
     SCHED_TASK(cruise_learn_update,    50,    200, 126),
@@ -145,7 +152,6 @@ constexpr int8_t Rover::_failsafe_priorities[7];
 Rover::Rover(void) :
     AP_Vehicle(),
     param_loader(var_info),
-    logger{g.log_bitmask},
     modes(&g.mode1),
     control_mode(&mode_initializing)
 {
@@ -193,6 +199,14 @@ bool Rover::set_steering_and_throttle(float steering, float throttle)
 
     // set steering and throttle
     mode_guided.set_steering_and_throttle(steering, throttle);
+    return true;
+}
+
+// get steering and throttle (-1 to +1) (for use by scripting)
+bool Rover::get_steering_and_throttle(float& steering, float& throttle)
+{
+    steering = g2.motors.get_steering() / 4500.0;
+    throttle = g2.motors.get_throttle() * 0.01;
     return true;
 }
 
@@ -257,13 +271,13 @@ bool Rover::nav_scripting_enable(uint8_t mode)
 }
 
 // lua scripts use this to retrieve the contents of the active command
-bool Rover::nav_script_time(uint16_t &id, uint8_t &cmd, float &arg1, float &arg2)
+bool Rover::nav_script_time(uint16_t &id, uint8_t &cmd, float &arg1, float &arg2, int16_t &arg3, int16_t &arg4)
 {
     if (control_mode != &mode_auto) {
         return false;
     }
 
-    return mode_auto.nav_script_time(id, cmd, arg1, arg2);
+    return mode_auto.nav_script_time(id, cmd, arg1, arg2, arg3, arg4);
 }
 
 // lua scripts use this to indicate when they have complete the command
@@ -277,14 +291,13 @@ void Rover::nav_script_time_done(uint16_t id)
 }
 #endif // AP_SCRIPTING_ENABLED
 
-#if STATS_ENABLED == ENABLED
+#if AP_STATS_ENABLED
 /*
   update AP_Stats
 */
 void Rover::stats_update(void)
 {
-    g2.stats.set_flying(g2.motors.active());
-    g2.stats.update();
+    AP::stats()->set_flying(g2.motors.active());
 }
 #endif
 
@@ -317,6 +330,7 @@ void Rover::ahrs_update()
         ground_speed = ahrs.groundspeed();
     }
 
+#if HAL_LOGGING_ENABLED
     if (should_log(MASK_LOG_ATTITUDE_FAST)) {
         Log_Write_Attitude();
         Log_Write_Sail();
@@ -329,6 +343,7 @@ void Rover::ahrs_update()
     if (should_log(MASK_LOG_VIDEO_STABILISATION)) {
         ahrs.write_video_stabilisation();
     }
+#endif
 }
 
 /*
@@ -336,25 +351,28 @@ void Rover::ahrs_update()
  */
 void Rover::gcs_failsafe_check(void)
 {
-    if (!g.fs_gcs_enabled) {
+    if (g.fs_gcs_enabled == FS_GCS_DISABLED) {
         // gcs failsafe disabled
         return;
     }
 
-    // check for updates from GCS within 2 seconds
     const uint32_t gcs_last_seen_ms = gcs().sysid_myggcs_last_seen_time_ms();
-    bool do_failsafe = true;
     if (gcs_last_seen_ms == 0) {
         // we've never seen the GCS, so we never failsafe for not seeing it
-        do_failsafe = false;
-    } else if (millis() - gcs_last_seen_ms <= 2000) {
-        // we've never seen the GCS in the last couple of seconds, so all good
-        do_failsafe = false;
+        return;
     }
+
+    // calc time since last gcs update
+    // note: this only looks at the heartbeat from the device id set by g.sysid_my_gcs
+    const uint32_t last_gcs_update_ms = millis() - gcs_last_seen_ms;
+    const uint32_t gcs_timeout_ms = uint32_t(constrain_float(g2.fs_gcs_timeout * 1000.0f, 0.0f, UINT32_MAX));
+
+    const bool do_failsafe = last_gcs_update_ms >= gcs_timeout_ms ? true : false;
 
     failsafe_trigger(FAILSAFE_EVENT_GCS, "GCS", do_failsafe);
 }
 
+#if HAL_LOGGING_ENABLED
 /*
   log some key data - 10Hz
  */
@@ -367,7 +385,9 @@ void Rover::update_logging1(void)
 
     if (should_log(MASK_LOG_THR)) {
         Log_Write_Throttle();
+#if AP_BEACON_ENABLED
         g2.beacon.log();
+#endif
     }
 
     if (should_log(MASK_LOG_NTUN)) {
@@ -402,9 +422,17 @@ void Rover::update_logging2(void)
 
     if (should_log(MASK_LOG_IMU)) {
         AP::ins().Write_Vibration();
+#if HAL_GYROFFT_ENABLED
+        gyro_fft.write_log_messages();
+#endif
     }
+#if HAL_MOUNT_ENABLED
+    if (should_log(MASK_LOG_CAMERA)) {
+        camera_mount.write_log();
+    }
+#endif
 }
-
+#endif  // HAL_LOGGING_ENABLED
 
 /*
   once a second events
@@ -437,6 +465,7 @@ void Rover::one_second_loop(void)
     // send latest param values to wp_nav
     g2.wp_nav.set_turn_params(g2.turn_radius, g2.motors.have_skid_steering());
     g2.pos_control.set_turn_params(g2.turn_radius, g2.motors.have_skid_steering());
+    g2.wheel_rate_control.set_notch_sample_rate(AP::scheduler().get_filtered_loop_rate_hz());
 }
 
 void Rover::update_current_mode(void)

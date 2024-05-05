@@ -15,6 +15,10 @@
 
 #pragma once
 
+#include "AP_Filesystem_config.h"
+
+#if AP_FILESYSTEM_MISSION_ENABLED
+
 #include "AP_Filesystem_backend.h"
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <AP_Common/ExpandingString.h>
@@ -68,7 +72,12 @@ private:
 
     // finish loading items
     bool finish_upload(const rfile &r);
+    bool finish_upload_mission(const struct header &hdr, const rfile &r, const uint8_t *b);
+    bool finish_upload_fence(const struct header &hdr, const rfile &r, const uint8_t *b);
+    bool finish_upload_rally(const struct header &hdr, const rfile &r, const uint8_t *b);
 
     // see if a block of memory is all zero
     bool all_zero(const uint8_t *b, uint8_t size) const;
 };
+
+#endif  // AP_FILESYSTEM_MISSION_ENABLED

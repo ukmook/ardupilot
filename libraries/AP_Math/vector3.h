@@ -158,7 +158,7 @@ public:
     }
     
     // multiply a row vector by a matrix, to give a row vector
-    Vector3<T> operator *(const Matrix3<T> &m) const;
+    Vector3<T> row_times_mat(const Matrix3<T> &m) const;
 
     // multiply a column vector by a row vector, returning a 3x3 matrix
     Matrix3<T> mul_rowcol(const Vector3<T> &v) const;
@@ -279,6 +279,12 @@ public:
     }
     Vector3<double> todouble() const {
         return Vector3<double>{x,y,z};
+    }
+
+    // convert from right-front-up to front-right-down
+    // or ENU to NED
+    Vector3<T> rfu_to_frd() const {
+        return Vector3<T>{y,x,-z};
     }
 
     // given a position p1 and a velocity v1 produce a vector

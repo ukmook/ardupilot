@@ -15,41 +15,44 @@
 
 #include "AP_Filesystem.h"
 
+#include "AP_Filesystem_config.h"
+#include <AP_HAL/HAL.h>
+#include <AP_HAL/Util.h>
+#include <AP_Math/AP_Math.h>
+
 static AP_Filesystem fs;
 
-#if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
-#if HAVE_FILESYSTEM_SUPPORT
+// create exactly one "local" filesystem:
+#if AP_FILESYSTEM_FATFS_ENABLED
 #include "AP_Filesystem_FATFS.h"
 static AP_Filesystem_FATFS fs_local;
+#elif AP_FILESYSTEM_ESP32_ENABLED
+#include "AP_Filesystem_ESP32.h"
+static AP_Filesystem_ESP32 fs_local;
+#elif AP_FILESYSTEM_POSIX_ENABLED
+#include "AP_Filesystem_posix.h"
+static AP_Filesystem_Posix fs_local;
 #else
 static AP_Filesystem_Backend fs_local;
 int errno;
-#endif // HAVE_FILESYSTEM_SUPPORT
-#endif // HAL_BOARD_CHIBIOS
-
-#if CONFIG_HAL_BOARD == HAL_BOARD_ESP32
-#include "AP_Filesystem_ESP32.h"
-static AP_Filesystem_ESP32 fs_local;
-#endif // HAL_BOARD_ESP32
-
-#if CONFIG_HAL_BOARD == HAL_BOARD_LINUX || CONFIG_HAL_BOARD == HAL_BOARD_SITL
-#include "AP_Filesystem_posix.h"
-static AP_Filesystem_Posix fs_local;
 #endif
 
-#ifdef HAL_HAVE_AP_ROMFS_EMBEDDED_H
+#if AP_FILESYSTEM_ROMFS_ENABLED
 #include "AP_Filesystem_ROMFS.h"
 static AP_Filesystem_ROMFS fs_romfs;
 #endif
 
+#if AP_FILESYSTEM_PARAM_ENABLED
 #include "AP_Filesystem_Param.h"
 static AP_Filesystem_Param fs_param;
+#endif
 
+#if AP_FILESYSTEM_SYS_ENABLED
 #include "AP_Filesystem_Sys.h"
 static AP_Filesystem_Sys fs_sys;
+#endif
 
-#include <AP_Mission/AP_Mission.h>
-#if AP_MISSION_ENABLED
+#if AP_FILESYSTEM_MISSION_ENABLED
 #include "AP_Filesystem_Mission.h"
 static AP_Filesystem_Mission fs_mission;
 #endif
@@ -59,13 +62,18 @@ static AP_Filesystem_Mission fs_mission;
  */
 const AP_Filesystem::Backend AP_Filesystem::backends[] = {
     { nullptr, fs_local },
-#ifdef HAL_HAVE_AP_ROMFS_EMBEDDED_H
+#if AP_FILESYSTEM_ROMFS_ENABLED
     { "@ROMFS/", fs_romfs },
+    { "@ROMFS", fs_romfs },
 #endif
+#if AP_FILESYSTEM_PARAM_ENABLED
     { "@PARAM/", fs_param },
+#endif
+#if AP_FILESYSTEM_SYS_ENABLED
     { "@SYS/", fs_sys },
     { "@SYS", fs_sys },
-#if AP_MISSION_ENABLED
+#endif
+#if AP_FILESYSTEM_MISSION_ENABLED
     { "@MISSION/", fs_mission },
 #endif
 };
@@ -172,6 +180,12 @@ int AP_Filesystem::mkdir(const char *pathname)
     return backend.fs.mkdir(pathname);
 }
 
+int AP_Filesystem::rename(const char *oldpath, const char *newpath)
+{
+    const Backend &backend = backend_by_path(oldpath);
+    return backend.fs.rename(oldpath, newpath);
+}
+
 AP_Filesystem::DirHandle *AP_Filesystem::opendir(const char *pathname)
 {
     const Backend &backend = backend_by_path(pathname);
@@ -274,17 +288,77 @@ bool AP_Filesystem::fgets(char *buf, uint8_t buflen, int fd)
     return true;
 }
 
+// run crc32 over file with given name, returns true if successful
+bool AP_Filesystem::crc32(const char *fname, uint32_t& checksum)
+{
+    // Ensure value is initialized
+    checksum = 0;
+
+    // Open file in readonly mode
+    int fd = open(fname, O_RDONLY);
+    if (fd == -1) {
+        return false;
+    }
+
+    // Buffer to store data temporarily
+    const ssize_t buff_len = 64;
+    uint8_t buf[buff_len];
+
+    // Read into buffer and run crc
+    ssize_t read_size;
+    do {
+        read_size = read(fd, buf, buff_len);
+        if (read_size == -1) {
+            // Read error, note that we have changed the checksum value in this case
+            close(fd);
+            return false;
+        }
+        checksum = crc_crc32(checksum, buf, MIN(read_size, buff_len));
+    } while (read_size > 0);
+
+    close(fd);
+
+    return true;
+}
+
+
+#if AP_FILESYSTEM_FORMAT_ENABLED
 // format filesystem
 bool AP_Filesystem::format(void)
 {
-#if AP_FILESYSTEM_FORMAT_ENABLED
     if (hal.util->get_soft_armed()) {
         return false;
     }
     return LOCAL_BACKEND.fs.format();
-#else
-    return false;
+}
+AP_Filesystem_Backend::FormatStatus AP_Filesystem::get_format_status(void) const
+{
+    return LOCAL_BACKEND.fs.get_format_status();
+}
 #endif
+
+/*
+  stat wrapper for scripting
+ */
+bool AP_Filesystem::stat(const char *pathname, stat_t &stbuf)
+{
+    struct stat st;
+    if (fs.stat(pathname, &st) != 0) {
+        return false;
+    }
+    stbuf.size = st.st_size;
+    stbuf.mode = st.st_mode;
+    // these wrap in 2038
+    stbuf.atime = st.st_atime;
+    stbuf.ctime = st.st_ctime;
+    stbuf.mtime = st.st_mtime;
+    return true;
+}
+
+// get_singleton for scripting
+AP_Filesystem *AP_Filesystem::get_singleton(void)
+{
+    return &fs;
 }
 
 namespace AP

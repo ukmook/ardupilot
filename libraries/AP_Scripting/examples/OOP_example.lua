@@ -24,7 +24,6 @@ local function PIFF(kFF,kP,kI,iMax)
    local _kFF = kFF
    local _kP = kP or 0.0
    local _kI = kI or 0.0
-   local _kD = kD or 0.0
    local _iMax = iMax
    local _last_t = nil
    local _log_data = {}
@@ -57,7 +56,7 @@ local function PIFF(kFF,kP,kI,iMax)
 
    -- log the controller internals
    function self.log(name)
-      logger.write(name,'Targ,Curr,FF,P,I,Total','ffffff',table.unpack(_log_data))
+      logger:write(name,'Targ,Curr,FF,P,I,Total','ffffff',table.unpack(_log_data))
    end
 
    -- return the instance
@@ -110,7 +109,7 @@ function PIFF2.update(self, target, current)
 end
 
 function PIFF2.log(self, name)
-   logger.write(name,'Targ,Curr,FF,P,I,Total','ffffff',table.unpack(self.log_data))
+   logger:write(name,'Targ,Curr,FF,P,I,Total','ffffff',table.unpack(self.log_data))
 end
 
 --[[

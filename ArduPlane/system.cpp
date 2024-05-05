@@ -17,19 +17,7 @@ static void failsafe_check_static()
 void Plane::init_ardupilot()
 {
 
-#if STATS_ENABLED == ENABLED
-    // initialise stats module
-    g2.stats.init();
-#endif
-
     ins.set_log_raw_bit(MASK_LOG_IMU_RAW);
-
-    // setup any board specific drivers
-    BoardConfig.init();
-
-#if HAL_MAX_CAN_PROTOCOL_DRIVERS
-    can_mgr.init();
-#endif
 
     rollController.convert_pid();
     pitchController.convert_pid();
@@ -42,17 +30,15 @@ void Plane::init_ardupilot()
 #endif
     rc().init();
 
+#if AP_RELAY_ENABLED
     relay.init();
+#endif
 
     // initialise notify system
     notify.init();
     notify_mode(*control_mode);
 
     init_rc_out_main();
-    
-    // keep a record of how many resets have happened. This can be
-    // used to detect in-flight resets
-    g.num_resets.set_and_save(g.num_resets+1);
 
     // init baro
     barometer.init();
@@ -66,7 +52,9 @@ void Plane::init_ardupilot()
 
     rssi.init();
 
+#if AP_RPM_ENABLED
     rpm_sensor.init();
+#endif
 
     // setup telem slots with serial ports
     gcs().setup_uarts();
@@ -76,14 +64,11 @@ void Plane::init_ardupilot()
     osd.init();
 #endif
 
-#if LOGGING_ENABLED == ENABLED
-    log_init();
-#endif
-
     AP::compass().set_log_bit(MASK_LOG_COMPASS);
     AP::compass().init();
 
 #if AP_AIRSPEED_ENABLED
+    airspeed.set_fixedwing_parameters(&aparm);
     airspeed.set_log_bit(MASK_LOG_IMU);
 #endif
 
@@ -98,7 +83,12 @@ void Plane::init_ardupilot()
     camera_mount.init();
 #endif
 
-#if LANDING_GEAR_ENABLED == ENABLED
+#if AP_CAMERA_ENABLED
+    // initialise camera
+    camera.init();
+#endif
+
+#if AP_LANDINGGEAR_ENABLED
     // initialise landing gear position
     g2.landing_gear.init();
 #endif
@@ -134,18 +124,13 @@ void Plane::init_ardupilot()
 
     // set the correct flight mode
     // ---------------------------
-    reset_control_switch();
+    rc().reset_mode_switch();
 
     // initialise sensor
 #if AP_OPTICALFLOW_ENABLED
     if (optflow.enabled()) {
         optflow.init(-1);
     }
-#endif
-
-// init cargo gripper
-#if GRIPPER_ENABLED == ENABLED
-    g2.gripper.init();
 #endif
 }
 
@@ -176,33 +161,78 @@ void Plane::startup_ground(void)
     mission.init();
 
     // initialise AP_Logger library
-#if LOGGING_ENABLED == ENABLED
+#if HAL_LOGGING_ENABLED
     logger.setVehicle_Startup_Writer(
         FUNCTOR_BIND(&plane, &Plane::Log_Write_Vehicle_Startup_Messages, void)
         );
 #endif
 
-#if AP_SCRIPTING_ENABLED
-    g2.scripting.init();
-#endif // AP_SCRIPTING_ENABLED
-
     // reset last heartbeat time, so we don't trigger failsafe on slow
     // startup
     gcs().sysid_myggcs_seen(AP_HAL::millis());
-
-    // we don't want writes to the serial port to cause us to pause
-    // mid-flight, so set the serial ports non-blocking once we are
-    // ready to fly
-    serial_manager.set_blocking_writes_all(false);
 }
 
+
+#if AP_FENCE_ENABLED
+/*
+  return true if a mode reason is an automatic mode change due to
+  landing sequencing.
+ */
+static bool mode_reason_is_landing_sequence(const ModeReason reason)
+{
+    switch (reason) {
+    case ModeReason::RTL_COMPLETE_SWITCHING_TO_FIXEDWING_AUTOLAND:
+    case ModeReason::RTL_COMPLETE_SWITCHING_TO_VTOL_LAND_RTL:
+    case ModeReason::QRTL_INSTEAD_OF_RTL:
+    case ModeReason::QLAND_INSTEAD_OF_RTL:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+#endif // AP_FENCE_ENABLED
+
+// Check if this mode can be entered from the GCS
+bool Plane::gcs_mode_enabled(const Mode::Number mode_num) const
+{
+    // List of modes that can be blocked, index is bit number in parameter bitmask
+    static const uint8_t mode_list [] {
+        (uint8_t)Mode::Number::MANUAL,
+        (uint8_t)Mode::Number::CIRCLE,
+        (uint8_t)Mode::Number::STABILIZE,
+        (uint8_t)Mode::Number::TRAINING,
+        (uint8_t)Mode::Number::ACRO,
+        (uint8_t)Mode::Number::FLY_BY_WIRE_A,
+        (uint8_t)Mode::Number::FLY_BY_WIRE_B,
+        (uint8_t)Mode::Number::CRUISE,
+        (uint8_t)Mode::Number::AUTOTUNE,
+        (uint8_t)Mode::Number::AUTO,
+        (uint8_t)Mode::Number::LOITER,
+        (uint8_t)Mode::Number::TAKEOFF,
+        (uint8_t)Mode::Number::AVOID_ADSB,
+        (uint8_t)Mode::Number::GUIDED,
+        (uint8_t)Mode::Number::THERMAL,
+#if HAL_QUADPLANE_ENABLED
+        (uint8_t)Mode::Number::QSTABILIZE,
+        (uint8_t)Mode::Number::QHOVER,
+        (uint8_t)Mode::Number::QLOITER,
+        (uint8_t)Mode::Number::QACRO,
+#if QAUTOTUNE_ENABLED
+        (uint8_t)Mode::Number::QAUTOTUNE
+#endif
+#endif
+    };
+
+    return !block_GCS_mode_change((uint8_t)mode_num, mode_list, ARRAY_SIZE(mode_list));
+}
 
 bool Plane::set_mode(Mode &new_mode, const ModeReason reason)
 {
 
     if (control_mode == &new_mode) {
         // don't switch modes if we are already in the correct mode.
-        // only make happy noise if using a difent method to switch, this stops beeping for repeated change mode requests from GCS
+        // only make happy noise if using a different method to switch, this stops beeping for repeated change mode requests from GCS
         if ((reason != control_mode_reason) && (reason != ModeReason::INITIALISED)) {
             AP_Notify::events.user_mode_change = 1;
         }
@@ -220,18 +250,6 @@ bool Plane::set_mode(Mode &new_mode, const ModeReason reason)
         return false;
     }
 
-#if !QAUTOTUNE_ENABLED
-    if (&new_mode == &plane.mode_qautotune) {
-        gcs().send_text(MAV_SEVERITY_INFO,"QAUTOTUNE disabled");
-        set_mode(plane.mode_qhover, ModeReason::UNAVAILABLE);
-        // make sad noise
-        if (reason != ModeReason::INITIALISED) {
-            AP_Notify::events.user_mode_change_failed = 1;
-        }
-        return false;
-    }
-#endif  // !QAUTOTUNE_ENABLED
-
 #else
     if (new_mode.is_vtol_mode()) {
         INTERNAL_ERROR(AP_InternalError::error_t::flow_of_control);
@@ -246,13 +264,23 @@ bool Plane::set_mode(Mode &new_mode, const ModeReason reason)
 
 #if AP_FENCE_ENABLED
     // may not be allowed to change mode if recovering from fence breach
-    if (hal.util->get_soft_armed() && fence.enabled() && fence.option_enabled(AC_Fence::OPTIONS::DISABLE_MODE_CHANGE) &&
-                                            fence.get_breaches() && in_fence_recovery()) {
+    if (hal.util->get_soft_armed() &&
+        fence.enabled() &&
+        fence.option_enabled(AC_Fence::OPTIONS::DISABLE_MODE_CHANGE) &&
+        fence.get_breaches() &&
+        in_fence_recovery() &&
+        !mode_reason_is_landing_sequence(reason)) {
         gcs().send_text(MAV_SEVERITY_NOTICE,"Mode change to %s denied, in fence recovery", new_mode.name());
         AP_Notify::events.user_mode_change_failed = 1;
         return false;
     }
 #endif
+
+    // Check if GCS mode change is disabled via parameter
+    if ((reason == ModeReason::GCS_COMMAND) && !gcs_mode_enabled(new_mode.mode_number())) {
+        gcs().send_text(MAV_SEVERITY_NOTICE,"Mode change to %s denied, GCS entry disabled (FLTMODE_GCSBLOCK)", new_mode.name());
+        return false;
+    }
 
     // backup current control_mode and previous_mode
     Mode &old_previous_mode = *previous_mode;
@@ -284,16 +312,13 @@ bool Plane::set_mode(Mode &new_mode, const ModeReason reason)
         return false;
     }
 
-    if (previous_mode == &mode_autotune) {
-        // restore last gains
-        autotune_restore();
-    }
-
     // exit previous mode
     old_mode.exit();
 
     // log and notify mode change
+#if HAL_LOGGING_ENABLED
     logger.Write_Mode(control_mode->mode_number(), control_mode_reason);
+#endif
     notify_mode(*control_mode);
     gcs().send_message(MSG_HEARTBEAT);
 
@@ -327,7 +352,7 @@ void Plane::check_long_failsafe()
     const uint32_t tnow = millis();
     // only act on changes
     // -------------------
-    if (failsafe.state != FAILSAFE_LONG && failsafe.state != FAILSAFE_GCS && flight_stage != AP_Vehicle::FixedWing::FLIGHT_LAND) {
+    if (failsafe.state != FAILSAFE_LONG && failsafe.state != FAILSAFE_GCS && flight_stage != AP_FixedWing::FlightStage::LAND) {
         uint32_t radio_timeout_ms = failsafe.last_valid_rc_ms;
         if (failsafe.state == FAILSAFE_SHORT) {
             // time is relative to when short failsafe enabled
@@ -374,7 +399,7 @@ void Plane::check_short_failsafe()
     // -------------------
     if (g.fs_action_short != FS_ACTION_SHORT_DISABLED &&
        failsafe.state == FAILSAFE_NONE &&
-       flight_stage != AP_Vehicle::FixedWing::FLIGHT_LAND) {
+       flight_stage != AP_FixedWing::FlightStage::LAND) {
         // The condition is checked and the flag rc_failsafe is set in radio.cpp
         if(failsafe.rc_failsafe) {
             failsafe_short_on_event(FAILSAFE_SHORT, ModeReason::RADIO_FAILSAFE);
@@ -418,17 +443,15 @@ void Plane::notify_mode(const Mode& mode)
     notify.set_flight_mode_str(mode.name4());
 }
 
+#if HAL_LOGGING_ENABLED
 /*
   should we log a message type now?
  */
 bool Plane::should_log(uint32_t mask)
 {
-#if LOGGING_ENABLED == ENABLED
     return logger.should_log(mask);
-#else
-    return false;
-#endif
 }
+#endif
 
 /*
   return throttle percentage from 0 to 100 for normal use and -100 to 100 when using reverse thrust

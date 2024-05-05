@@ -12,8 +12,7 @@ public:
     AP_NavEKF_Source();
 
     /* Do not allow copies */
-    AP_NavEKF_Source(const AP_NavEKF_Source &other) = delete;
-    AP_NavEKF_Source &operator=(const AP_NavEKF_Source&) = delete;
+    CLASS_NO_COPY(AP_NavEKF_Source);
 
     enum class SourceXY : uint8_t {
         NONE = 0,
@@ -56,7 +55,7 @@ public:
 
     // get current position source
     SourceXY getPosXYSource() const { return _source_set[active_source_set].posxy; }
-    SourceZ getPosZSource() const { return _source_set[active_source_set].posz; }
+    SourceZ getPosZSource() const;
 
     // set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
     void setPosVelYawSourceSet(uint8_t source_set_idx);

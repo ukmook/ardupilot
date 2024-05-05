@@ -15,9 +15,9 @@
 
 #pragma once
 
-#define EFI_MAX_INSTANCES 2
-#define EFI_MAX_BACKENDS 2
-#define ENGINE_MAX_CYLINDERS 1
+#include <AP_EFI/AP_EFI_config.h>
+
+#if HAL_EFI_ENABLED
 
 #include <AP_Common/AP_Common.h>
 #include <AP_HAL/AP_HAL.h>
@@ -112,10 +112,16 @@ struct Cylinder_Status {
     // Cylinder head temperature (CHT) (kelvin)
     float cylinder_head_temperature;
 
+    // 2nd Cylinder head temperature (CHT) (kelvin), 0 if not applicable
+    float cylinder_head_temperature2;
+    
     // Exhaust gas temperature (EGT) (kelvin)
     // If this cylinder is not equipped with an EGT sensor - will be NaN
     // If there is a single shared EGT sensor, will be the same value for all cylinders
     float exhaust_gas_temperature;
+
+    // 2nd cylinder exhaust gas temperature, 0 if not applicable
+    float exhaust_gas_temperature2;
 
     // Estimated lambda coefficient (dimensionless ratio)
     // Useful for monitoring and tuning purposes.
@@ -197,6 +203,16 @@ struct EFI_State {
     Spark_Plug_Usage spark_plug_usage;
 
     // Status for each cylinder in the engine
-    Cylinder_Status cylinder_status[ENGINE_MAX_CYLINDERS];
+    Cylinder_Status cylinder_status;
 
+    // ignition voltage in Volts
+    float ignition_voltage = -1;  // -1 is "unknown";
+
+    // throttle output percentage
+    float throttle_out;
+
+    // PT compensation
+    float pt_compensation;
 };
+
+#endif // HAL_EFI_ENABLED

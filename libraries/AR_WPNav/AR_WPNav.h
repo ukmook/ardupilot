@@ -91,6 +91,8 @@ public:
 
     // accessors for parameter values
     float get_default_speed() const { return _speed_max; }
+    float get_default_accel() const { return _accel_max; }
+    float get_default_jerk() const { return _jerk_max; }
     float get_radius() const { return _radius; }
     float get_pivot_rate() const { return _pivot.get_rate_max(); }
 
@@ -166,6 +168,7 @@ protected:
     uint32_t _last_update_ms;       // system time of last call to update
     Location _origin;               // origin Location (vehicle will travel from the origin to the destination)
     Location _destination;          // destination Location when in Guided_WP
+    Location _next_destination;     // next destination Location when in Guided_WP
     bool _orig_and_dest_valid;      // true if the origin and destination have been set
     bool _reversed;                 // execute the mission by backing up
     enum class NavControllerType {

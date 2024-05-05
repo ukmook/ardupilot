@@ -116,6 +116,8 @@
 #define PROTO_EXTF_READ_MULTI       0x36    // read bytes at address and increment
 #define PROTO_EXTF_GET_CRC          0x37	// compute & return a CRC of data in external flash
 
+#define PROTO_CHIP_FULL_ERASE   0x40    // erase program area and reset program address, skip any flash wear optimization and force an erase
+
 #define PROTO_PROG_MULTI_MAX    64	// maximum PROG_MULTI size
 #define PROTO_READ_MULTI_MAX    255	// size of the size field
 
@@ -141,7 +143,7 @@ static virtual_timer_t systick_vt;
 #define TIMER_BL_WAIT	0
 #define TIMER_LED	    1
 
-static enum led_state {LED_BLINK, LED_ON, LED_OFF} led_state;
+static enum led_state led_state;
 
 volatile unsigned timer[NTIMERS];
 
@@ -161,7 +163,7 @@ extern AP_FlashIface_JEDEC ext_flash;
 /*
   1ms timer tick callback
  */
-static void sys_tick_handler(void *ctx)
+static void sys_tick_handler(virtual_timer_t* vt, void *ctx)
 {
     chSysLockFromISR();
     chVTSetI(&systick_vt, chTimeMS2I(1), sys_tick_handler, nullptr);
@@ -176,6 +178,11 @@ static void sys_tick_handler(void *ctx)
         led_toggle(LED_BOOTLOADER);
         timer[TIMER_LED] = 50;
     }
+
+    if ((led_state == LED_BAD_FW) && (timer[TIMER_LED] == 0)) {
+        led_toggle(LED_BOOTLOADER);
+        timer[TIMER_LED] = 1000;
+    }
 }
 
 static void delay(unsigned msec)
@@ -183,7 +190,7 @@ static void delay(unsigned msec)
     chThdSleep(chTimeMS2I(msec));
 }
 
-static void
+void
 led_set(enum led_state state)
 {
     led_state = state;
@@ -199,6 +206,10 @@ led_set(enum led_state state)
 
     case LED_BLINK:
         /* restart the blink state machine ASAP */
+        timer[TIMER_LED] = 0;
+        break;
+
+    case LED_BAD_FW:
         timer[TIMER_LED] = 0;
         break;
     }
@@ -229,6 +240,10 @@ do_jump(uint32_t stacktop, uint32_t entrypoint)
 #define APP_START_ADDRESS (FLASH_LOAD_ADDRESS + (FLASH_BOOTLOADER_LOAD_KB + APP_START_OFFSET_KB)*1024U)
 #endif
 
+#if !defined(STM32_OTG2_IS_OTG1)
+#define STM32_OTG2_IS_OTG1 0
+#endif
+
 void
 jump_to_app()
 {
@@ -238,6 +253,7 @@ jump_to_app()
     const auto ok = check_good_firmware();
     if (ok != check_fw_result_t::CHECK_FW_OK) {
         // bad firmware, don't try and boot
+        led_set(LED_BAD_FW);
         return;
     }
 #endif
@@ -304,12 +320,17 @@ jump_to_app()
 #elif defined(STM32L4)
     rccDisableAPB1R1(~0);
     rccDisableAPB1R2(~0);
+#elif defined(STM32L4PLUS)
+    rccDisableAPB1R1(~0);
+    rccDisableAPB1R2(~0);
 #else
     rccDisableAPB1(~0);
 #endif
     rccDisableAPB2(~0);
-#if HAL_USE_SERIAL_USB == TRUE    
+#if HAL_USE_SERIAL_USB == TRUE
+#if !STM32_OTG2_IS_OTG1
     rccResetOTG_FS();
+#endif
 #if defined(rccResetOTG_HS)
     rccResetOTG_HS();
 #endif
@@ -401,23 +422,23 @@ static void test_flash()
             }
             uint32_t num_writes = flash_func_sector_size(page) / sizeof(v);
             uprintf("page %u size %u addr=0x%08x v=0x%08x\n",
-                    page, flash_func_sector_size(page), addr, v[0]); delay(10);
+                    unsigned(page), unsigned(flash_func_sector_size(page)), unsigned(addr), unsigned(v[0])); delay(10);
             if (init_done) {
                 for (uint32_t j=0; j<flash_func_sector_size(page)/4; j++) {
                     uint32_t v1 = (page<<16) + (loop-1);
                     uint32_t v2 = flash_func_read_word(addr+j*4);
                     if (v2 != v1) {
-                        uprintf("read error at 0x%08x v=0x%08x v2=0x%08x\n", addr+j*4, v1, v2);
+                        uprintf("read error at 0x%08x v=0x%08x v2=0x%08x\n", unsigned(addr+j*4), unsigned(v1), unsigned(v2));
                         break;
                     }
                 }
             }
             if (!flash_func_erase_sector(page)) {
-                uprintf("erase of %u failed\n", page);
+                uprintf("erase of %u failed\n", unsigned(page));
             }
             for (uint32_t j=0; j<num_writes; j++) {
                 if (!flash_func_write_words(addr+j*sizeof(v), v, ARRAY_SIZE(v))) {
-                    uprintf("write failed at 0x%08x\n", addr+j*sizeof(v));
+                    uprintf("write failed at 0x%08x\n", unsigned(addr+j*sizeof(v)));
                     break;
                 }
             }
@@ -467,7 +488,10 @@ bootloader(unsigned timeout)
     }
 
     /* make the LED blink while we are idle */
-    led_set(LED_BLINK);
+    // ensure we don't override BAD FW LED
+    if (led_state != LED_BAD_FW) {
+        led_set(LED_BLINK);
+    }
 
     while (true) {
         volatile int c;
@@ -584,6 +608,9 @@ bootloader(unsigned timeout)
         // erase failure:	INSYNC/FAILURE
         //
         case PROTO_CHIP_ERASE:
+#if defined(STM32F7) || defined(STM32H7)
+        case PROTO_CHIP_FULL_ERASE:
+#endif
 
             if (!done_sync || !CHECK_GET_DEVICE_FINISHED(done_get_device_flags)) {
                 // lower chance of random data on a uart triggering erase
@@ -607,8 +634,12 @@ bootloader(unsigned timeout)
             led_set(LED_OFF);
 
             // erase all sectors
-            for (uint8_t i = 0; flash_func_sector_size(i) != 0; i++) {
+            for (uint16_t i = 0; flash_func_sector_size(i) != 0; i++) {
+#if defined(STM32F7) || defined(STM32H7)
+                if (!flash_func_erase_sector(i, c == PROTO_CHIP_FULL_ERASE)) {
+#else
                 if (!flash_func_erase_sector(i)) {
+#endif
                     goto cmd_fail;
                 }
             }

@@ -16,6 +16,7 @@
 #include "AP_Proximity.h"
 
 #if HAL_PROXIMITY_ENABLED
+#include "AP_Proximity_Backend.h"
 #include "AP_Proximity_RPLidarA2.h"
 #include "AP_Proximity_TeraRangerTower.h"
 #include "AP_Proximity_TeraRangerTowerEvo.h"
@@ -26,6 +27,11 @@
 #include "AP_Proximity_SITL.h"
 #include "AP_Proximity_AirSimSITL.h"
 #include "AP_Proximity_Cygbot_D1.h"
+#include "AP_Proximity_DroneCAN.h"
+#include "AP_Proximity_Scripting.h"
+#include "AP_Proximity_LD06.h"
+#include "AP_Proximity_MR72_CAN.h"
+
 
 #include <AP_Logger/AP_Logger.h>
 
@@ -65,30 +71,56 @@ const AP_Param::GroupInfo AP_Proximity::var_info[] = {
     // 19 was _MIN
     // 20 was _MAX
 
+    // @Param{Copter}: _ALT_MIN
+    // @DisplayName: Proximity lowest altitude.
+    // @Description: Minimum altitude below which proximity should not work.
+    // @Units: m
+    // @Range: 0 10
+    // @User: Advanced
+    AP_GROUPINFO_FRAME("_ALT_MIN", 25, AP_Proximity, _alt_min, 1.0f, AP_PARAM_FRAME_COPTER | AP_PARAM_FRAME_HELI | AP_PARAM_FRAME_TRICOPTER),
+
     // @Group: 1
     // @Path: AP_Proximity_Params.cpp
     AP_SUBGROUPINFO(params[0], "1", 21, AP_Proximity, AP_Proximity_Params),
+
+    // @Group: 1_
+    // @Path: AP_Proximity_MR72_CAN.cpp
+    AP_SUBGROUPVARPTR(drivers[0], "1_",  26, AP_Proximity, backend_var_info[0]),
 
 #if PROXIMITY_MAX_INSTANCES > 1
     // @Group: 2
     // @Path: AP_Proximity_Params.cpp
     AP_SUBGROUPINFO(params[1], "2", 22, AP_Proximity, AP_Proximity_Params),
+
+    // @Group: 2_
+    // @Path: AP_Proximity_MR72_CAN.cpp
+    AP_SUBGROUPVARPTR(drivers[1], "2_",  27, AP_Proximity, backend_var_info[1]),
 #endif
 
 #if PROXIMITY_MAX_INSTANCES > 2
     // @Group: 3
     // @Path: AP_Proximity_Params.cpp
     AP_SUBGROUPINFO(params[2], "3", 23, AP_Proximity, AP_Proximity_Params),
+
+    // @Group: 3_
+    // @Path: AP_Proximity_MR72_CAN.cpp
+    AP_SUBGROUPVARPTR(drivers[2], "3_",  28, AP_Proximity, backend_var_info[2]),
 #endif
 
 #if PROXIMITY_MAX_INSTANCES > 3
     // @Group: 4
     // @Path: AP_Proximity_Params.cpp
     AP_SUBGROUPINFO(params[3], "4", 24, AP_Proximity, AP_Proximity_Params),
+
+    // @Group: 4_
+    // @Path: AP_Proximity_MR72_CAN.cpp
+    AP_SUBGROUPVARPTR(drivers[3], "4_",  29, AP_Proximity, backend_var_info[3]),
 #endif
 
     AP_GROUPEND
 };
+
+const AP_Param::GroupInfo *AP_Proximity::backend_var_info[PROXIMITY_MAX_INSTANCES];
 
 AP_Proximity::AP_Proximity()
 {
@@ -112,10 +144,12 @@ void AP_Proximity::init()
 
     // instantiate backends
     uint8_t serial_instance = 0;
+    (void)serial_instance;  // in case no serial backends are compiled in
     for (uint8_t instance=0; instance<PROXIMITY_MAX_INSTANCES; instance++) {
         switch (get_type(instance)) {
         case Type::None:
             break;
+#if AP_PROXIMITY_RPLIDARA2_ENABLED
         case Type::RPLidarA2:
             if (AP_Proximity_RPLidarA2::detect(serial_instance)) {
                 state[instance].instance = instance;
@@ -123,11 +157,14 @@ void AP_Proximity::init()
                 serial_instance++;
             }
             break;
+#endif
+#if AP_PROXIMITY_MAV_ENABLED
         case Type::MAV:
             state[instance].instance = instance;
             drivers[instance] = new AP_Proximity_MAV(*this, state[instance], params[instance]);
             break;
-
+#endif
+#if AP_PROXIMITY_TERARANGERTOWER_ENABLED
         case Type::TRTOWER:
             if (AP_Proximity_TeraRangerTower::detect(serial_instance)) {
                 state[instance].instance = instance;
@@ -135,6 +172,8 @@ void AP_Proximity::init()
                 serial_instance++;
             }
             break;
+#endif
+#if AP_PROXIMITY_TERARANGERTOWEREVO_ENABLED
         case Type::TRTOWEREVO:
             if (AP_Proximity_TeraRangerTowerEvo::detect(serial_instance)) {
                 state[instance].instance = instance;
@@ -142,12 +181,14 @@ void AP_Proximity::init()
                 serial_instance++;
             }
             break;
-
+#endif
+#if AP_PROXIMITY_RANGEFINDER_ENABLED
         case Type::RangeFinder:
             state[instance].instance = instance;
             drivers[instance] = new AP_Proximity_RangeFinder(*this, state[instance], params[instance]);
             break;
-
+#endif
+#if AP_PROXIMITY_LIGHTWARE_SF40C_ENABLED
         case Type::SF40C:
             if (AP_Proximity_LightWareSF40C::detect(serial_instance)) {
                 state[instance].instance = instance;
@@ -155,7 +196,8 @@ void AP_Proximity::init()
                 serial_instance++;
             }
             break;
-
+#endif
+#if AP_PROXIMITY_LIGHTWARE_SF45B_ENABLED
         case Type::SF45B:
             if (AP_Proximity_LightWareSF45B::detect(serial_instance)) {
                 state[instance].instance = instance;
@@ -163,26 +205,52 @@ void AP_Proximity::init()
                 serial_instance++;
             }
             break;
-
-        case Type::CYGBOT_D1:
+#endif
 #if AP_PROXIMITY_CYGBOT_ENABLED
+        case Type::CYGBOT_D1:
         if (AP_Proximity_Cygbot_D1::detect(serial_instance)) {
             state[instance].instance = instance;
             drivers[instance] = new AP_Proximity_Cygbot_D1(*this, state[instance], params[instance], serial_instance);
             serial_instance++;
         }
+            break;
 # endif
+#if AP_PROXIMITY_DRONECAN_ENABLED
+        case  Type::DroneCAN:
+            num_instances = instance+1;
         break;
-
-#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+#endif
+#if AP_PROXIMITY_SCRIPTING_ENABLED
+        case Type::Scripting:
+            state[instance].instance = instance;
+            drivers[instance] = new AP_Proximity_Scripting(*this, state[instance], params[instance]);
+        break;
+#endif
+#if AP_PROXIMITY_MR72_ENABLED
+        case Type::MR72:
+            state[instance].instance = instance;
+            drivers[instance] = new AP_Proximity_MR72_CAN(*this, state[instance], params[instance]);
+            break;
+# endif
+#if AP_PROXIMITY_SITL_ENABLED
         case Type::SITL:
             state[instance].instance = instance;
             drivers[instance] = new AP_Proximity_SITL(*this, state[instance], params[instance]);
             break;
-
+#endif
+#if AP_PROXIMITY_AIRSIMSITL_ENABLED
         case Type::AirSimSITL:
             state[instance].instance = instance;
             drivers[instance] = new AP_Proximity_AirSimSITL(*this, state[instance], params[instance]);
+            break;
+#endif
+#if AP_PROXIMITY_LD06_ENABLED
+        case Type::LD06:
+            if (AP_Proximity_LD06::detect(serial_instance)) {
+                state[instance].instance = instance;
+                drivers[instance] = new AP_Proximity_LD06(*this, state[instance], params[instance], serial_instance);
+                serial_instance++;
+            }
             break;
 #endif
         }
@@ -195,6 +263,12 @@ void AP_Proximity::init()
 
         // initialise status
         state[instance].status = Status::NotConnected;
+
+        // if the backend has some local parameters then make those available in the tree
+        if (drivers[instance] && state[instance].var_info) {
+            backend_var_info[instance] = state[instance].var_info;
+            AP_Param::load_object_from_eeprom(drivers[instance], backend_var_info[instance]);
+        }
     }
 }
 
@@ -245,6 +319,15 @@ AP_Proximity::Status AP_Proximity::get_status() const
     }
     // All valid sensors seem to be working
     return Status::Good;
+}
+
+// return proximity backend for Lua scripting
+AP_Proximity_Backend *AP_Proximity::get_backend(uint8_t id) const
+{
+    if (!valid_instance(id)) {
+        return nullptr;
+    }
+    return drivers[id];
 }
 
 // prearm checks
@@ -344,6 +427,12 @@ uint8_t AP_Proximity::get_object_count() const
 bool AP_Proximity::get_object_angle_and_distance(uint8_t object_number, float& angle_deg, float &distance) const
 {
     return boundary.get_horizontal_object_angle_and_distance(object_number, angle_deg, distance);
+}
+
+// get obstacle pitch and angle for a particular obstacle num
+bool AP_Proximity::get_obstacle_info(uint8_t obstacle_num, float &angle_deg, float &pitch, float &distance) const
+{
+    return boundary.get_obstacle_info(obstacle_num, angle_deg, pitch, distance);
 }
 
 // handle mavlink messages

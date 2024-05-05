@@ -39,7 +39,6 @@
 // #include <AP_AccelCal/AP_AccelCal.h>                // interface and maths for accelerometer calibration
 // #include <AP_InertialSensor/AP_InertialSensor.h>  // ArduPilot Mega Inertial Sensor (accel & gyro) Library
 #include <AP_AHRS/AP_AHRS.h>
-#include <AP_Stats/AP_Stats.h>     // statistics library
 #include <Filter/Filter.h>             // Filter library
 #include <AP_Vehicle/AP_Vehicle.h>         // needed for AHRS build
 #include <AP_InertialNav/AP_InertialNav.h>     // inertial navigation library
@@ -50,6 +49,8 @@
 #include <AC_PID/AC_PID_2D.h>
 #include <AC_PID/AC_PID_Basic.h>
 #include <AC_PID/AC_PID.h>
+#include <AP_Vehicle/AP_MultiCopter.h>
+
 #include <Filter/NotchFilter.h>
 
 // Configuration
@@ -57,6 +58,7 @@
 #include "config.h"
 
 #include "Fins.h"
+#include "Loiter.h"
 
 #include "RC_Channel.h"         // RC Channel Library
 
@@ -89,15 +91,17 @@ public:
     friend class ModeLand;
     friend class ModeVelocity;
     friend class ModeLoiter;
+    friend class ModeRTL;
 
     friend class Fins;
+    friend class Loiter;
 
     Blimp(void);
 
 private:
 
     // key aircraft parameters passed to multiple libraries
-    AP_Vehicle::MultiCopter aparm;
+    AP_MultiCopter aparm;
 
     // Global parameters are all contained within the 'g' class.
     Parameters g;
@@ -106,10 +110,8 @@ private:
     // primary input control channels
     RC_Channel *channel_right;
     RC_Channel *channel_front;
-    RC_Channel *channel_down;
+    RC_Channel *channel_up;
     RC_Channel *channel_yaw;
-
-    AP_Logger logger;
 
     // flight modes convenience array
     AP_Int8 *flight_modes;
@@ -145,7 +147,7 @@ private:
             uint8_t logging_started         : 1; // 4       // true if logging has started
             uint8_t land_complete           : 1; // 5       // true if we have detected a landing
             uint8_t new_radio_frame         : 1; // 6       // Set true if we have new PWM data to act on from the Radio
-            uint8_t rc_receiver_present     : 1; // 7       // true if we have an rc receiver present (i.e. if we've ever received an update
+            uint8_t rc_receiver_present_unused     : 1; // 7       // UNUSED
             uint8_t compass_mot             : 1; // 8       // true if we are currently performing compassmot calibration
             uint8_t motor_test              : 1; // 9       // true if we are currently performing the motors test
             uint8_t initialised             : 1; // 10      // true once the init_ardupilot function has completed.  Extended status to GCS is not sent until this completes
@@ -170,7 +172,7 @@ private:
 
     RCMapper rcmap;
 
-    // intertial nav alt when we armed
+    // inertial nav alt when we armed
     float arming_altitude_m;
 
     // Failsafe
@@ -189,6 +191,7 @@ private:
 
     // Motor Output
     Fins *motors;
+    Loiter *loiter;
 
     int32_t _home_bearing;
     uint32_t _home_distance;
@@ -224,13 +227,13 @@ private:
     AP_InertialNav inertial_nav;
 
     // Vel & pos PIDs
-    AC_PID_2D pid_vel_xy{3, 0.2, 0, 0, 0.2, 3, 3, 0.02}; //These are the defaults - P I D FF IMAX FiltHz FiltDHz DT
-    AC_PID_Basic pid_vel_z{7, 1.5, 0, 0, 1, 3, 3, 0.02};
-    AC_PID_Basic pid_vel_yaw{3, 0.4, 0, 0, 0.2, 3, 3, 0.02};
+    AC_PID_2D pid_vel_xy{3, 0.2, 0, 0, 0.2, 3, 3}; //These are the defaults - P I D FF IMAX FiltHz FiltDHz DT
+    AC_PID_Basic pid_vel_z{7, 1.5, 0, 0, 1, 3, 3};
+    AC_PID_Basic pid_vel_yaw{3, 0.4, 0, 0, 0.2, 3, 3};
 
-    AC_PID_2D pid_pos_xy{1, 0.05, 0, 0, 0.1, 3, 3, 0.02};
-    AC_PID_Basic pid_pos_z{0.7, 0, 0, 0, 0, 3, 3, 0.02};
-    AC_PID pid_pos_yaw{1.2, 0.5, 0, 0, 2, 3, 3, 3, 0.02}; //p, i, d, ff, imax, filt_t, filt_e, filt_d, dt, opt srmax, opt srtau
+    AC_PID_2D pid_pos_xy{1, 0.05, 0, 0, 0.1, 3, 3};
+    AC_PID_Basic pid_pos_z{0.7, 0, 0, 0, 0, 3, 3};
+    AC_PID pid_pos_yaw{1.2, 0.5, 0, 0, 2, 3, 3, 3}; //p, i, d, ff, imax, filt_t, filt_e, filt_d, dt, opt srmax, opt srtau
 
     // System Timers
     // --------------
@@ -346,8 +349,15 @@ private:
     // landing_gear.cpp
     void landinggear_update();
 
+#if HAL_LOGGING_ENABLED
+    // methods for AP_Vehicle:
+    const AP_Int32 &get_log_bitmask() override { return g.log_bitmask; }
+    const struct LogStructure *get_log_structures() const override {
+        return log_structure;
+    }
+    uint8_t get_num_log_structures() const override;
+
     // Log.cpp
-    void Log_Write_Performance();
     void Log_Write_Attitude();
     void Log_Write_PIDs();
     void Log_Write_EKF_POS();
@@ -357,13 +367,12 @@ private:
     void Log_Write_Data(LogDataID id, uint16_t value);
     void Log_Write_Data(LogDataID id, float value);
     void Log_Write_Parameter_Tuning(uint8_t param, float tuning_val, float tune_min, float tune_max);
-    void Log_Write_GuidedTarget(uint8_t target_type, const Vector3f& pos_target, const Vector3f& vel_target);
-    void Log_Write_SysID_Setup(uint8_t systemID_axis, float waveform_magnitude, float frequency_start, float frequency_stop, float time_fade_in, float time_const_freq, float time_record, float time_fade_out);
-    void Log_Write_SysID_Data(float waveform_time, float waveform_sample, float waveform_freq, float angle_x, float angle_y, float angle_z, float accel_x, float accel_y, float accel_z);
+
+
     void Log_Write_Vehicle_Startup_Messages();
-    void log_init(void);
     void Write_FINI(float right, float front, float down, float yaw);
     void Write_FINO(float *amp, float *off);
+#endif
 
     // mode.cpp
     bool set_mode(Mode::Number mode, ModeReason reason);
@@ -376,7 +385,7 @@ private:
     void notify_flight_mode();
 
     // mode_land.cpp
-    void set_mode_land_with_pause(ModeReason reason);
+    void set_mode_land_failsafe(ModeReason reason);
     bool landing_with_GPS();
 
     // // motors.cpp
@@ -428,6 +437,7 @@ private:
     ModeLand mode_land;
     ModeVelocity mode_velocity;
     ModeLoiter mode_loiter;
+    ModeRTL mode_rtl;
 
     // mode.cpp
     Mode *mode_from_mode_num(const Mode::Number mode);

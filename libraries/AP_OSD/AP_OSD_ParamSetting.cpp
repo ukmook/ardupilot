@@ -23,7 +23,9 @@
 
 #include "AP_OSD.h"
 #include <AP_Vehicle/AP_Vehicle_Type.h>
+#include <GCS_MAVLink/GCS.h>
 #include <SRV_Channel/SRV_Channel.h>
+#include <AP_SerialManager/AP_SerialManager.h>
 #include <ctype.h>
 
 #if OSD_PARAM_ENABLED
@@ -34,21 +36,21 @@ const AP_Param::GroupInfo AP_OSD_ParamSetting::var_info[] = {
     // @Description: Enable setting
     // @Values: 0:Disabled,1:Enabled
     // @User: Standard
-    AP_GROUPINFO("_EN", 1, AP_OSD_ParamSetting, enabled, 0),
+    AP_GROUPINFO_FLAGS_DEFAULT_POINTER("_EN", 1, AP_OSD_ParamSetting, enabled, default_enabled),
 
     // @Param: _X
     // @DisplayName: X position
     // @Description: Horizontal position on screen
     // @Range: 0 29
     // @User: Standard
-    AP_GROUPINFO("_X", 2, AP_OSD_ParamSetting, xpos, 0),
+    AP_GROUPINFO("_X", 2, AP_OSD_ParamSetting, xpos, 2),
 
     // @Param: _Y
     // @DisplayName: Y position
     // @Description: Vertical position on screen
     // @Range: 0 15
     // @User: Standard
-    AP_GROUPINFO("_Y", 3, AP_OSD_ParamSetting, ypos, 0),
+    AP_GROUPINFO_FLAGS_DEFAULT_POINTER("_Y", 3, AP_OSD_ParamSetting, ypos, default_ypos),
 
     // Parameter access keys. These default to -1 too allow user overrides
     // to work properly
@@ -57,19 +59,19 @@ const AP_Param::GroupInfo AP_OSD_ParamSetting::var_info[] = {
     // @DisplayName: Parameter key
     // @Description: Key of the parameter to be displayed and modified
     // @User: Standard
-    AP_GROUPINFO("_KEY", 4, AP_OSD_ParamSetting, _param_key, -1),
+    AP_GROUPINFO_FLAGS_DEFAULT_POINTER("_KEY", 4, AP_OSD_ParamSetting, _param_key, default_param_key),
 
     // @Param: _IDX
     // @DisplayName: Parameter index
     // @Description: Index of the parameter to be displayed and modified
     // @User: Standard
-    AP_GROUPINFO("_IDX", 5, AP_OSD_ParamSetting, _param_idx, -1),
+    AP_GROUPINFO_FLAGS_DEFAULT_POINTER("_IDX", 5, AP_OSD_ParamSetting, _param_idx, default_param_idx),
 
     // @Param: _GRP
     // @DisplayName: Parameter group
     // @Description: Group of the parameter to be displayed and modified
     // @User: Standard
-    AP_GROUPINFO("_GRP", 6, AP_OSD_ParamSetting, _param_group, -1),
+    AP_GROUPINFO_FLAGS_DEFAULT_POINTER("_GRP", 6, AP_OSD_ParamSetting, _param_group, default_param_group),
 
     // @Param: _MIN
     // @DisplayName: Parameter minimum
@@ -93,10 +95,31 @@ const AP_Param::GroupInfo AP_OSD_ParamSetting::var_info[] = {
     // @DisplayName: Parameter type
     // @Description: Type of the parameter to be displayed and modified
     // @User: Standard
-    AP_GROUPINFO("_TYPE", 10, AP_OSD_ParamSetting, _type, 0),
+    AP_GROUPINFO_FLAGS_DEFAULT_POINTER("_TYPE", 10, AP_OSD_ParamSetting, _type, default_type),
 
     AP_GROUPEND
 };
+
+#if HAL_GCS_ENABLED
+// ensure that our OSD_PARAM type enumeration is 1:1 with the mavlink
+// numbers.  This allows us to do a simple cast from one to the other
+// when sending mavlink messages, rather than having some sort of
+// mapping function from our internal enumeration into the mavlink
+// enumeration.  Doing things this way has two advantages - in the
+// future we could add that mapping function and change our
+// enumeration, and the other is that it allows us to build the GPS
+// library without having the mavlink headers built (for example, in
+// AP_Periph we shouldn't need mavlink headers).
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::NONE == (uint32_t)OSD_PARAM_NONE, "OSD_PARAM_NONE incorrect");
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::SERIAL_PROTOCOL == (uint32_t)OSD_PARAM_SERIAL_PROTOCOL, "OSD_PARAM_SERIAL_PROTOCOL incorrect");
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::SERVO_FUNCTION == (uint32_t)OSD_PARAM_SERVO_FUNCTION, "OSD_PARAM_SERVO_FUNCTION incorrect");
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::AUX_FUNCTION == (uint32_t)OSD_PARAM_AUX_FUNCTION, "OSD_PARAM_AUX_FUNCTION incorrect");
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::FLIGHT_MODE == (uint32_t)OSD_PARAM_FLIGHT_MODE, "OSD_PARAM_FLIGHT_MODE incorrect");
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::FAILSAFE_ACTION == (uint32_t)OSD_PARAM_FAILSAFE_ACTION, "OSD_PARAM_FAILSAFE_ACTION incorrect");
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::FAILSAFE_ACTION_1 == (uint32_t)OSD_PARAM_FAILSAFE_ACTION_1, "OSD_PARAM_FAILSAFE_ACTION_1 incorrect");
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::FAILSAFE_ACTION_2 == (uint32_t)OSD_PARAM_FAILSAFE_ACTION_2, "OSD_PARAM_FAILSAFE_ACTION_2 incorrect");
+static_assert((uint32_t)AP_OSD_ParamSetting::Type::NUM_TYPES == (uint32_t)AP_OSD_ParamSetting::Type::NUM_TYPES, "AP_OSD_ParamSetting::Type::NUM_TYPES incorrect");
+#endif  // HAL_GCS_ENABLED
 
 #define PARAM_COMPOSITE_INDEX(key, idx, group) (uint32_t((uint32_t(key) << 23) | (uint32_t(idx) << 18) | uint32_t(group)))
 
@@ -115,8 +138,10 @@ static const char* SERIAL_PROTOCOL_VALUES[] = {
     "", "MAV", "MAV2", "FSKY_D", "FSKY_S", "GPS", "", "ALEX", "STORM", "RNG", 
     "FSKY_TX", "LID360", "", "BEACN", "VOLZ", "SBUS", "ESC_TLM", "DEV_TLM", "OPTFLW", "RBTSRV",
     "NMEA", "WNDVNE", "SLCAN", "RCIN", "MGSQRT", "LTM", "RUNCAM", "HOT_TLM", "SCRIPT", "CRSF",
-    "GEN", "WNCH", "MSP", "DJI"
+    "GEN", "WNCH", "MSP", "DJI", "AIRSPD", "ADSB", "AHRS", "AUDIO", "FETTEC", "TORQ",
+    "AIS", "CD_ESC", "MSP_DP", "MAV_HL", "TRAMP", "DDS", "IMUOUT", "IQ", "PPP",
 };
+static_assert(AP_SerialManager::SerialProtocol_NumProtocols == ARRAY_SIZE(SERIAL_PROTOCOL_VALUES), "Wrong size SerialProtocol_NumProtocols");
 
 static const char* SERVO_FUNCTIONS[] = {
     "NONE", "RCPASS", "FLAP", "FLAP_AUTO", "AIL", "", "MNT_PAN", "MNT_TLT", "MNT_RLL", "MNT_OPEN", 
@@ -172,7 +197,7 @@ static const char* FS_LNG_ACTNS[] = {
 };
 
 // plane parameters
-const AP_OSD_ParamSetting::ParamMetadata AP_OSD_ParamSetting::_param_metadata[OSD_PARAM_NUM_TYPES] = {
+const AP_OSD_ParamSetting::ParamMetadata AP_OSD_ParamSetting::_param_metadata[unsigned(AP_OSD_ParamSetting::Type::NUM_TYPES)] = {
     { -1, AP_SerialManager::SerialProtocol_NumProtocols - 1,    1, ARRAY_SIZE(SERIAL_PROTOCOL_VALUES), SERIAL_PROTOCOL_VALUES },  // OSD_PARAM_SERIAL_PROTOCOL
     { 0, SRV_Channel::k_nr_aux_servo_functions - 1,             1, ARRAY_SIZE(SERVO_FUNCTIONS), SERVO_FUNCTIONS },                // OSD_PARAM_SERVO_FUNCTION
     { 0, 105, 1, ARRAY_SIZE(AUX_OPTIONS), AUX_OPTIONS },                        // OSD_PARAM_AUX_FUNCTION
@@ -219,7 +244,7 @@ static const char* FS_ACT[] = {
 };
 
 // copter parameters
-const AP_OSD_ParamSetting::ParamMetadata AP_OSD_ParamSetting::_param_metadata[OSD_PARAM_NUM_TYPES] = {
+const AP_OSD_ParamSetting::ParamMetadata AP_OSD_ParamSetting::_param_metadata[unsigned(AP_OSD_ParamSetting::Type::NUM_TYPES)] = {
     { -1, AP_SerialManager::SerialProtocol_NumProtocols - 1,    1, ARRAY_SIZE(SERIAL_PROTOCOL_VALUES), SERIAL_PROTOCOL_VALUES },  // OSD_PARAM_SERIAL_PROTOCOL
     { 0, SRV_Channel::k_nr_aux_servo_functions - 1,             1, ARRAY_SIZE(SERVO_FUNCTIONS), SERVO_FUNCTIONS },                // OSD_PARAM_SERVO_FUNCTION
     { 0, 105, 1, ARRAY_SIZE(AUX_OPTIONS), AUX_OPTIONS },                        // OSD_PARAM_AUX_FUNCTION
@@ -230,43 +255,33 @@ const AP_OSD_ParamSetting::ParamMetadata AP_OSD_ParamSetting::_param_metadata[OS
 };
 
 #else
-const AP_OSD_ParamSetting::ParamMetadata AP_OSD_ParamSetting::_param_metadata[OSD_PARAM_NUM_TYPES] = {};
+const AP_OSD_ParamSetting::ParamMetadata AP_OSD_ParamSetting::_param_metadata[unsigned(AP_OSD_ParamSetting::Type::NUM_TYPES)] = {};
 #endif
 
 extern const AP_HAL::HAL& hal;
 
-// constructor
-AP_OSD_ParamSetting::AP_OSD_ParamSetting(uint8_t param_number, bool _enabled, uint8_t x, uint8_t y,  int16_t key, int8_t idx, int32_t group, int8_t type, float min, float max, float incr)
-    : AP_OSD_Setting(_enabled, x, y), _param_number(param_number)
-{
-    _param_group.set(group);
-    _param_idx.set(idx);
-    _param_key.set(key);
-    _param_min.set(min);
-    _param_max.set(max);
-    _param_incr.set(incr);
-    _type.set(type);
-}
-
 // default constructor that just sets some sensible defaults that exist on all platforms
-AP_OSD_ParamSetting::AP_OSD_ParamSetting(uint8_t param_number)
-    : AP_OSD_Setting(false, 2, param_number + 1), _param_number(param_number)
+AP_OSD_ParamSetting::AP_OSD_ParamSetting(uint8_t param_number) :
+    _param_number(param_number),
+    default_ypos(param_number + 1),
+    default_param_group(-1),
+    default_param_idx(-1),
+    default_param_key(-1)
 {
-    _param_min.set(0.0f);
-    _param_max.set(1.0f);
-    _param_incr.set(0.001f);
-    _type.set(OSD_PARAM_NONE);
+    AP_Param::setup_object_defaults(this, var_info);
 }
 
 // construct a setting from a compact static initializer structure
-AP_OSD_ParamSetting::AP_OSD_ParamSetting(const Initializer& initializer)
-    : AP_OSD_ParamSetting(initializer.index)
+AP_OSD_ParamSetting::AP_OSD_ParamSetting(const Initializer& initializer) :
+    _param_number(initializer.index),
+    default_enabled(true),
+    default_ypos(initializer.index + 1),
+    default_param_group(initializer.token.group_element),
+    default_param_idx(initializer.token.idx),
+    default_param_key(initializer.token.key),
+    default_type(float(initializer.type))
 {
-    _param_group.set(initializer.token.group_element);
-    _param_idx.set(initializer.token.idx);
-    _param_key.set(initializer.token.key);
-    _type.set(initializer.type);
-    enabled.set(true);
+    AP_Param::setup_object_defaults(this, var_info);
 }
 
 // update the contained parameter
@@ -312,7 +327,7 @@ bool AP_OSD_ParamSetting::set_by_name(const char* name, uint8_t config_type, flo
 
     _type.set_and_save_ifchanged(config_type);
 
-    if (config_type == OSD_PARAM_NONE && !is_zero(pincr)) {
+    if (config_type == uint8_t(Type::NONE) && !is_zero(pincr)) {
         // ranges
         _param_min.set_and_save_ifchanged(pmin);
         _param_max.set_and_save_ifchanged(pmax);
@@ -437,7 +452,7 @@ void AP_OSD_ParamSetting::copy_name_camel_case(char* name, size_t len) const
 bool AP_OSD_ParamSetting::set_from_metadata()
 {
     // check for statically configured setting metadata
-    if (_type > 0 && _type < OSD_PARAM_NUM_TYPES && _param_metadata[_type - 1].values_max > 0) {
+    if (_type > 0 && _type < uint8_t(Type::NUM_TYPES) && _param_metadata[_type - 1].values_max > 0) {
         _param_incr.set(_param_metadata[_type - 1].increment);
         _param_min.set(_param_metadata[_type - 1].min_value);
         _param_max.set(_param_metadata[_type - 1].max_value);

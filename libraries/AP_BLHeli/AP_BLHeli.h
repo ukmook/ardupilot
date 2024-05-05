@@ -43,7 +43,7 @@ public:
     AP_BLHeli();
     
     void update(void);
-    void init(void);
+    void init(uint32_t motor_mask, AP_HAL::RCOutput::output_mode mode);
     void update_telemetry(void);
     bool process_input(uint8_t b);
 
@@ -54,6 +54,8 @@ public:
     }
 
     uint32_t get_bidir_dshot_mask() const { return channel_bidir_dshot_mask.get(); }
+    uint8_t get_motor_poles() const { return motor_poles.get(); }
+    uint16_t get_telemetry_rate() const { return telem_rate.get(); }
 
     static AP_BLHeli *get_singleton(void) {
         return _singleton;
@@ -237,7 +239,7 @@ private:
     // have we locked the UART?
     bool uart_locked;
 
-    // true if we have a mix of reversable and normal ESC
+    // true if we have a mix of reversible and normal ESC
     bool mixed_type;
 
     // mapping from BLHeli motor numbers to RC output channels

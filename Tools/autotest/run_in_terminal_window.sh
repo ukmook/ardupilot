@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Try to run a command in an appropriate type of terminal window
 # depending on whats available
@@ -43,7 +43,7 @@ elif [ -n "$DISPLAY" -a -n "$(which gnome-terminal)" ]; then
   gnome-terminal -e "$*"
 elif [ -n "$STY" ]; then
   # We are running inside of screen, try to start it there
-  screen -X screen -t "$name" $*
+  screen -X screen -t "$name" bash -c "cd $PWD; $*"
 else
   filename="/tmp/$name.log"
   echo "RiTW: Window access not found, logging to $filename"

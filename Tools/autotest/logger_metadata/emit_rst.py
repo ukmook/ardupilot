@@ -24,7 +24,7 @@ This is a list of log messages which may be present in logs produced and stored 
         self.fh = open("LogMessages.rst", mode='w')
         print(self.preface(), file=self.fh)
 
-    def emit(self, doccos):
+    def emit(self, doccos, enumerations):
         self.start()
         for docco in doccos:
             print('.. _%s:' % docco.name, file=self.fh)
@@ -37,15 +37,47 @@ This is a list of log messages which may be present in logs produced and stored 
 
             rows = []
             for f in docco.fields_order:
+                # Populate the description column
                 if "description" in docco.fields[f]:
                     fdesc = docco.fields[f]["description"]
                 else:
                     fdesc = ""
-                rows.append([f, fdesc])
-#                if "bits" in docco.fields[f]:
-#                    print('                <bits>%s</bits>' %
-#                          docco.fields[f]["bits"], file=self.fh)
-            print(self.tablify(rows), file=self.fh)
+                # Initialise Type/Unit and check for enum/bitfields
+                ftypeunit = ""
+                fieldnamething = None
+                if "bitmaskenum" in docco.fields[f]:
+                    fieldnamething = "bitmaskenum"
+                    table_label = "Bitmask values"
+                    ftypeunit = "bitmask"
+                elif "valueenum" in docco.fields[f]:
+                    fieldnamething = "valueenum"
+                    table_label = "Values"
+                    ftypeunit = "enum"
+                # If an enum/bitmask is defined, build the table
+                if fieldnamething is not None:
+                    enum_name = docco.fields[f][fieldnamething]
+                    if enum_name not in enumerations:
+                        raise Exception("Unknown enum (%s) (have %s)" %
+                                        (enum_name, "\n".join(sorted(enumerations.keys()))))
+                    enumeration = enumerations[enum_name]
+                    bitmaskrows = []
+                    for enumentry in enumeration.entries:
+#                        print("enumentry: %s" % str(enumentry))
+                        comment = enumentry.comment
+                        if comment is None:
+                            comment = ""
+                        bitmaskrows.append([enumentry.name, str(enumentry.value), comment])
+                    fdesc += "\n%s:\n\n%s" % (table_label, self.tablify(bitmaskrows))
+                # Populate the Type/Units column
+                if "units" in docco.fields[f] and docco.fields[f]["units"] != "":
+                    ftypeunit = docco.fields[f]["units"]
+                elif "fmt" in docco.fields[f] and "char" in docco.fields[f]["fmt"]:
+                    ftypeunit = docco.fields[f]["fmt"]
+                # Add the new row
+                rows.append([f, ftypeunit, fdesc])
+
+            if rows:
+                print(self.tablify(rows), file=self.fh)
 
             print("", file=self.fh)
         self.stop()

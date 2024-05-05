@@ -12,13 +12,15 @@
 
 #include <AP_AHRS/AP_AHRS.h>
 #include <GCS_MAVLink/GCS.h>
+#include <AP_Logger/AP_Logger.h>
+#include <AC_Fence/AC_Fence.h>
 
 #include <stdio.h>
 
 #define POLYFENCE_LOADER_DEBUGGING 0
 
 #if POLYFENCE_LOADER_DEBUGGING
-#define Debug(fmt, args ...)  do { gcs().send_text(MAV_SEVERITY_INFO, fmt, ## args); } while (0)
+#define Debug(fmt, args ...)  do { GCS_SEND_TEXT(MAV_SEVERITY_INFO, fmt, ## args); } while (0)
 #else
 #define Debug(fmt, args ...)
 #endif
@@ -188,24 +190,9 @@ bool AC_PolyFence_loader::read_latlon_from_storage(uint16_t &read_offset, Vector
     return true;
 }
 
-// load boundary point from eeprom, returns true on successful load
-// only used for converting from old storage to new storage
-bool AC_PolyFence_loader::load_point_from_eeprom(uint16_t i, Vector2l& point) const
-{
-    // sanity check index
-    if (i >= max_items()) {
-        return false;
-    }
-
-    // read fence point
-    point.x = fence_storage.read_uint32(i * sizeof(Vector2l));
-    point.y = fence_storage.read_uint32(i * sizeof(Vector2l) + sizeof(uint32_t));
-    return true;
-}
-
 bool AC_PolyFence_loader::breached() const
 {
-    struct Location loc;
+    Location loc;
     if (!AP::ahrs().get_location(loc)) {
         return false;
     }
@@ -225,11 +212,14 @@ bool AC_PolyFence_loader::breached(const Location& loc) const
     pos.x = loc.lat;
     pos.y = loc.lng;
 
+    const uint16_t num_inclusion = _num_loaded_circle_inclusion_boundaries + _num_loaded_inclusion_boundaries;
+    uint16_t num_inclusion_outside = 0;
+
     // check we are inside each inclusion zone:
     for (uint8_t i=0; i<_num_loaded_inclusion_boundaries; i++) {
         const InclusionBoundary &boundary = _loaded_inclusion_boundary[i];
         if (Polygon_outside(pos, boundary.points_lla, boundary.count)) {
-            return true;
+            num_inclusion_outside++;
         }
     }
 
@@ -259,6 +249,21 @@ bool AC_PolyFence_loader::breached(const Location& loc) const
         circle_center.lng = circle.point.y;
         const float diff_cm = loc.get_distance(circle_center)*100.0f;
         if (diff_cm > circle.radius * 100.0f) {
+            num_inclusion_outside++;
+        }
+    }
+
+    if (AC_Fence::option_enabled(AC_Fence::OPTIONS::INCLUSION_UNION, _options)) {
+        // using union of inclusion areas, we are outside the fence if
+        // there is at least one inclusion areas and we are outside
+        // all of them
+        if (num_inclusion > 0 && num_inclusion == num_inclusion_outside) {
+            return true;
+        }
+    } else {
+        // using intersection of inclusion areas. We are outside if we
+        // are outside any of them
+        if (num_inclusion_outside > 0) {
             return true;
         }
     }
@@ -291,70 +296,6 @@ bool AC_PolyFence_loader::format()
     _eeprom_fence_count = 0;
     _eeprom_item_count = 0;
     return write_eos_to_storage(offset);
-}
-
-bool AC_PolyFence_loader::convert_to_new_storage()
-{
-    // sanity check total
-    _total.set(constrain_int16(_total, 0, max_items()));
-    // FIXME: ensure the fence was closed and don't load it if it was not
-    if (_total < 5) {
-        // fence was invalid.  Just format it and move on
-        return format();
-    }
-
-    if (hal.util->available_memory() < 100U + _total * sizeof(Vector2l)) {
-        return false;
-    }
-
-    Vector2l *_tmp_boundary = new Vector2l[_total];
-    if (_tmp_boundary == nullptr) {
-        return false;
-    }
-
-    // load each point from eeprom
-    bool ret = false;
-    for (uint16_t index=0; index<_total; index++) {
-        // load boundary point as lat/lon point
-        if (!load_point_from_eeprom(index, _tmp_boundary[index])) {
-            goto out;
-        }
-    }
-
-    // now store:
-    if (!format()) {
-        goto out;
-    }
-    {
-        uint16_t offset = 4; // skip magic
-        // write return point
-        if (!write_type_to_storage(offset, AC_PolyFenceType::RETURN_POINT)) {
-            return false;
-        }
-        if (!write_latlon_to_storage(offset, _tmp_boundary[0])) {
-            return false;
-        }
-        // write out polygon fence
-        fence_storage.write_uint8(offset, (uint8_t)AC_PolyFenceType::POLYGON_INCLUSION);
-        offset++;
-        fence_storage.write_uint8(offset, (uint8_t)_total-2);
-        offset++;
-        for (uint8_t i=1; i<_total-1; i++) {
-            if (!write_latlon_to_storage(offset, _tmp_boundary[i])) {
-                goto out;
-            }
-        }
-        // write eos marker
-        if (!write_eos_to_storage(offset)) {
-            goto out;
-        }
-    }
-
-    ret = true;
-
-out:
-    delete[] _tmp_boundary;
-    return ret;
 }
 
 bool AC_PolyFence_loader::scale_latlon_from_origin(const Location &origin, const Vector2l &point, Vector2f &pos_cm)
@@ -415,7 +356,7 @@ bool AC_PolyFence_loader::scan_eeprom(scan_fn_t scan_fn)
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
             AP_HAL::panic("Fence corrupt (offset=%u)", read_offset);
 #endif
-            gcs().send_text(MAV_SEVERITY_WARNING, "Fence corrupt");
+            GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Fence corrupt");
             return false;
         }
 
@@ -521,7 +462,7 @@ void AC_PolyFence_loader::scan_eeprom_index_fences(const AC_PolyFenceType type, 
 bool AC_PolyFence_loader::index_eeprom()
 {
     if (!formatted()) {
-        if (!convert_to_new_storage()) {
+        if (!format()) {
             return false;
         }
     }
@@ -647,7 +588,7 @@ bool AC_PolyFence_loader::load_from_eeprom()
         return _load_time_ms != 0;
     }
 
-    struct Location ekf_origin{};
+    Location ekf_origin{};
     if (!AP::ahrs().get_origin(ekf_origin)) {
 //        Debug("fence load requires origin");
         return false;
@@ -759,13 +700,13 @@ bool AC_PolyFence_loader::load_from_eeprom()
             boundary.points_lla = next_storage_point_lla;
             boundary.count = index.count;
             if (index.count < 3) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: invalid polygon vertex count %u", index.count);
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: invalid polygon vertex count %u", index.count);
                 storage_valid = false;
                 break;
             }
             storage_offset += 1; // skip vertex count
             if (!read_polygon_from_storage(ekf_origin, storage_offset, index.count, next_storage_point, next_storage_point_lla)) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: polygon read failed");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: polygon read failed");
                 storage_valid = false;
                 break;
             }
@@ -778,13 +719,13 @@ bool AC_PolyFence_loader::load_from_eeprom()
             boundary.points_lla = next_storage_point_lla;
             boundary.count = index.count;
             if (index.count < 3) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: invalid polygon vertex count %u", index.count);
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: invalid polygon vertex count %u", index.count);
                 storage_valid = false;
                 break;
             }
             storage_offset += 1; // skip vertex count
             if (!read_polygon_from_storage(ekf_origin, storage_offset, index.count, next_storage_point, next_storage_point_lla)) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: polygon read failed");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: polygon read failed");
                 storage_valid = false;
                 break;
             }
@@ -795,12 +736,12 @@ bool AC_PolyFence_loader::load_from_eeprom()
         case AC_PolyFenceType::CIRCLE_EXCLUSION: {
             ExclusionCircle &circle = _loaded_circle_exclusion_boundary[_num_loaded_circle_exclusion_boundaries];
             if (!read_latlon_from_storage(storage_offset, circle.point)) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: latlon read failed");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: latlon read failed");
                 storage_valid = false;
                 break;
             }
             if (!scale_latlon_from_origin(ekf_origin, circle.point, circle.pos_cm)) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: latlon read failed");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: latlon read failed");
                 storage_valid = false;
                 break;
             }
@@ -811,7 +752,7 @@ bool AC_PolyFence_loader::load_from_eeprom()
                 circle.radius = fence_storage.read_float(storage_offset);
             }
             if (!is_positive(circle.radius)) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: non-positive circle radius");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: non-positive circle radius");
                 storage_valid = false;
                 break;
             }
@@ -822,12 +763,12 @@ bool AC_PolyFence_loader::load_from_eeprom()
         case AC_PolyFenceType::CIRCLE_INCLUSION: {
             InclusionCircle &circle = _loaded_circle_inclusion_boundary[_num_loaded_circle_inclusion_boundaries];
             if (!read_latlon_from_storage(storage_offset, circle.point)) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: latlon read failed");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: latlon read failed");
                 storage_valid = false;
                 break;
             }
             if (!scale_latlon_from_origin(ekf_origin, circle.point, circle.pos_cm)){
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: latlon read failed");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: latlon read failed");
                 storage_valid = false;
                 break;
             }
@@ -838,7 +779,7 @@ bool AC_PolyFence_loader::load_from_eeprom()
                 circle.radius = fence_storage.read_float(storage_offset);
             }
             if (!is_positive(circle.radius)) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "AC_Fence: non-positive circle radius");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "AC_Fence: non-positive circle radius");
                 storage_valid = false;
                 break;
             }
@@ -847,13 +788,13 @@ bool AC_PolyFence_loader::load_from_eeprom()
         }
         case AC_PolyFenceType::RETURN_POINT:
             if (_loaded_return_point != nullptr) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "PolyFence: Multiple return points found");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "PolyFence: Multiple return points found");
                 storage_valid = false;
                 break;
             }
             _loaded_return_point = next_storage_point;
             if (_loaded_return_point_lla != nullptr) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "PolyFence: Multiple return points found");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "PolyFence: Multiple return points found");
                 storage_valid = false;
                 break;
             }
@@ -861,12 +802,12 @@ bool AC_PolyFence_loader::load_from_eeprom()
             // Read the point from storage
             if (!read_latlon_from_storage(storage_offset, *next_storage_point_lla)) {
                 storage_valid = false;
-                gcs().send_text(MAV_SEVERITY_WARNING, "PolyFence: latlon read failed");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "PolyFence: latlon read failed");
                 break;
             }
             if (!scale_latlon_from_origin(ekf_origin, *next_storage_point_lla, *next_storage_point)) {
                 storage_valid = false;
-                gcs().send_text(MAV_SEVERITY_WARNING, "PolyFence: latlon read failed");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "PolyFence: latlon read failed");
                 break;
             }
             next_storage_point++;
@@ -973,7 +914,7 @@ bool AC_PolyFence_loader::validate_fence(const AC_PolyFenceItem *new_items, uint
         case AC_PolyFenceType::POLYGON_INCLUSION:
         case AC_PolyFenceType::POLYGON_EXCLUSION:
             if (new_items[i].vertex_count < 3) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "Invalid vertex count (%u)", new_items[i].vertex_count);
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Invalid vertex count (%u)", new_items[i].vertex_count);
                 return false;
             }
             if (expected_type_count == 0) {
@@ -982,10 +923,10 @@ bool AC_PolyFence_loader::validate_fence(const AC_PolyFenceItem *new_items, uint
                 expecting_type = new_items[i].type;
             } else {
                 if (new_items[i].type != expecting_type) {
-                    gcs().send_text(MAV_SEVERITY_WARNING, "Received incorrect vertex type (want=%u got=%u)", (unsigned)expecting_type, (unsigned)new_items[i].type);
+                    GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Received incorrect vertex type (want=%u got=%u)", (unsigned)expecting_type, (unsigned)new_items[i].type);
                     return false;
                 } else if (new_items[i].vertex_count != orig_expected_type_count) {
-                    gcs().send_text(MAV_SEVERITY_WARNING, "Unexpected vertex count want=%u got=%u\n", orig_expected_type_count, new_items[i].vertex_count);
+                    GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Unexpected vertex count want=%u got=%u\n", orig_expected_type_count, new_items[i].vertex_count);
                     return false;
                 }
             }
@@ -1001,11 +942,11 @@ bool AC_PolyFence_loader::validate_fence(const AC_PolyFenceItem *new_items, uint
         case AC_PolyFenceType::CIRCLE_INCLUSION:
         case AC_PolyFenceType::CIRCLE_EXCLUSION:
             if (expected_type_count) {
-               gcs().send_text(MAV_SEVERITY_WARNING, "Received incorrect type (want=%u got=%u)", (unsigned)expecting_type, (unsigned)new_items[i].type);
+               GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Received incorrect type (want=%u got=%u)", (unsigned)expecting_type, (unsigned)new_items[i].type);
                return false;
             }
             if (!is_positive(new_items[i].radius)) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "Non-positive circle radius");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Non-positive circle radius");
                 return false;
             }
             validate_latlon = true;
@@ -1013,13 +954,13 @@ bool AC_PolyFence_loader::validate_fence(const AC_PolyFenceItem *new_items, uint
 
         case AC_PolyFenceType::RETURN_POINT:
             if (expected_type_count) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "Received incorrect type (want=%u got=%u)", (unsigned)expecting_type, (unsigned)new_items[i].type);
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Received incorrect type (want=%u got=%u)", (unsigned)expecting_type, (unsigned)new_items[i].type);
                 return false;
             }
 
             // spec says only one return point allowed
             if (seen_return_point) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "Multiple return points");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Multiple return points");
                 return false;
             }
             seen_return_point = true;
@@ -1031,14 +972,14 @@ bool AC_PolyFence_loader::validate_fence(const AC_PolyFenceItem *new_items, uint
 
         if (validate_latlon) {
             if (!check_latlng(new_items[i].loc[0], new_items[i].loc[1])) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "Bad lat or lon");
+                GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Bad lat or lon");
                 return false;
             }
         }
     }
 
     if (expected_type_count) {
-        gcs().send_text(MAV_SEVERITY_INFO, "Incorrect item count");
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Incorrect item count");
         return false;
     }
 
@@ -1081,12 +1022,12 @@ uint16_t AC_PolyFence_loader::fence_storage_space_required(const AC_PolyFenceIte
 bool AC_PolyFence_loader::write_fence(const AC_PolyFenceItem *new_items, uint16_t count)
 {
     if (!validate_fence(new_items, count)) {
-        gcs().send_text(MAV_SEVERITY_WARNING, "Fence validation failed");
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Fence validation failed");
         return false;
     }
 
     if (fence_storage_space_required(new_items, count) > fence_storage.size()) {
-        gcs().send_text(MAV_SEVERITY_WARNING, "Fence exceeds storage size");
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Fence exceeds storage size");
         return false;
     }
 
@@ -1177,7 +1118,12 @@ bool AC_PolyFence_loader::write_fence(const AC_PolyFenceItem *new_items, uint16_
     if (!index_eeprom()) {
         AP_HAL::panic("Failed to index eeprom");
     }
-    gcs().send_text(MAV_SEVERITY_DEBUG, "Fence Indexed OK");
+    GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "Fence Indexed OK");
+#endif
+
+#if HAL_LOGGING_ENABLED
+    // start logger logging new fence
+    AP::logger().Write_Fence();
 #endif
 
     void_index();
@@ -1198,7 +1144,6 @@ bool AC_PolyFence_loader::write_fence(const AC_PolyFenceItem *new_items, uint16_
 }
 
 
-#if AC_POLYFENCE_FENCE_POINT_PROTOCOL_SUPPORT
 bool AC_PolyFence_loader::get_return_point(Vector2l &ret)
 {
     if (!check_indexed()) {
@@ -1273,7 +1218,6 @@ bool AC_PolyFence_loader::get_return_point(Vector2l &ret)
 
     return true;
 }
-#endif
 
 AC_PolyFence_loader::FenceIndex *AC_PolyFence_loader::find_first_fence(const AC_PolyFenceType type) const
 {
