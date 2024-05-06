@@ -205,6 +205,7 @@ const AP_Param::GroupInfo RC_Channel::var_info[] = {
     // @Values{Rover, Plane}: 106:Disable Airspeed Use
     // @Values{Plane}: 107:Enable FW Autotune
     // @Values{Plane}: 108:QRTL Mode
+    // @Values{Copter}: 109:use Custom Controller
     // @Values{Copter, Rover, Plane, Blimp}:  110:KillIMU3
     // @Values{Plane}: 150:CRUISE Mode
     // @Values{Copter}: 151:TURTLE Mode
@@ -231,6 +232,7 @@ const AP_Param::GroupInfo RC_Channel::var_info[] = {
     // @Values{Copter, Rover, Plane, Blimp}: 172:Battery MPPT Enable
     // @Values{Plane}: 173:Plane AUTO Mode Landing Abort
     // @Values{Copter, Rover, Plane, Blimp}: 174:Camera Image Tracking
+    // @Values{Copter, Rover, Plane, Blimp}: 175:Camera Lens
     // @Values{Rover}: 201:Roll
     // @Values{Rover}: 202:Pitch
     // @Values{Rover}: 207:MainSail
@@ -659,6 +661,7 @@ void RC_Channel::init_aux_function(const aux_func_t ch_option, const AuxSwitchPo
     case AUX_FUNC::MOUNT2_YAW:
     case AUX_FUNC::LOWEHEISER_STARTER:
     case AUX_FUNC::MAG_CAL:
+    case AUX_FUNC::CAMERA_IMAGE_TRACKING:
         break;
 
     // not really aux functions:
@@ -695,10 +698,11 @@ void RC_Channel::init_aux_function(const aux_func_t ch_option, const AuxSwitchPo
     case AUX_FUNC::CAMERA_ZOOM:
     case AUX_FUNC::CAMERA_MANUAL_FOCUS:
     case AUX_FUNC::CAMERA_AUTO_FOCUS:
+    case AUX_FUNC::CAMERA_LENS:
         run_aux_function(ch_option, ch_flag, AuxFuncTriggerSource::INIT);
         break;
     default:
-        gcs().send_text(MAV_SEVERITY_WARNING, "Failed to init: RC%u_OPTION: %u\n",
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Failed to init: RC%u_OPTION: %u\n",
                         (unsigned)(this->ch_in+1), (unsigned)ch_option);
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
         AP_BoardConfig::config_error("Failed to init: RC%u_OPTION: %u",
@@ -762,6 +766,7 @@ const RC_Channel::LookupTable RC_Channel::lookuptable[] = {
     { AUX_FUNC::CAMERA_MANUAL_FOCUS, "Camera Manual Focus"},
     { AUX_FUNC::CAMERA_AUTO_FOCUS, "Camera Auto Focus"},
     { AUX_FUNC::CAMERA_IMAGE_TRACKING, "Camera Image Tracking"},
+    { AUX_FUNC::CAMERA_LENS, "Camera Lens"},
 };
 
 /* lookup the announcement for switch change */
@@ -825,7 +830,7 @@ bool RC_Channel::read_aux()
     // announce the change to the GCS:
     const char *aux_string = string_for_aux_function(_option);
     if (aux_string != nullptr) {
-        gcs().send_text(MAV_SEVERITY_INFO, "RC%i: %s %s", ch_in+1, aux_string, string_for_aux_pos(new_position));
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "RC%i: %s %s", ch_in+1, aux_string, string_for_aux_pos(new_position));
     }
 #endif
 
@@ -865,19 +870,19 @@ void RC_Channel::do_aux_function_avoid_adsb(const AuxSwitchPos ch_flag)
         }
         // try to enable AP_Avoidance
         if (!adsb->enabled() || !adsb->healthy()) {
-            gcs().send_text(MAV_SEVERITY_CRITICAL, "ADSB not available");
+            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "ADSB not available");
             return;
         }
         avoidance->enable();
         AP::logger().Write_Event(LogEvent::AVOIDANCE_ADSB_ENABLE);
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "ADSB Avoidance Enabled");
+        GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "ADSB Avoidance Enabled");
         return;
     }
 
     // disable AP_Avoidance
     avoidance->disable();
     AP::logger().Write_Event(LogEvent::AVOIDANCE_ADSB_DISABLE);
-    gcs().send_text(MAV_SEVERITY_CRITICAL, "ADSB Avoidance Disabled");
+    GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "ADSB Avoidance Disabled");
 #endif
 }
 
@@ -989,6 +994,16 @@ bool RC_Channel::do_aux_function_camera_image_tracking(const AuxSwitchPos ch_fla
     // High position enables tracking a POINT in middle of image
     // Low or Mediums disables tracking.  (0.5,0.5) is still passed in but ignored
     return camera->set_tracking(ch_flag == AuxSwitchPos::HIGH ? TrackingType::TRK_POINT : TrackingType::TRK_NONE, Vector2f{0.5, 0.5}, Vector2f{});
+}
+
+bool RC_Channel::do_aux_function_camera_lens(const AuxSwitchPos ch_flag)
+{
+    AP_Camera *camera = AP::camera();
+    if (camera == nullptr) {
+        return false;
+    }
+    // Low selects lens 0 (default), Mediums selects lens1, High selects lens2
+    return camera->set_lens((uint8_t)ch_flag);
 }
 #endif
 
@@ -1427,7 +1442,7 @@ bool RC_Channel::do_aux_function(const aux_func_t ch_option, const AuxSwitchPos 
     case AUX_FUNC::OPTFLOW_CAL: {
         AP_OpticalFlow *optflow = AP::opticalflow();
         if (optflow == nullptr) {
-            gcs().send_text(MAV_SEVERITY_CRITICAL, "OptFlow Cal: failed sensor not enabled");
+            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "OptFlow Cal: failed sensor not enabled");
             break;
         }
         if (ch_flag == AuxSwitchPos::HIGH) {
@@ -1491,6 +1506,9 @@ bool RC_Channel::do_aux_function(const aux_func_t ch_option, const AuxSwitchPos 
 
     case AUX_FUNC::CAMERA_IMAGE_TRACKING:
         return do_aux_function_camera_image_tracking(ch_flag);
+
+    case AUX_FUNC::CAMERA_LENS:
+        return do_aux_function_camera_lens(ch_flag);
 #endif
 
 #if HAL_MOUNT_ENABLED
@@ -1556,7 +1574,7 @@ bool RC_Channel::do_aux_function(const aux_func_t ch_option, const AuxSwitchPos 
                 const bool autoreboot = false;
                 compass.start_calibration_all(retry, autosave, delay, autoreboot);
             } else {
-                gcs().send_text(MAV_SEVERITY_NOTICE, "Disarm to allow compass calibration");
+                GCS_SEND_TEXT(MAV_SEVERITY_NOTICE, "Disarm to allow compass calibration");
             }
             break;
         }
@@ -1628,7 +1646,7 @@ bool RC_Channel::do_aux_function(const aux_func_t ch_option, const AuxSwitchPos 
         break;
 
     default:
-        gcs().send_text(MAV_SEVERITY_INFO, "Invalid channel option (%u)", (unsigned int)ch_option);
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Invalid channel option (%u)", (unsigned int)ch_option);
         return false;
     }
 

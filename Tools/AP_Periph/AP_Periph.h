@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AP_HAL/AP_HAL.h>
+#include <canard.h>
 #include <AP_Param/AP_Param.h>
 #include <AP_GPS/AP_GPS.h>
 #include <AP_Compass/AP_Compass.h>
@@ -25,11 +26,16 @@
 #include <AP_Scripting/AP_Scripting.h>
 #include <AP_HAL/CANIface.h>
 #include <AP_Stats/AP_Stats.h>
+#include <AP_Networking/AP_Networking.h>
+#include <AP_RPM/AP_RPM.h>
 #include <AP_SerialManager/AP_SerialManager.h>
 #include <AP_ESC_Telem/AP_ESC_Telem_config.h>
 #if HAL_WITH_ESC_TELEM
 #include <AP_ESC_Telem/AP_ESC_Telem.h>
 #endif
+#include <AP_RCProtocol/AP_RCProtocol_config.h>
+#include "rc_in.h"
+#include "batt_balance.h"
 
 #include <AP_NMEA_Output/AP_NMEA_Output.h>
 #if HAL_NMEA_OUTPUT_ENABLED && !(HAL_GCS_ENABLED && defined(HAL_PERIPH_ENABLE_GPS))
@@ -80,6 +86,21 @@ void can_printf(const char *fmt, ...) FMT_PRINTF(1,2);
 struct CanardInstance;
 struct CanardRxTransfer;
 
+#define MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, src_node_id, dst_node_id)             \
+    (((uint32_t)(data_type_id)) | (((uint32_t)(transfer_type)) << 16U) |                            \
+    (((uint32_t)(src_node_id)) << 18U) | (((uint32_t)(dst_node_id)) << 25U))
+
+#ifndef HAL_CAN_POOL_SIZE
+#if HAL_CANFD_SUPPORTED
+    #define HAL_CAN_POOL_SIZE 16000
+#elif GPS_MOVING_BASELINE
+    #define HAL_CAN_POOL_SIZE 8000
+#else
+    #define HAL_CAN_POOL_SIZE 4000
+#endif
+#endif
+
+
 class AP_Periph_FW {
 public:
     AP_Periph_FW();
@@ -110,6 +131,9 @@ public:
     void can_rangefinder_update();
     void can_battery_update();
     void can_proximity_update();
+    void can_buzzer_update(void);
+    void can_safety_button_update(void);
+    void can_safety_LED_update(void);
 
     void load_parameters();
     void prepare_reboot();
@@ -158,11 +182,15 @@ public:
     AP_Baro baro;
 #endif
 
-#ifdef HAL_PERIPH_ENABLE_BATTERY
-    struct AP_Periph_Battery {
-        void handle_battery_failsafe(const char* type_str, const int8_t action) { }
-        AP_BattMonitor lib{0, FUNCTOR_BIND_MEMBER(&AP_Periph_FW::AP_Periph_Battery::handle_battery_failsafe, void, const char*, const int8_t), nullptr};
+#ifdef HAL_PERIPH_ENABLE_RPM
+    AP_RPM rpm_sensor;
+    uint32_t rpm_last_update_ms;
+#endif
 
+#ifdef HAL_PERIPH_ENABLE_BATTERY
+    void handle_battery_failsafe(const char* type_str, const int8_t action) { }
+    AP_BattMonitor battery_lib{0, FUNCTOR_BIND_MEMBER(&AP_Periph_FW::handle_battery_failsafe, void, const char*, const int8_t), nullptr};
+    struct {
         uint32_t last_read_ms;
         uint32_t last_can_send_ms;
     } battery;
@@ -212,7 +240,7 @@ public:
     uint32_t last_sample_ms;
 #endif
 
-#if HAL_PROXIMITY_ENABLED
+#ifdef HAL_PERIPH_ENABLE_PROXIMITY
     AP_Proximity proximity;
 #endif
 
@@ -271,6 +299,21 @@ public:
     void rcout_handle_safety_state(uint8_t safety_state);
 #endif
 
+#ifdef HAL_PERIPH_ENABLE_RCIN
+    void rcin_init();
+    void rcin_update();
+    void can_send_RCInput(uint8_t quality, uint16_t *values, uint8_t nvalues, bool in_failsafe, bool quality_valid);
+    bool rcin_initialised;
+    uint32_t rcin_last_sent_RCInput_ms;
+    const char *rcin_rc_protocol;  // protocol currently being decoded
+    Parameters_RCIN g_rcin;
+#endif
+
+#ifdef HAL_PERIPH_ENABLE_BATTERY_BALANCE
+    void batt_balance_update();
+    BattBalance battery_balance;
+#endif
+    
 #if AP_TEMPERATURE_SENSOR_ENABLED
     AP_TemperatureSensor temperature_sensor;
 #endif
@@ -301,6 +344,10 @@ public:
 #if HAL_LOGGING_ENABLED
     static const struct LogStructure log_structure[];
     AP_Logger logger;
+#endif
+
+#ifdef HAL_PERIPH_ENABLE_NETWORKING
+    AP_Networking networking;
 #endif
 
 #if HAL_GCS_ENABLED
@@ -338,14 +385,22 @@ public:
     static bool no_iface_finished_dna;
     static constexpr auto can_printf = ::can_printf;
 
-    static bool canard_broadcast(uint64_t data_type_signature,
-                                 uint16_t data_type_id,
-                                 uint8_t priority,
-                                 const void* payload,
-                                 uint16_t payload_len);
+    bool canard_broadcast(uint64_t data_type_signature,
+                          uint16_t data_type_id,
+                          uint8_t priority,
+                          const void* payload,
+                          uint16_t payload_len);
 
+    void onTransferReceived(CanardInstance* canard_instance,
+                            CanardRxTransfer* transfer);
+    bool shouldAcceptTransfer(const CanardInstance* canard_instance,
+                              uint64_t* out_data_type_signature,
+                              uint16_t data_type_id,
+                              CanardTransferType transfer_type,
+                              uint8_t source_node_id);
+    
 #if AP_UART_MONITOR_ENABLED
-    void handle_tunnel_Targetted(CanardInstance* ins, CanardRxTransfer* transfer);
+    void handle_tunnel_Targetted(CanardInstance* canard_instance, CanardRxTransfer* transfer);
     void send_serial_monitor_data();
     int8_t get_default_tunnel_serial_port(void) const;
 
@@ -360,7 +415,63 @@ public:
         bool locked;
     } uart_monitor;
 #endif
+
+    // handlers for incoming messages
+    void handle_get_node_info(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_param_getset(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_param_executeopcode(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_begin_firmware_update(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_allocation_response(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_safety_state(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_arming_status(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_RTCMStream(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_MovingBaselineData(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_esc_rawcommand(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_act_command(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_beep_command(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_lightscommand(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+    void handle_notify_state(CanardInstance* canard_instance, CanardRxTransfer* transfer);
+
+    void process1HzTasks(uint64_t timestamp_usec);
+    void processTx(void);
+    void processRx(void);
+    void cleanup_stale_transactions(uint64_t &timestamp_usec);
+    void update_rx_protocol_stats(int16_t res);
+    void node_status_send(void);
+    bool can_do_dna();
+    uint8_t *get_tid_ptr(uint32_t transfer_desc);
+    uint16_t pool_peak_percent();
+    void set_rgb_led(uint8_t red, uint8_t green, uint8_t blue);
+
+    struct dronecan_protocol_t {
+        CanardInstance canard;
+        uint32_t canard_memory_pool[HAL_CAN_POOL_SIZE/sizeof(uint32_t)];
+        struct tid_map {
+            uint32_t transfer_desc;
+            uint8_t tid;
+            tid_map *next;
+        } *tid_map_head;
+        /*
+         * Variables used for dynamic node ID allocation.
+         * RTFM at http://uavcan.org/Specification/6._Application_level_functions/#dynamic-node-id-allocation
+         */
+        uint32_t send_next_node_id_allocation_request_at_ms; ///< When the next node ID allocation request should be sent
+        uint8_t node_id_allocation_unique_id_offset;         ///< Depends on the stage of the next request
+        uint8_t tx_fail_count;
+        uint8_t dna_interface = 1;
+    } dronecan;
+
+#if AP_SIM_ENABLED
+    SITL::SIM sitl;
+#if AP_AHRS_ENABLED
+    AP_AHRS ahrs;
+#endif
+#endif
 };
+
+#ifndef CAN_APP_NODE_NAME
+#define CAN_APP_NODE_NAME "org.ardupilot." CHIBIOS_BOARD_NAME
+#endif
 
 namespace AP
 {

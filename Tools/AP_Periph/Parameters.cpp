@@ -223,7 +223,7 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
 #ifdef HAL_PERIPH_ENABLE_BATTERY
     // @Group: BATT
     // @Path: ../libraries/AP_BattMonitor/AP_BattMonitor.cpp
-    GOBJECT(battery, "BATT", AP_BattMonitor),
+    GOBJECT(battery_lib, "BATT", AP_BattMonitor),
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_MAG
@@ -475,7 +475,7 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
     GOBJECT(efi, "EFI", AP_EFI),
 #endif
 
-#if HAL_PROXIMITY_ENABLED
+#ifdef HAL_PERIPH_ENABLE_PROXIMITY
     // @Param: PRX_BAUDRATE
     // @DisplayName: Proximity Sensor serial baudrate
     // @Description: Proximity Sensor serial baudrate.
@@ -507,7 +507,7 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
     // @Group: PRX
     // @Path: ../libraries/AP_Proximity/AP_Proximity.cpp
     GOBJECT(proximity, "PRX", AP_Proximity),
-#endif  // HAL_PROXIMITY_ENABLED
+#endif  // HAL_PERIPH_ENABLE_PROXIMITY
 
 #if HAL_NMEA_OUTPUT_ENABLED
     // @Group: NMEA_
@@ -550,6 +550,43 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
     GARRAY(esc_serial_port, 1, "ESC_APD_SERIAL_2", APD_ESC_SERIAL_1),
   #endif
 #endif
+
+#ifdef HAL_PERIPH_ENABLE_NETWORKING
+    // @Group: NET_
+    // @Path: ../libraries/AP_Networking/AP_Networking.cpp
+    GOBJECT(networking, "NET_", AP_Networking),
+#endif
+
+#ifdef HAL_PERIPH_ENABLE_RPM
+    // @Group: RPM
+    // @Path: ../libraries/AP_RPM/AP_RPM.cpp
+    GOBJECT(rpm_sensor, "RPM", AP_RPM),
+#endif
+
+#ifdef HAL_PERIPH_ENABLE_RCIN
+    // @Group: RC
+    // @Path: rc_in.cpp
+    GOBJECT(g_rcin, "RC",  Parameters_RCIN),
+#endif
+
+#ifdef HAL_PERIPH_ENABLE_BATTERY_BALANCE
+    // @Group: BAL
+    // @Path: batt_balance.cpp
+    GOBJECT(battery_balance, "BAL",  BattBalance),
+#endif
+
+    // NOTE: sim parameters should go last
+#if AP_SIM_ENABLED
+    // @Group: SIM_
+    // @Path: ../libraries/SITL/SITL.cpp
+    GOBJECT(sitl, "SIM_", SITL::SIM),
+
+#if AP_AHRS_ENABLED
+    // @Group: AHRS_
+    // @Path: ../libraries/AP_AHRS/AP_AHRS.cpp
+    GOBJECT(ahrs,                   "AHRS_",    AP_AHRS),
+#endif
+#endif // AP_SIM_ENABLED
 
     AP_VAREND
 };

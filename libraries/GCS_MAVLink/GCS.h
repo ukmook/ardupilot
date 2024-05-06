@@ -28,10 +28,6 @@
 
 #define GCS_DEBUG_SEND_MESSAGE_TIMINGS 0
 
-#ifndef HAL_HIGH_LATENCY2_ENABLED
-#define HAL_HIGH_LATENCY2_ENABLED 1
-#endif
-
 // macros used to determine if a message will fit in the space available.
 
 void gcs_out_of_space_to_send(mavlink_channel_t chan);
@@ -165,7 +161,7 @@ public:
     Type task;
     MAV_CMD mav_cmd;
 
-    static class GCS_MAVLINK_InProgress *get_task(MAV_CMD cmd, Type t, uint8_t sysid, uint8_t compid);
+    static class GCS_MAVLINK_InProgress *get_task(MAV_CMD cmd, Type t, uint8_t sysid, uint8_t compid, mavlink_channel_t chan);
 
     static void check_tasks();
 
@@ -519,7 +515,7 @@ protected:
     void handle_command_int(const mavlink_message_t &msg);
 
     MAV_RESULT handle_command_do_set_home(const mavlink_command_int_t &packet);
-    virtual MAV_RESULT handle_command_int_packet(const mavlink_command_int_t &packet);
+    virtual MAV_RESULT handle_command_int_packet(const mavlink_command_int_t &packet, const mavlink_message_t &msg);
     MAV_RESULT handle_command_int_external_position_estimate(const mavlink_command_int_t &packet);
 
     virtual bool set_home_to_current_location(bool lock) = 0;
@@ -643,15 +639,16 @@ protected:
     MAV_RESULT handle_command_battery_reset(const mavlink_command_long_t &packet);
     void handle_command_long(const mavlink_message_t &msg);
     MAV_RESULT handle_command_accelcal_vehicle_pos(const mavlink_command_long_t &packet);
-    MAV_RESULT handle_command_do_set_roi_sysid(const uint8_t sysid);
-    MAV_RESULT handle_command_do_set_roi_sysid(const mavlink_command_int_t &packet);
-    MAV_RESULT handle_command_do_set_roi_sysid(const mavlink_command_long_t &packet);
-    MAV_RESULT handle_command_do_set_roi_none();
 
-    virtual MAV_RESULT handle_command_mount(const mavlink_command_long_t &packet, const mavlink_message_t &msg);
-    MAV_RESULT handle_command_mag_cal(const mavlink_command_long_t &packet);
-    MAV_RESULT try_command_long_as_command_int(const mavlink_command_long_t &packet);
-    virtual MAV_RESULT handle_command_long_packet(const mavlink_command_long_t &packet);
+#if HAL_MOUNT_ENABLED
+    virtual MAV_RESULT handle_command_mount(const mavlink_command_int_t &packet, const mavlink_message_t &msg);
+#endif
+
+    MAV_RESULT handle_command_mag_cal(const mavlink_command_int_t &packet);
+    MAV_RESULT handle_command_fixed_mag_cal_yaw(const mavlink_command_int_t &packet);
+
+    MAV_RESULT try_command_long_as_command_int(const mavlink_command_long_t &packet, const mavlink_message_t &msg);
+    virtual MAV_RESULT handle_command_long_packet(const mavlink_command_long_t &packet, const mavlink_message_t &msg);
     MAV_RESULT handle_command_camera(const mavlink_command_long_t &packet);
     MAV_RESULT handle_command_do_send_banner(const mavlink_command_long_t &packet);
     MAV_RESULT handle_command_do_set_roi(const mavlink_command_int_t &packet);
@@ -673,8 +670,6 @@ protected:
     void handle_can_frame(const mavlink_message_t &msg) const;
 
     void handle_optical_flow(const mavlink_message_t &msg);
-
-    MAV_RESULT handle_command_fixed_mag_cal_yaw(const mavlink_command_int_t &packet);
 
     void handle_manual_control(const mavlink_message_t &msg);
 
@@ -770,7 +765,8 @@ private:
 
     virtual void        handleMessage(const mavlink_message_t &msg) = 0;
 
-    MAV_RESULT handle_servorelay_message(const mavlink_command_long_t &packet);
+    MAV_RESULT handle_servorelay_message(const mavlink_command_int_t &packet);
+    bool send_relay_status() const;
 
     static bool command_long_stores_location(const MAV_CMD command);
 
@@ -1333,6 +1329,8 @@ void can_printf(const char *fmt, ...);
 #define GCS_SEND_TEXT(severity, format, args...) (void)severity; can_printf(format, ##args)
 #endif
 
+#define GCS_SEND_MESSAGE(msg) gcs().send_message(msg)
+
 #elif defined(HAL_BUILD_AP_PERIPH) && !defined(STM32F1)
 
 // map send text to can_printf() on larger AP_Periph boards
@@ -1340,10 +1338,12 @@ extern "C" {
 void can_printf(const char *fmt, ...);
 }
 #define GCS_SEND_TEXT(severity, format, args...) can_printf(format, ##args)
+#define GCS_SEND_MESSAGE(msg)
 
 #else // HAL_GCS_ENABLED
 // empty send text when we have no GCS
 #define GCS_SEND_TEXT(severity, format, args...)
+#define GCS_SEND_MESSAGE(msg)
 
 #endif // HAL_GCS_ENABLED
 

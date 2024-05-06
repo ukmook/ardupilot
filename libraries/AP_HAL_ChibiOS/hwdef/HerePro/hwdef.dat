@@ -195,8 +195,6 @@ PB2 BOOT1 INPUT
 
 
 
-define CAN_APP_NODE_NAME "com.cubepilot.herepro"
-
 # disabled compass cal as it doesn't work for now
 # define COMPASS_CAL_ENABLED 1
 
@@ -216,3 +214,6 @@ define AP_RC_CHANNEL_ENABLED 1
 
 define AP_RELAY_ENABLED 1
 define AP_SERVORELAYEVENTS_ENABLED 1
+
+# bootloader embedding / bootloader flashing not available
+define AP_BOOTLOADER_FLASHING_ENABLED 0

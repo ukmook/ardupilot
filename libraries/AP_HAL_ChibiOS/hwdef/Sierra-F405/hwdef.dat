@@ -67,8 +67,6 @@ CAN_ORDER 1
 
 # use DNA for node allocation
 
-define CAN_APP_NODE_NAME "org.ardupilot.Sierra-F405"
-
 # order of UARTs
 SERIAL_ORDER USART1 EMPTY EMPTY USART2
 
@@ -131,3 +129,5 @@ define HAL_PERIPH_LISTEN_FOR_SERIAL_UART_REBOOT_CMD_PORT 0
 
 define DEFAULT_NTF_LED_TYPES 455
 
+# bootloader embedding / bootloader flashing not available
+define AP_BOOTLOADER_FLASHING_ENABLED 0

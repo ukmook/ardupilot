@@ -2,6 +2,7 @@
 
 #include "Copter.h"
 #include <AP_Math/chirp.h>
+#include <AP_ExternalControl/AP_ExternalControl_config.h> // TODO why is this needed if Copter.h includes this
 class Parameters;
 class ParametersG2;
 
@@ -566,7 +567,7 @@ private:
     void do_loiter_to_alt(const AP_Mission::Mission_Command& cmd);
     void do_spline_wp(const AP_Mission::Mission_Command& cmd);
     void get_spline_from_cmd(const AP_Mission::Mission_Command& cmd, const Location& default_loc, Location& dest_loc, Location& next_dest_loc, bool& next_dest_loc_is_spline);
-#if NAV_GUIDED == ENABLED
+#if AC_NAV_GUIDED == ENABLED
     void do_nav_guided_enable(const AP_Mission::Mission_Command& cmd);
     void do_guided_limits(const AP_Mission::Mission_Command& cmd);
 #endif
@@ -604,7 +605,7 @@ private:
     bool verify_nav_wp(const AP_Mission::Mission_Command& cmd);
     bool verify_circle(const AP_Mission::Mission_Command& cmd);
     bool verify_spline_wp(const AP_Mission::Mission_Command& cmd);
-#if NAV_GUIDED == ENABLED
+#if AC_NAV_GUIDED == ENABLED
     bool verify_nav_guided_enable(const AP_Mission::Mission_Command& cmd);
 #endif
     bool verify_nav_delay(const AP_Mission::Mission_Command& cmd);
@@ -957,6 +958,10 @@ private:
 class ModeGuided : public Mode {
 
 public:
+#if AP_EXTERNAL_CONTROL_ENABLED
+    friend class AP_ExternalControl_Copter;
+#endif
+
     // inherit constructor
     using Mode::Mode;
     Number mode_number() const override { return Number::GUIDED; }
@@ -1718,6 +1723,7 @@ private:
 
 };
 
+#if AP_FOLLOW_ENABLED
 class ModeFollow : public ModeGuided {
 
 public:
@@ -1747,6 +1753,7 @@ protected:
 
     uint32_t last_log_ms;   // system time of last time desired velocity was logging
 };
+#endif
 
 class ModeZigZag : public Mode {        
 

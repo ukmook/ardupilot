@@ -1,3 +1,7 @@
+#include "AP_Logger_config.h"
+
+#if HAL_LOGGING_ENABLED
+
 #include "AP_Logger_Backend.h"
 
 #include "LoggerMessageWriter.h"
@@ -381,6 +385,7 @@ void AP_Logger_Backend::validate_WritePrioritisedBlock(const void *pBuffer,
     }
     const uint8_t type = ((uint8_t*)pBuffer)[2];
     uint8_t type_len;
+    const char *name_src;
     const struct LogStructure *s = _front.structure_for_msg_type(type);
     if (s == nullptr) {
         const struct AP_Logger::log_write_fmt *t = _front.log_write_fmt_for_msg_type(type);
@@ -388,13 +393,15 @@ void AP_Logger_Backend::validate_WritePrioritisedBlock(const void *pBuffer,
             AP_HAL::panic("No structure for msg_type=%u", type);
         }
         type_len = t->msg_len;
+        name_src = t->name;
     } else {
         type_len = s->msg_len;
+        name_src = s->name;
     }
     if (type_len != size) {
         char name[5] = {}; // get a null-terminated string
-        if (s->name != nullptr) {
-            memcpy(name, s->name, 4);
+        if (name_src != nullptr) {
+            memcpy(name, name_src, 4);
         } else {
             strncpy(name, "?NM?", ARRAY_SIZE(name));
         }
@@ -749,3 +756,5 @@ bool AP_Logger_RateLimiter::should_log(uint8_t msgid, bool writev_streaming)
     }
     return ret;
 }
+
+#endif  // HAL_LOGGING_ENABLED

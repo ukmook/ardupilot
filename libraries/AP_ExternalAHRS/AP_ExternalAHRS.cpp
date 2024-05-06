@@ -23,7 +23,7 @@
 #include "AP_ExternalAHRS.h"
 #include "AP_ExternalAHRS_backend.h"
 #include "AP_ExternalAHRS_VectorNav.h"
-#include "AP_ExternalAHRS_LORD.h"
+#include "AP_ExternalAHRS_MicroStrain5.h"
 
 #include <GCS_MAVLink/GCS.h>
 
@@ -53,7 +53,7 @@ const AP_Param::GroupInfo AP_ExternalAHRS::var_info[] = {
     // @Param: _TYPE
     // @DisplayName: AHRS type
     // @Description: Type of AHRS device
-    // @Values: 0:None,1:VectorNav,2:LORD
+    // @Values: 0:None,1:VectorNav,2:MicroStrain
     // @User: Standard
     AP_GROUPINFO_FLAGS("_TYPE", 1, AP_ExternalAHRS, devtype, HAL_EXTERNAL_AHRS_DEFAULT, AP_PARAM_FLAG_ENABLE),
 
@@ -92,21 +92,20 @@ void AP_ExternalAHRS::init(void)
     switch (DevType(devtype)) {
     case DevType::None:
         // nothing to do
-        break;
+        return;
 #if AP_EXTERNAL_AHRS_VECTORNAV_ENABLED
     case DevType::VecNav:
         backend = new AP_ExternalAHRS_VectorNav(this, state);
-        break;
+        return;
 #endif
-#if AP_EXTERNAL_AHRS_LORD_ENABLED
-    case DevType::LORD:
-        backend = new AP_ExternalAHRS_LORD(this, state);
-        break;
-    default:
+#if AP_EXTERNAL_AHRS_MICROSTRAIN5_ENABLED
+    case DevType::MicroStrain5:
+        backend = new AP_ExternalAHRS_MicroStrain5(this, state);
+        return;
 #endif
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Unsupported ExternalAHRS type %u", unsigned(devtype));
-        break;
     }
+
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Unsupported ExternalAHRS type %u", unsigned(devtype));
 }
 
 bool AP_ExternalAHRS::enabled() const
