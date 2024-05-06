@@ -16,6 +16,7 @@
 #include <SRV_Channel/SRV_Channel.h>
 #include <GCS_MAVLink/GCS.h>
 #include "AP_MotorsUGV.h"
+#include <AP_ServoRelayEvents/AP_ServoRelayEvents.h>
 
 #define SERVO_MAX 4500  // This value represents 45 degrees and is just an arbitrary representation of servo max travel.
 
@@ -113,9 +114,8 @@ const AP_Param::GroupInfo AP_MotorsUGV::var_info[] = {
     AP_GROUPEND
 };
 
-AP_MotorsUGV::AP_MotorsUGV(AP_ServoRelayEvents &relayEvents, AP_WheelRateControl& rate_controller) :
-        _relayEvents(relayEvents),
-        _rate_controller(rate_controller)
+AP_MotorsUGV::AP_MotorsUGV(AP_WheelRateControl& rate_controller) :
+    _rate_controller(rate_controller)
 {
     AP_Param::setup_object_defaults(this, var_info);
     _singleton = this;
@@ -135,7 +135,7 @@ void AP_MotorsUGV::init(uint8_t frtype)
     setup_safety_output();
 
     // setup for omni vehicles
-    if (_frame_type != FRAME_TYPE_UNDEFINED) {
+    if (is_omni()) {
         setup_omni();
     }
 }
@@ -266,11 +266,7 @@ float AP_MotorsUGV::get_slew_limited_throttle(float throttle, float dt) const
  */
 bool AP_MotorsUGV::have_skid_steering() const
 {
-    if (SRV_Channels::function_assigned(SRV_Channel::k_throttleLeft) &&
-        SRV_Channels::function_assigned(SRV_Channel::k_throttleRight)) {
-        return true;
-    }
-    return false;
+    return (SRV_Channels::function_assigned(SRV_Channel::k_throttleLeft) && SRV_Channels::function_assigned(SRV_Channel::k_throttleRight)) || is_omni();
 }
 
 // true if the vehicle has a mainsail
@@ -779,8 +775,8 @@ void AP_MotorsUGV::output_skid_steering(bool armed, float steering, float thrott
 // output for omni frames
 void AP_MotorsUGV::output_omni(bool armed, float steering, float throttle, float lateral)
 {
-    // exit immediately if the frame type is set to UNDEFINED
-    if (_frame_type == FRAME_TYPE_UNDEFINED) {
+    // exit immediately if the vehicle is not omni
+    if (!is_omni()) {
         return;
     }
 
@@ -850,7 +846,10 @@ void AP_MotorsUGV::output_throttle(SRV_Channel::Aux_servo_function_t function, f
     throttle = get_rate_controlled_throttle(function, throttle, dt);
 
     // set relay if necessary
+#if AP_SERVORELAYEVENTS_ENABLED && AP_RELAY_ENABLED
     if (_pwm_type == PWM_TYPE_BRUSHED_WITH_RELAY) {
+        auto &_relayEvents { *AP::servorelayevents() };
+
         // find the output channel, if not found return
         const SRV_Channel *out_chan = SRV_Channels::get_channel_for(function);
         if (out_chan == nullptr) {
@@ -882,6 +881,7 @@ void AP_MotorsUGV::output_throttle(SRV_Channel::Aux_servo_function_t function, f
         // invert the output to always have positive value calculated by calc_pwm
         throttle = reverse_multiplier * fabsf(throttle);
     }
+#endif  // AP_SERVORELAYEVENTS_ENABLED && AP_RELAY_ENABLED
 
     // output to servo channel
     switch (function) {

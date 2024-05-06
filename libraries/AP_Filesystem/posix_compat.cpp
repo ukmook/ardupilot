@@ -24,7 +24,7 @@
 
 #include "AP_Filesystem.h"
 
-#if HAVE_FILESYSTEM_SUPPORT
+#if AP_FILESYSTEM_FATFS_ENABLED || AP_FILESYSTEM_POSIX_ENABLED || AP_FILESYSTEM_ESP32_ENABLED || AP_FILESYSTEM_ROMFS_ENABLED
 
 #include "posix_compat.h"
 #include <stdarg.h>
@@ -83,6 +83,10 @@ APFS_FILE *apfs_fopen(const char *pathname, const char *mode)
         return nullptr;
     }
     f->fd = AP::FS().open(pathname, posix_fopen_modes_to_open(mode));
+    if (f->fd == -1) {
+        delete f;
+        return nullptr;
+    }
     f->unget = -1;
     return f;
 }
@@ -264,4 +268,4 @@ int apfs_remove(const char *pathname)
     return AP::FS().unlink(pathname);
 }
 
-#endif // HAVE_FILESYSTEM_SUPPORT
+#endif // AP_FILESYSTEM_POSIX_ENABLED

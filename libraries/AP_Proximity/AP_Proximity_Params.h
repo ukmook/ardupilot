@@ -14,8 +14,7 @@ public:
     AP_Proximity_Params(void);
 
     /* Do not allow copies */
-    AP_Proximity_Params(const AP_Proximity_Params &other) = delete;
-    AP_Proximity_Params &operator=(const AP_Proximity_Params&) = delete;
+    CLASS_NO_COPY(AP_Proximity_Params);
 
     AP_Int8 type;                                       // type of sensor
     AP_Int8 orientation;                                // orientation (e.g. right-side-up or upside-down)
@@ -24,4 +23,5 @@ public:
     AP_Int8 ignore_width_deg[PROXIMITY_MAX_IGNORE];     // width of beam (in degrees) that should be ignored
     AP_Float max_m;                                     // maximum range in meters
     AP_Float min_m;                                     // minimum range in meters
+    AP_Int8  address;                                   // proximity address (for AP_Periph CAN)
 };

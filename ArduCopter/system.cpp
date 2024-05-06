@@ -27,12 +27,12 @@ void Copter::init_ardupilot()
 #endif
 
     // init cargo gripper
-#if GRIPPER_ENABLED == ENABLED
+#if AP_GRIPPER_ENABLED
     g2.gripper.init();
 #endif
 
     // init winch
-#if WINCH_ENABLED == ENABLED
+#if AP_WINCH_ENABLED
     g2.winch.init();
 #endif
 
@@ -92,7 +92,9 @@ void Copter::init_ardupilot()
     // motors initialised so parameters can be sent
     ap.initialised_params = true;
 
+#if AP_RELAY_ENABLED
     relay.init();
+#endif
 
     /*
      *  setup the 'main loop is dead' check. Note that this relies on
@@ -127,12 +129,17 @@ void Copter::init_ardupilot()
     camera_mount.init();
 #endif
 
-#if PRECISION_LANDING == ENABLED
+#if AP_CAMERA_ENABLED
+    // initialise camera
+    camera.init();
+#endif
+
+#if AC_PRECLAND_ENABLED
     // initialise precision landing
     init_precland();
 #endif
 
-#if LANDING_GEAR_ENABLED == ENABLED
+#if AP_LANDINGGEAR_ENABLED
     // initialise landing gear position
     landinggear.init();
 #endif
@@ -154,12 +161,12 @@ void Copter::init_ardupilot()
     g2.proximity.init();
 #endif
 
-#if BEACON_ENABLED == ENABLED
+#if AP_BEACON_ENABLED
     // init beacons used for non-gps position estimation
     g2.beacon.init();
 #endif
 
-#if RPM_ENABLED == ENABLED
+#if AP_RPM_ENABLED
     // initialise AP_RPM library
     rpm_sensor.init();
 #endif
@@ -183,24 +190,20 @@ void Copter::init_ardupilot()
     g2.scripting.init();
 #endif // AP_SCRIPTING_ENABLED
 
+#if AC_CUSTOMCONTROL_MULTI_ENABLED == ENABLED
+    custom_control.init();
+#endif
+
     // set landed flags
     set_land_complete(true);
     set_land_complete_maybe(true);
-
-    // we don't want writes to the serial port to cause us to pause
-    // mid-flight, so set the serial ports non-blocking once we are
-    // ready to fly
-    serial_manager.set_blocking_writes_all(false);
 
     // enable CPU failsafe
     failsafe_enable();
 
     ins.set_log_raw_bit(MASK_LOG_IMU_RAW);
 
-    // enable output to motors
-    if (arming.rc_calibration_checks(true)) {
-        enable_motor_output();
-    }
+    motors->output_min();  // output lowest possible value to motors
 
     // attempt to set the intial_mode, else set to STABILIZE
     if (!set_mode((enum Mode::Number)g.initial_mode.get(), ModeReason::INITIALISED)) {
@@ -444,15 +447,15 @@ void Copter::allocate_motors(void)
 #if FRAME_CONFIG != HELI_FRAME
     if ((AP_Motors::motor_frame_class)g2.frame_class.get() == AP_Motors::MOTOR_FRAME_6DOF_SCRIPTING) {
 #if AP_SCRIPTING_ENABLED
-        attitude_control = new AC_AttitudeControl_Multi_6DoF(*ahrs_view, aparm, *motors, scheduler.get_loop_period_s());
+        attitude_control = new AC_AttitudeControl_Multi_6DoF(*ahrs_view, aparm, *motors);
         ac_var_info = AC_AttitudeControl_Multi_6DoF::var_info;
 #endif // AP_SCRIPTING_ENABLED
     } else {
-        attitude_control = new AC_AttitudeControl_Multi(*ahrs_view, aparm, *motors, scheduler.get_loop_period_s());
+        attitude_control = new AC_AttitudeControl_Multi(*ahrs_view, aparm, *motors);
         ac_var_info = AC_AttitudeControl_Multi::var_info;
     }
 #else
-    attitude_control = new AC_AttitudeControl_Heli(*ahrs_view, aparm, *motors, scheduler.get_loop_period_s());
+    attitude_control = new AC_AttitudeControl_Heli(*ahrs_view, aparm, *motors);
     ac_var_info = AC_AttitudeControl_Heli::var_info;
 #endif
     if (attitude_control == nullptr) {
@@ -460,7 +463,7 @@ void Copter::allocate_motors(void)
     }
     AP_Param::load_object_from_eeprom(attitude_control, ac_var_info);
         
-    pos_control = new AC_PosControl(*ahrs_view, inertial_nav, *motors, *attitude_control, scheduler.get_loop_period_s());
+    pos_control = new AC_PosControl(*ahrs_view, inertial_nav, *motors, *attitude_control);
     if (pos_control == nullptr) {
         AP_BoardConfig::allocation_error("PosControl");
     }

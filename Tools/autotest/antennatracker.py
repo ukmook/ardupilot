@@ -101,6 +101,7 @@ class AutoTestTracker(AutoTest):
         super(AutoTestTracker, self).reboot_sitl(*args, **kwargs)
 
     def GUIDED(self):
+        '''Test GUIDED mode'''
         self.reboot_sitl() # temporary hack around control issues
         self.change_mode(4) # "GUIDED"
         self.achieve_attitude(desyaw=10, despitch=30)
@@ -108,6 +109,7 @@ class AutoTestTracker(AutoTest):
         self.achieve_attitude(desyaw=45, despitch=10)
 
     def MANUAL(self):
+        '''Test MANUAL mode'''
         self.change_mode(0) # "MANUAL"
         for chan in 1, 2:
             for pwm in 1200, 1600, 1367:
@@ -115,34 +117,30 @@ class AutoTestTracker(AutoTest):
                 self.wait_servo_channel_value(chan, pwm)
 
     def SERVOTEST(self):
+        '''Test SERVOTEST mode'''
         self.change_mode(0) # "MANUAL"
         # magically changes to SERVOTEST (3)
         for value in 1900, 1200:
             channel = 1
-            self.run_cmd(mavutil.mavlink.MAV_CMD_DO_SET_SERVO,
-                         channel,
-                         value,
-                         0,
-                         0,
-                         0,
-                         0,
-                         0,
-                         timeout=1)
+            self.run_cmd(
+                mavutil.mavlink.MAV_CMD_DO_SET_SERVO,
+                p1=channel,
+                p2=value,
+                timeout=1,
+            )
             self.wait_servo_channel_value(channel, value)
         for value in 1300, 1670:
             channel = 2
-            self.run_cmd(mavutil.mavlink.MAV_CMD_DO_SET_SERVO,
-                         channel,
-                         value,
-                         0,
-                         0,
-                         0,
-                         0,
-                         0,
-                         timeout=1)
+            self.run_cmd(
+                mavutil.mavlink.MAV_CMD_DO_SET_SERVO,
+                p1=channel,
+                p2=value,
+                timeout=1,
+            )
             self.wait_servo_channel_value(channel, value)
 
     def SCAN(self):
+        '''Test SCAN mode'''
         self.change_mode(2) # "SCAN"
         self.set_parameter("SCAN_SPEED_YAW", 20)
         for channel in 1, 2:
@@ -166,24 +164,10 @@ class AutoTestTracker(AutoTest):
         '''return list of all tests'''
         ret = super(AutoTestTracker, self).tests()
         ret.extend([
-            ("GUIDED",
-             "Test GUIDED mode",
-             self.GUIDED),
-
-            ("MANUAL",
-             "Test MANUAL mode",
-             self.MANUAL),
-
-            ("SERVOTEST",
-             "Test SERVOTEST mode",
-             self.SERVOTEST),
-
-            ("NMEAOutput",
-             "Test AHRS NMEA Output can be read by out NMEA GPS",
-             self.nmea_output),
-
-            ("SCAN",
-             "Test SCAN mode",
-             self.SCAN),
+            self.GUIDED,
+            self.MANUAL,
+            self.SERVOTEST,
+            self.NMEAOutput,
+            self.SCAN,
         ])
         return ret

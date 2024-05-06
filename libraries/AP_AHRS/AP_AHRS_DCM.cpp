@@ -27,6 +27,7 @@
 #include <AP_Baro/AP_Baro.h>
 #include <AP_Compass/AP_Compass.h>
 #include <AP_Logger/AP_Logger.h>
+#include <AP_Vehicle/AP_Vehicle_Type.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -1021,7 +1022,7 @@ void AP_AHRS_DCM::estimate_wind(void)
 
 // return our current position estimate using
 // dead-reckoning or GPS
-bool AP_AHRS_DCM::get_location(struct Location &loc) const
+bool AP_AHRS_DCM::get_location(Location &loc) const
 {
     loc.lat = _last_lat;
     loc.lng = _last_lng;
@@ -1182,7 +1183,7 @@ bool AP_AHRS_DCM::get_velocity_NED(Vector3f &vec) const
 
 // Get a derivative of the vertical position in m/s which is kinematically consistent with the vertical position is required by some control loops.
 // This is different to the vertical velocity from the EKF which is not always consistent with the vertical position due to the various errors that are being corrected for.
-bool AP_AHRS_DCM::get_vert_pos_rate(float &velocity) const
+bool AP_AHRS_DCM::get_vert_pos_rate_D(float &velocity) const
 {
     Vector3f velned;
     if (!get_velocity_NED(velned)) {
@@ -1252,4 +1253,17 @@ bool AP_AHRS_DCM::get_relative_position_D_origin(float &posD) const
 
 void AP_AHRS_DCM::send_ekf_status_report(GCS_MAVLINK &link) const
 {
+}
+
+// return true if DCM has a yaw source available
+bool AP_AHRS_DCM::yaw_source_available(void) const
+{
+    return AP::compass().use_for_yaw();
+}
+
+void AP_AHRS_DCM::get_control_limits(float &ekfGndSpdLimit, float &ekfNavVelGainScaler) const
+{
+    // lower gains in VTOL controllers when flying on DCM
+    ekfGndSpdLimit = 50.0;
+    ekfNavVelGainScaler = 0.5;
 }

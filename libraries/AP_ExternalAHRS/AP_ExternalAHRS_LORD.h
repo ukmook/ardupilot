@@ -16,15 +16,12 @@
 
 #pragma once
 
+#include "AP_ExternalAHRS_config.h"
+
+#if AP_EXTERNAL_AHRS_LORD_ENABLED
+
 #include "AP_ExternalAHRS_backend.h"
-
-#ifndef HAL_EXTERNAL_AHRS_LORD_ENABLED
-#define HAL_EXTERNAL_AHRS_LORD_ENABLED HAL_EXTERNAL_AHRS_ENABLED
-#endif
-
-#if HAL_EXTERNAL_AHRS_LORD_ENABLED
-
-#include <GCS_MAVLink/GCS_MAVLink.h>
+#include <AP_GPS/AP_GPS.h>
 
 class AP_ExternalAHRS_LORD: public AP_ExternalAHRS_backend
 {
@@ -34,6 +31,9 @@ public:
 
     // get serial port number, -1 for not enabled
     int8_t get_port(void) const override;
+
+    // Get model/type name
+    const char* get_name() const override;
 
     // accessors for AP_AHRS
     bool healthy(void) const override;
@@ -145,10 +145,7 @@ private:
 
     Vector3f populate_vector3f(const uint8_t* data, uint8_t offset) const;
     Quaternion populate_quaternion(const uint8_t* data, uint8_t offset) const;
-    float extract_float(const uint8_t* data, uint8_t offset) const;
-    double extract_double(const uint8_t* data, uint8_t offset) const;
 
 };
 
-#endif // HAL_EXTERNAL_AHRS_ENABLED
-
+#endif // AP_EXTERNAL_AHRS_LORD_ENABLED

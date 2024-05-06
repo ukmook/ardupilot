@@ -19,6 +19,7 @@
 #include <AC_WPNav/AC_Loiter.h>
 #include <AC_Avoidance/AC_Avoid.h>
 #include <AP_Logger/LogStructure.h>
+#include <AP_Mission/AP_Mission.h>
 #include <AP_Proximity/AP_Proximity.h>
 #include "qautotune.h"
 #include "defines.h"
@@ -46,6 +47,7 @@ public:
     friend class Tailsitter_Transition;
 
     friend class Mode;
+    friend class ModeManual;
     friend class ModeAuto;
     friend class ModeRTL;
     friend class ModeAvoidADSB;
@@ -95,6 +97,9 @@ public:
     bool in_assisted_flight(void) const {
         return available() && assisted_flight;
     }
+
+    // abort landing, only valid when in a VTOL landing descent
+    bool abort_landing(void);
 
     /*
       return true if we are in a transition to fwd flight from hover
@@ -171,9 +176,25 @@ public:
     // Check if servo auto trim is allowed
     bool allow_servo_auto_trim();
 
+    /*
+      are we in the descent phase of a VTOL landing?
+     */
+    bool in_vtol_land_descent(void) const;
+
+    // Should we allow stick mixing from the pilot
+    bool allow_stick_mixing() const;
+
+    /*
+      should we disable the TECS controller?
+      only called when in an auto-throttle mode
+     */
+    bool should_disable_TECS() const;
+
 private:
     AP_AHRS &ahrs;
-    AP_Vehicle::MultiCopter aparm;
+
+    // key aircraft parameters passed to multiple libraries
+    AP_MultiCopter aparm;
 
     AP_InertialNav inertial_nav{ahrs};
 
@@ -212,9 +233,6 @@ private:
     // check for quadplane assistance needed
     bool should_assist(float aspeed, bool have_airspeed);
 
-    // update transition handling
-    void update_transition(void);
-
     // check for an EKF yaw reset
     void check_yaw_reset(void);
     
@@ -225,7 +243,7 @@ private:
     void hold_stabilize(float throttle_in);
 
     // set climb rate in position controller
-    void set_climb_rate_cms(float target_climb_rate_cms, bool force_descend);
+    void set_climb_rate_cms(float target_climb_rate_cms);
 
     // get pilot desired yaw rate in cd/s
     float get_pilot_input_yaw_rate_cds(void) const;
@@ -334,6 +352,7 @@ private:
 
     // QRTL start altitude, meters
     AP_Int16 qrtl_alt;
+    AP_Int16 qrtl_alt_min;
     
     // alt to switch to QLAND_FINAL
     AP_Float land_final_alt;
@@ -457,6 +476,7 @@ private:
         QPOS_POSITION1,
         QPOS_POSITION2,
         QPOS_LAND_DESCEND,
+        QPOS_LAND_ABORT,
         QPOS_LAND_FINAL,
         QPOS_LAND_COMPLETE
     };
@@ -487,6 +507,9 @@ private:
         float target_accel;
         uint32_t last_pos_reset_ms;
         bool overshoot;
+
+        float override_descent_rate;
+        uint32_t last_override_descent_ms;
     private:
         uint32_t last_state_change_ms;
         enum position_control_state state;
@@ -557,6 +580,7 @@ private:
         ONLY_ARM_IN_QMODE_OR_AUTO=(1<<18),
         TRANS_FAIL_TO_FW=(1<<19),
         FS_RTL=(1<<20),
+        DISARMED_TILT_UP=(1<<21),
     };
     bool option_is_set(OPTION option) const {
         return (options.get() & int32_t(option)) != 0;
@@ -568,6 +592,9 @@ private:
     uint32_t takeoff_time_limit_ms;
 
     float last_land_final_agl;
+
+    // AHRS alt for land abort and package place, meters
+    float land_descend_start_alt;
 
     // min alt for navigation in takeoff
     AP_Float takeoff_navalt_min;
@@ -597,11 +624,6 @@ private:
       are we in the approach phase of a VTOL landing?
      */
     bool in_vtol_land_approach(void) const;
-
-    /*
-      are we in the descent phase of a VTOL landing?
-     */
-    bool in_vtol_land_descent(void) const;
 
     /*
       are we in the final landing phase of a VTOL landing?
@@ -664,6 +686,11 @@ private:
       get a scaled Q_WP_SPEED based on direction of movement
      */
     float get_scaled_wp_speed(float target_bearing_deg) const;
+
+    /*
+      setup scaling of roll and pitch angle P gains to match fixed wing gains
+     */
+    void setup_rp_fw_angle_gains(void);
 
 public:
     void motor_test_output();

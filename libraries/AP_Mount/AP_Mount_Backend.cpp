@@ -1,15 +1,53 @@
 #include "AP_Mount_Backend.h"
 #if HAL_MOUNT_ENABLED
 #include <AP_AHRS/AP_AHRS.h>
+#include <GCS_MAVLink/GCS.h>
 
 extern const AP_HAL::HAL& hal;
 
 #define AP_MOUNT_UPDATE_DT 0.02     // update rate in seconds.  update() should be called at this rate
 
+// Default init function for every mount
+void AP_Mount_Backend::init()
+{
+    // setting default target sysid from parameters
+    _target_sysid = _params.sysid_default.get();
+}
+
+// set device id of this instance, for MNTx_DEVID parameter
+void AP_Mount_Backend::set_dev_id(uint32_t id)
+{
+    _params.dev_id.set_and_save(int32_t(id));
+}
+
+// return true if this mount accepts roll targets
+bool AP_Mount_Backend::has_roll_control() const
+{
+    return (_params.roll_angle_min < _params.roll_angle_max);
+}
+
+// return true if this mount accepts pitch targets
+bool AP_Mount_Backend::has_pitch_control() const
+{
+    return (_params.pitch_angle_min < _params.pitch_angle_max);
+}
+
 // set angle target in degrees
 // yaw_is_earth_frame (aka yaw_lock) should be true if yaw angle is earth-frame, false if body-frame
 void AP_Mount_Backend::set_angle_target(float roll_deg, float pitch_deg, float yaw_deg, bool yaw_is_earth_frame)
 {
+    // enforce angle limits
+    roll_deg = constrain_float(roll_deg, _params.roll_angle_min, _params.roll_angle_max);
+    pitch_deg = constrain_float(pitch_deg, _params.pitch_angle_min, _params.pitch_angle_max);
+    if (!yaw_is_earth_frame) {
+        // only limit yaw if in body-frame.  earth-frame yaw limiting is backend specific
+        // custom wrap code (instead of wrap_180) to better handle yaw of <= -180
+        if (yaw_deg > 180) {
+            yaw_deg -= 360;
+        }
+        yaw_deg = constrain_float(yaw_deg, _params.yaw_angle_min, _params.yaw_angle_max);
+    }
+
     // set angle targets
     mavt_target.target_type = MountTargetType::ANGLE;
     mavt_target.angle_rad.roll = radians(roll_deg);
@@ -47,6 +85,19 @@ void AP_Mount_Backend::set_roi_target(const Location &target_loc)
     set_mode(MAV_MOUNT_MODE_GPS_POINT);
 }
 
+// clear_roi_target - clears target location that mount should attempt to point towards
+void AP_Mount_Backend::clear_roi_target()
+{
+    // clear the target GPS location
+    _roi_target_set = false;
+
+    // reset the mode if in GPS tracking mode
+    if (_mode == MAV_MOUNT_MODE_GPS_POINT) {
+        MAV_MOUNT_MODE default_mode = (MAV_MOUNT_MODE)_params.default_mode.get();
+        set_mode(default_mode);
+    }
+}
+
 // set_sys_target - sets system that mount should attempt to point towards
 void AP_Mount_Backend::set_target_sysid(uint8_t sysid)
 {
@@ -60,9 +111,6 @@ void AP_Mount_Backend::set_target_sysid(uint8_t sysid)
 void AP_Mount_Backend::handle_mount_configure(const mavlink_mount_configure_t &packet)
 {
     set_mode((MAV_MOUNT_MODE)packet.mount_mode);
-    _state._stab_roll.set(packet.stab_roll);
-    _state._stab_tilt.set(packet.stab_pitch);
-    _state._stab_pan.set(packet.stab_yaw);
 }
 
 // send a GIMBAL_DEVICE_ATTITUDE_STATUS message to GCS
@@ -91,6 +139,73 @@ void AP_Mount_Backend::send_gimbal_device_attitude_status(mavlink_channel_t chan
                                                    std::numeric_limits<double>::quiet_NaN(),    // pitch axis angular velocity (NaN for unknown)
                                                    std::numeric_limits<double>::quiet_NaN(),    // yaw axis angular velocity (NaN for unknown)
                                                    0);  // failure flags (not supported)
+}
+
+// return gimbal manager capability flags used by GIMBAL_MANAGER_INFORMATION message
+uint32_t AP_Mount_Backend::get_gimbal_manager_capability_flags() const
+{
+    uint32_t cap_flags = GIMBAL_MANAGER_CAP_FLAGS_HAS_RETRACT |
+                         GIMBAL_MANAGER_CAP_FLAGS_HAS_NEUTRAL |
+                         GIMBAL_MANAGER_CAP_FLAGS_HAS_RC_INPUTS |
+                         GIMBAL_MANAGER_CAP_FLAGS_CAN_POINT_LOCATION_LOCAL |
+                         GIMBAL_MANAGER_CAP_FLAGS_CAN_POINT_LOCATION_GLOBAL;
+
+    // roll control
+    if (has_roll_control()) {
+        cap_flags |= GIMBAL_MANAGER_CAP_FLAGS_HAS_ROLL_AXIS |
+                     GIMBAL_MANAGER_CAP_FLAGS_HAS_ROLL_FOLLOW |
+                     GIMBAL_MANAGER_CAP_FLAGS_HAS_ROLL_LOCK;
+    }
+
+    // pitch control
+    if (has_pitch_control()) {
+        cap_flags |= GIMBAL_MANAGER_CAP_FLAGS_HAS_PITCH_AXIS |
+                     GIMBAL_MANAGER_CAP_FLAGS_HAS_PITCH_FOLLOW |
+                     GIMBAL_MANAGER_CAP_FLAGS_HAS_PITCH_LOCK;
+    }
+
+    // yaw control
+    if (has_pan_control()) {
+        cap_flags |= GIMBAL_MANAGER_CAP_FLAGS_HAS_YAW_AXIS |
+                     GIMBAL_MANAGER_CAP_FLAGS_HAS_YAW_FOLLOW |
+                     GIMBAL_MANAGER_CAP_FLAGS_HAS_YAW_LOCK;
+    }
+
+    return cap_flags;
+}
+
+// send a GIMBAL_MANAGER_INFORMATION message to GCS
+void AP_Mount_Backend::send_gimbal_manager_information(mavlink_channel_t chan)
+{
+    mavlink_msg_gimbal_manager_information_send(chan,
+                                                AP_HAL::millis(),                       // autopilot system time
+                                                get_gimbal_manager_capability_flags(),  // bitmap of gimbal manager capability flags
+                                                _instance + 1,                          // gimbal device id
+                                                radians(_params.roll_angle_min),        // roll_min in radians
+                                                radians(_params.roll_angle_max),        // roll_max in radians
+                                                radians(_params.pitch_angle_min),       // pitch_min in radians
+                                                radians(_params.pitch_angle_max),       // pitch_max in radians
+                                                radians(_params.yaw_angle_min),         // yaw_min in radians
+                                                radians(_params.yaw_angle_max));        // yaw_max in radians
+}
+
+// send a GIMBAL_MANAGER_STATUS message to GCS
+void AP_Mount_Backend::send_gimbal_manager_status(mavlink_channel_t chan)
+{
+    uint32_t flags = GIMBAL_MANAGER_FLAGS_ROLL_LOCK | GIMBAL_MANAGER_FLAGS_PITCH_LOCK;
+
+    if (_yaw_lock) {
+        flags |= GIMBAL_MANAGER_FLAGS_YAW_LOCK;
+    }
+
+    mavlink_msg_gimbal_manager_status_send(chan,
+                                           AP_HAL::millis(),    // autopilot system time
+                                           flags,               // bitmap of gimbal manager flags
+                                           _instance + 1,       // gimbal device id
+                                           mavlink_control_id.sysid,    // primary control system id
+                                           mavlink_control_id.compid,   // primary control component id
+                                           0,                           // secondary control system id
+                                           0);                          // secondary control component id
 }
 
 // process MOUNT_CONTROL messages received from GCS. deprecated.
@@ -189,6 +304,42 @@ MAV_RESULT AP_Mount_Backend::handle_command_do_mount_control(const mavlink_comma
     }
 }
 
+// handle do_gimbal_manager_configure.  Returns MAV_RESULT_ACCEPTED on success
+// requires original message in order to extract caller's sysid and compid
+MAV_RESULT AP_Mount_Backend::handle_command_do_gimbal_manager_configure(const mavlink_command_long_t &packet, const mavlink_message_t &msg)
+{
+    // sanity check param1 and param2 values
+    if ((packet.param1 < -3) || (packet.param1 > UINT8_MAX) || (packet.param2 < -3) || (packet.param2 > UINT8_MAX)) {
+        return MAV_RESULT_FAILED;
+    }
+
+    // convert negative packet1 and packet2 values
+    int16_t new_sysid = packet.param1;
+    switch (new_sysid) {
+        case -1:
+            // leave unchanged
+            break;
+        case -2:
+            // set itself in control
+            mavlink_control_id.sysid = msg.sysid;
+            mavlink_control_id.compid = msg.compid;
+            break;
+        case -3:
+            // remove control if currently in control
+            if ((mavlink_control_id.sysid == msg.sysid) && (mavlink_control_id.compid == msg.compid)) {
+                mavlink_control_id.sysid = 0;
+                mavlink_control_id.compid = 0;
+            }
+            break;
+        default:
+            mavlink_control_id.sysid = packet.param1;
+            mavlink_control_id.compid = packet.param2;
+            break;
+    }
+
+    return MAV_RESULT_ACCEPTED;
+}
+
 // handle a GLOBAL_POSITION_INT message
 bool AP_Mount_Backend::handle_global_position_int(uint8_t msg_sysid, const mavlink_global_position_int_t &packet)
 {
@@ -208,9 +359,9 @@ bool AP_Mount_Backend::handle_global_position_int(uint8_t msg_sysid, const mavli
 // get pilot input (in the range -1 to +1) received through RC
 void AP_Mount_Backend::get_rc_input(float& roll_in, float& pitch_in, float& yaw_in) const
 {
-    const RC_Channel *roll_ch = rc().channel(_state._roll_rc_in - 1);
-    const RC_Channel *pitch_ch = rc().channel(_state._tilt_rc_in - 1);
-    const RC_Channel *yaw_ch = rc().channel(_state._pan_rc_in - 1);
+    const RC_Channel *roll_ch = rc().find_channel_for_option(_instance == 0 ? RC_Channel::AUX_FUNC::MOUNT1_ROLL : RC_Channel::AUX_FUNC::MOUNT2_ROLL);
+    const RC_Channel *pitch_ch = rc().find_channel_for_option(_instance == 0 ? RC_Channel::AUX_FUNC::MOUNT1_PITCH : RC_Channel::AUX_FUNC::MOUNT2_PITCH);
+    const RC_Channel *yaw_ch = rc().find_channel_for_option(_instance == 0 ? RC_Channel::AUX_FUNC::MOUNT1_YAW : RC_Channel::AUX_FUNC::MOUNT2_YAW);
 
     roll_in = 0;
     if ((roll_ch != nullptr) && (roll_ch->get_radio_in() > 0)) {
@@ -233,7 +384,7 @@ void AP_Mount_Backend::get_rc_input(float& roll_in, float& pitch_in, float& yaw_
 bool AP_Mount_Backend::get_rc_rate_target(MountTarget& rate_rads) const
 {
     // exit immediately if RC is not providing rate targets
-    if (_frontend._rc_rate_max <= 0) {
+    if (_params.rc_rate_max <= 0) {
         return false;
     }
 
@@ -242,7 +393,7 @@ bool AP_Mount_Backend::get_rc_rate_target(MountTarget& rate_rads) const
     get_rc_input(roll_in, pitch_in, yaw_in);
 
     // calculate rates
-    const float rc_rate_max_rads = radians(_frontend._rc_rate_max.get());
+    const float rc_rate_max_rads = radians(_params.rc_rate_max.get());
     rate_rads.roll = roll_in * rc_rate_max_rads;
     rate_rads.pitch = pitch_in * rc_rate_max_rads;
     rate_rads.yaw = yaw_in * rc_rate_max_rads;
@@ -258,7 +409,7 @@ bool AP_Mount_Backend::get_rc_rate_target(MountTarget& rate_rads) const
 bool AP_Mount_Backend::get_rc_angle_target(MountTarget& angle_rad) const
 {
     // exit immediately if RC is not providing angle targets
-    if (_frontend._rc_rate_max > 0) {
+    if (_params.rc_rate_max > 0) {
         return false;
     }
 
@@ -267,10 +418,10 @@ bool AP_Mount_Backend::get_rc_angle_target(MountTarget& angle_rad) const
     get_rc_input(roll_in, pitch_in, yaw_in);
 
     // roll angle
-    angle_rad.roll = radians(((roll_in + 1.0f) * 0.5f * (_state._roll_angle_max - _state._roll_angle_min) + _state._roll_angle_min)*0.01f);
+    angle_rad.roll = radians(((roll_in + 1.0f) * 0.5f * (_params.roll_angle_max - _params.roll_angle_min) + _params.roll_angle_min));
 
     // pitch angle
-    angle_rad.pitch = radians(((pitch_in + 1.0f) * 0.5f * (_state._tilt_angle_max - _state._tilt_angle_min) + _state._tilt_angle_min)*0.01f);
+    angle_rad.pitch = radians(((pitch_in + 1.0f) * 0.5f * (_params.pitch_angle_max - _params.pitch_angle_min) + _params.pitch_angle_min));
 
     // yaw angle
     angle_rad.yaw_is_ef = _yaw_lock;
@@ -279,7 +430,7 @@ bool AP_Mount_Backend::get_rc_angle_target(MountTarget& angle_rad) const
         angle_rad.yaw = yaw_in * M_PI;
     } else {
         // yaw target in body frame so apply body frame limits
-        angle_rad.yaw = radians(((yaw_in + 1.0f) * 0.5f * (_state._pan_angle_max - _state._pan_angle_min) + _state._pan_angle_min)*0.01f);
+        angle_rad.yaw = radians(((yaw_in + 1.0f) * 0.5f * (_params.yaw_angle_max - _params.yaw_angle_min) + _params.yaw_angle_min));
     }
 
     return true;
@@ -333,27 +484,27 @@ bool AP_Mount_Backend::get_angle_target_to_roi(MountTarget& angle_rad) const
 }
 
 // return body-frame yaw angle from a mount target
-float AP_Mount_Backend::get_bf_yaw_angle(const MountTarget& angle_rad) const
+float AP_Mount_Backend::MountTarget::get_bf_yaw() const
 {
-    if (angle_rad.yaw_is_ef) {
+    if (yaw_is_ef) {
         // convert to body-frame
-        return wrap_PI(angle_rad.yaw - AP::ahrs().yaw);
+        return wrap_PI(yaw - AP::ahrs().yaw);
     }
 
     // target is already body-frame
-    return angle_rad.yaw;
+    return yaw;
 }
 
 // return earth-frame yaw angle from a mount target
-float AP_Mount_Backend::get_ef_yaw_angle(const MountTarget& angle_rad) const
+float AP_Mount_Backend::MountTarget::get_ef_yaw() const
 {
-    if (angle_rad.yaw_is_ef) {
+    if (yaw_is_ef) {
         // target is already earth-frame
-        return angle_rad.yaw;
+        return yaw;
     }
 
     // convert to earth-frame
-    return wrap_PI(angle_rad.yaw + AP::ahrs().yaw);
+    return wrap_PI(yaw + AP::ahrs().yaw);
 }
 
 // update angle targets using a given rate target
@@ -362,15 +513,15 @@ float AP_Mount_Backend::get_ef_yaw_angle(const MountTarget& angle_rad) const
 void AP_Mount_Backend::update_angle_target_from_rate(const MountTarget& rate_rad, MountTarget& angle_rad) const
 {
     // update roll and pitch angles and apply limits
-    angle_rad.roll = constrain_float(angle_rad.roll + rate_rad.roll * AP_MOUNT_UPDATE_DT, radians(_state._roll_angle_min * 0.01), radians(_state._roll_angle_max * 0.01));
-    angle_rad.pitch = constrain_float(angle_rad.pitch + rate_rad.pitch * AP_MOUNT_UPDATE_DT, radians(_state._tilt_angle_min * 0.01), radians(_state._tilt_angle_max * 0.01));
+    angle_rad.roll = constrain_float(angle_rad.roll + rate_rad.roll * AP_MOUNT_UPDATE_DT, radians(_params.roll_angle_min), radians(_params.roll_angle_max));
+    angle_rad.pitch = constrain_float(angle_rad.pitch + rate_rad.pitch * AP_MOUNT_UPDATE_DT, radians(_params.pitch_angle_min), radians(_params.pitch_angle_max));
 
     // ensure angle yaw frames matches rate yaw frame
     if (angle_rad.yaw_is_ef != rate_rad.yaw_is_ef) {
         if (rate_rad.yaw_is_ef) {
-            angle_rad.yaw = get_ef_yaw_angle(angle_rad);
+            angle_rad.yaw = angle_rad.get_ef_yaw();
         } else {
-            angle_rad.yaw = get_bf_yaw_angle(angle_rad);
+            angle_rad.yaw = angle_rad.get_bf_yaw();
         }
         angle_rad.yaw_is_ef = rate_rad.yaw_is_ef;
     }
@@ -382,7 +533,7 @@ void AP_Mount_Backend::update_angle_target_from_rate(const MountTarget& rate_rad
         angle_rad.yaw = wrap_PI(angle_rad.yaw);
     } else {
         // if body-frame constrain yaw to body-frame limits
-        angle_rad.yaw = constrain_float(angle_rad.yaw, radians(_state._pan_angle_min * 0.01), radians(_state._pan_angle_max * 0.01));
+        angle_rad.yaw = constrain_float(angle_rad.yaw, radians(_params.yaw_angle_min), radians(_params.yaw_angle_max));
     }
 }
 

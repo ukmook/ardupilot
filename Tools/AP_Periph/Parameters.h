@@ -3,6 +3,8 @@
 #include <AP_Common/AP_Common.h>
 #include "GCS_MAVLink.h"
 
+#define AP_PARAM_VEHICLE_NAME periph
+
 // Global parameter class.
 //
 class Parameters {
@@ -28,7 +30,7 @@ public:
         k_param_hardpoint_id,
         k_param_hardpoint_rate,
         k_param_baro_enable,
-        k_param_esc_number,
+        k_param_esc_number0,
         k_param_battery,
         k_param_debug,
         k_param_serial_number,
@@ -59,6 +61,21 @@ public:
         k_param_efi,
         k_param_efi_port,
         k_param_efi_baudrate,
+        k_param_esc_telem_rate,
+        k_param_can_slcan_cport,
+        k_param_temperature_sensor,
+        k_param_esc_command_timeout_ms,
+        k_param_proximity,
+        k_param_proximity_baud,
+        k_param_proximity_port,
+        k_param_proximity_max_rate,
+        k_param_nmea,
+        k_param_kdecan,
+        k_param_pole_count0,
+        k_param_esc_serial_port0,
+        k_param_esc_number1,
+        k_param_pole_count1,
+        k_param_esc_serial_port1,
     };
 
     AP_Int16 format_version;
@@ -66,7 +83,11 @@ public:
     
     AP_Int32 can_baudrate[HAL_NUM_CAN_IFACES];
 #if HAL_NUM_CAN_IFACES >= 2
-    AP_Enum<AP_CANManager::Driver_Type> can_protocol[HAL_NUM_CAN_IFACES];
+    AP_Enum<AP_CAN::Protocol> can_protocol[HAL_NUM_CAN_IFACES];
+#endif
+
+#if AP_CAN_SLCAN_ENABLED
+    AP_Int8 can_slcan_cport;
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_BUZZER_WITHOUT_NOTIFY
@@ -88,6 +109,13 @@ public:
     AP_Int16 rangefinder_max_rate;
 #endif
 
+#if HAL_PROXIMITY_ENABLED
+    AP_Int32 proximity_baud;
+    AP_Int8 proximity_port;
+    AP_Int16 proximity_max_rate;
+#endif
+
+
 #ifdef HAL_PERIPH_ENABLE_ADSB
     AP_Int32 adsb_baudrate;
     AP_Int8 adsb_port;
@@ -98,8 +126,21 @@ public:
     AP_Int8 hardpoint_rate;
 #endif
 
-#ifdef HAL_PERIPH_ENABLE_HWESC
-    AP_Int8 esc_number;
+#if defined(HAL_PERIPH_ENABLE_HWESC) || defined(HAL_PERIPH_ENABLE_ESC_APD)
+    #if defined ESC_NUMBERS
+        #error "ESC_NUMBERS should not have been previously defined"
+    #endif
+    #if defined(APD_ESC_INSTANCES)
+        #define ESC_NUMBERS APD_ESC_INSTANCES
+    #else
+        #define ESC_NUMBERS 2
+    #endif // defined(APD_ESC_INSTANCES)
+    AP_Int8 esc_number[ESC_NUMBERS];
+    AP_Int8 esc_serial_port[ESC_NUMBERS];
+#endif
+
+#if defined(ESC_NUMBERS)
+    AP_Int8 pole_count[ESC_NUMBERS];
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_GPS
@@ -115,8 +156,12 @@ public:
 
 #ifdef HAL_PERIPH_ENABLE_RC_OUT
     AP_Int8 esc_pwm_type;
+    AP_Int16 esc_command_timeout_ms;
 #if HAL_WITH_ESC_TELEM && !HAL_GCS_ENABLED
     AP_Int8 esc_telem_port;
+#endif
+#if HAL_WITH_ESC_TELEM
+    AP_Int32 esc_telem_rate;
 #endif
 #endif
 
@@ -143,6 +188,7 @@ public:
 #else
     static constexpr uint8_t can_fdmode = 0;
 #endif
+    AP_Int8 node_stats;
     Parameters() {}
 };
 

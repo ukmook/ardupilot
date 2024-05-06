@@ -6,23 +6,16 @@
 #include <GCS_MAVLink/include/mavlink/v2.0/checksum.h>
 #include <AP_SerialManager/AP_SerialManager.h>
 
-extern const AP_HAL::HAL& hal;
-
-AP_Mount_SToRM32_serial::AP_Mount_SToRM32_serial(AP_Mount &frontend, AP_Mount::mount_state &state, uint8_t instance) :
-    AP_Mount_Backend(frontend, state, instance),
-    _reply_type(ReplyType_UNKNOWN)
-{}
-
 // init - performs any required initialisation for this instance
 void AP_Mount_SToRM32_serial::init()
 {
     const AP_SerialManager& serial_manager = AP::serialmanager();
 
-    _port = serial_manager.find_serial(AP_SerialManager::SerialProtocol_SToRM32, 0);
+    _port = serial_manager.find_serial(AP_SerialManager::SerialProtocol_Gimbal, 0);
     if (_port) {
         _initialised = true;
-        set_mode((enum MAV_MOUNT_MODE)_state._default_mode.get());
     }
+    AP_Mount_Backend::init();
 
 }
 
@@ -43,7 +36,7 @@ void AP_Mount_SToRM32_serial::update()
     switch(get_mode()) {
         // move mount to a "retracted" position.  To-Do: remove support and replace with a relaxed mode?
         case MAV_MOUNT_MODE_RETRACT: {
-            const Vector3f &target = _state._retract_angles.get();
+            const Vector3f &target = _params.retract_angles.get();
             _angle_rad.roll = ToRad(target.x);
             _angle_rad.pitch = ToRad(target.y);
             _angle_rad.yaw = ToRad(target.z);
@@ -53,7 +46,7 @@ void AP_Mount_SToRM32_serial::update()
 
         // move mount to a neutral position, typically pointing forward
         case MAV_MOUNT_MODE_NEUTRAL: {
-            const Vector3f &target = _state._neutral_angles.get();
+            const Vector3f &target = _params.neutral_angles.get();
             _angle_rad.roll = ToRad(target.x);
             _angle_rad.pitch = ToRad(target.y);
             _angle_rad.yaw = ToRad(target.z);
@@ -133,25 +126,6 @@ void AP_Mount_SToRM32_serial::update()
     }
 }
 
-// has_pan_control - returns true if this mount can control it's pan (required for multicopters)
-bool AP_Mount_SToRM32_serial::has_pan_control() const
-{
-    // we do not have yaw control
-    return false;
-}
-
-// set_mode - sets mount's mode
-void AP_Mount_SToRM32_serial::set_mode(enum MAV_MOUNT_MODE mode)
-{
-    // exit immediately if not initialised
-    if (!_initialised) {
-        return;
-    }
-
-    // record the mode change
-    _mode = mode;
-}
-
 // get attitude as a quaternion.  returns true on success
 bool AP_Mount_SToRM32_serial::get_attitude_quaternion(Quaternion& att_quat)
 {
@@ -196,7 +170,7 @@ void AP_Mount_SToRM32_serial::send_target_angles(const MountTarget& angle_target
     // send CMD_SETANGLE (Note: reversed pitch and yaw)
     cmd_set_angles_data.pitch = -degrees(angle_target_rad.pitch);
     cmd_set_angles_data.roll = degrees(angle_target_rad.roll);
-    cmd_set_angles_data.yaw = -degrees(get_bf_yaw_angle(angle_target_rad));
+    cmd_set_angles_data.yaw = -degrees(angle_target_rad.get_bf_yaw());
 
     uint8_t* buf = (uint8_t*)&cmd_set_angles_data;
 
@@ -290,9 +264,10 @@ void AP_Mount_SToRM32_serial::parse_reply() {
                 break;
             }
 
+            // Parse angles (Note: reversed pitch and yaw) to match ardupilot coordinate system
             _current_angle.x = _buffer.data.imu1_roll;
-            _current_angle.y = _buffer.data.imu1_pitch;
-            _current_angle.z = _buffer.data.imu1_yaw;
+            _current_angle.y = -_buffer.data.imu1_pitch;
+            _current_angle.z = -_buffer.data.imu1_yaw;
             break;
         default:
             break;

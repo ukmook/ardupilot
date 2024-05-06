@@ -35,8 +35,15 @@ extern const AP_HAL::HAL& hal;
 
 using namespace SITL;
 
+struct GPS_TOW {
+    // Number of weeks since midnight 5-6 January 1980
+    uint16_t week;
+    // Time since start of the GPS week [mS]
+    uint32_t ms;
+};
+
 GPS::GPS(uint8_t _instance) :
-    SerialDevice(),
+    SerialDevice(8192, 2048),
     instance{_instance}
 {
 
@@ -55,6 +62,27 @@ GPS::GPS(uint8_t _instance) :
         }
     }
 #endif
+}
+
+uint32_t GPS::device_baud() const
+{
+    if (_sitl == nullptr) {
+        return 0;
+    }
+    switch ((Type)_sitl->gps_type[instance].get()) {
+        case Type::NOVA:
+            return 19200;
+        case Type::NONE:
+        case Type::UBLOX:
+        case Type::NMEA:
+        case Type::SBP:
+        case Type::SBP2:
+#if AP_SIM_GPS_FILE_ENABLED
+        case Type::FILE:
+#endif
+            return 0;  // 0 meaning unset
+    }
+    return 0;  // 0 meaning unset
 }
 
 /*
@@ -160,16 +188,18 @@ void GPS::send_ubx(uint8_t msgid, uint8_t *buf, uint16_t size)
 /*
   return GPS time of week in milliseconds
  */
-static void gps_time(uint16_t *time_week, uint32_t *time_week_ms)
+static GPS_TOW gps_time()
 {
+    GPS_TOW gps_tow;
     struct timeval tv;
     simulation_timeval(&tv);
     const uint32_t epoch = 86400*(10*365 + (1980-1969)/4 + 1 + 6 - 2) - (GPS_LEAPSECONDS_MILLIS / 1000ULL);
     uint32_t epoch_seconds = tv.tv_sec - epoch;
-    *time_week = epoch_seconds / AP_SEC_PER_WEEK;
+    gps_tow.week = epoch_seconds / AP_SEC_PER_WEEK;
     uint32_t t_ms = tv.tv_usec / 1000;
     // round time to nearest 200ms
-    *time_week_ms = (epoch_seconds % AP_SEC_PER_WEEK) * AP_MSEC_PER_SEC + ((t_ms/200) * 200);
+    gps_tow.ms = (epoch_seconds % AP_SEC_PER_WEEK) * AP_MSEC_PER_SEC + ((t_ms/200) * 200);
+    return gps_tow;
 }
 
 /*
@@ -325,12 +355,9 @@ void GPS::update_ubx(const struct gps_data *d)
 
     uint32_t _next_nav_sv_info_time = 0;
 
-    uint16_t time_week;
-    uint32_t time_week_ms;
+    const auto gps_tow = gps_time();
 
-    gps_time(&time_week, &time_week_ms);
-
-    pos.time = time_week_ms;
+    pos.time = gps_tow.ms;
     pos.longitude = d->longitude * 1.0e7;
     pos.latitude  = d->latitude * 1.0e7;
     pos.altitude_ellipsoid = d->altitude * 1000.0f;
@@ -338,7 +365,7 @@ void GPS::update_ubx(const struct gps_data *d)
     pos.horizontal_accuracy = _sitl->gps_accuracy[instance]*1000;
     pos.vertical_accuracy = _sitl->gps_accuracy[instance]*1000;
 
-    status.time = time_week_ms;
+    status.time = gps_tow.ms;
     status.fix_type = d->have_lock?3:0;
     status.fix_status = d->have_lock?1:0;
     status.differential_status = 0;
@@ -346,7 +373,7 @@ void GPS::update_ubx(const struct gps_data *d)
     status.time_to_first_fix = 0;
     status.uptime = AP_HAL::millis();
 
-    velned.time = time_week_ms;
+    velned.time = gps_tow.ms;
     velned.ned_north = 100.0f * d->speedN;
     velned.ned_east  = 100.0f * d->speedE;
     velned.ned_down  = 100.0f * d->speedD;
@@ -363,10 +390,10 @@ void GPS::update_ubx(const struct gps_data *d)
     sol.fix_type = d->have_lock?3:0;
     sol.fix_status = 221;
     sol.satellites = d->have_lock?_sitl->gps_numsats[instance]:3;
-    sol.time = time_week_ms;
-    sol.week = time_week;
+    sol.time = gps_tow.ms;
+    sol.week = gps_tow.week;
 
-    dop.time = time_week_ms;
+    dop.time = gps_tow.ms;
     dop.gDOP = 65535;
     dop.pDOP = 65535;
     dop.tDOP = 65535;
@@ -375,7 +402,7 @@ void GPS::update_ubx(const struct gps_data *d)
     dop.nDOP = 65535;
     dop.eDOP = 65535;
     
-    pvt.itow = time_week_ms;
+    pvt.itow = gps_tow.ms;
     pvt.year = 0; 
     pvt.month = 0;
     pvt.day = 0;
@@ -421,7 +448,7 @@ void GPS::update_ubx(const struct gps_data *d)
         rot.rotate(gyro * (-lag));
         rel_antenna_pos = rot * rel_antenna_pos;
         relposned.version = 1;
-        relposned.iTOW = time_week_ms;
+        relposned.iTOW = gps_tow.ms;
         relposned.relPosN = rel_antenna_pos.x * 100;
         relposned.relPosE = rel_antenna_pos.y * 100;
         relposned.relPosD = rel_antenna_pos.z * 100;
@@ -440,8 +467,8 @@ void GPS::update_ubx(const struct gps_data *d)
         send_ubx(MSG_RELPOSNED,    (uint8_t*)&relposned, sizeof(relposned));
     }
 
-    if (time_week_ms > _next_nav_sv_info_time) {
-        svinfo.itow = time_week_ms;
+    if (gps_tow.ms > _next_nav_sv_info_time) {
+        svinfo.itow = gps_tow.ms;
         svinfo.numCh = 32;
         svinfo.globalFlags = 4; // u-blox 8/M8
         // fill in the SV's with some data even though firmware does not currently use it
@@ -457,7 +484,7 @@ void GPS::update_ubx(const struct gps_data *d)
             // not bothering to fill in prRes
         }
         send_ubx(MSG_SVINFO, (uint8_t*)&svinfo, sizeof(svinfo));
-        _next_nav_sv_info_time = time_week_ms + 10000; // 10 second delay
+        _next_nav_sv_info_time = gps_tow.ms + 10000; // 10 second delay
     }
 }
 
@@ -520,7 +547,7 @@ void GPS::update_nmea(const struct gps_data *d)
                      lng_string,
                      d->have_lock?1:0,
                      d->have_lock?_sitl->gps_numsats[instance]:3,
-                     2.0,
+                     1.2,
                      d->altitude);
     const float speed_mps = norm(d->speedN, d->speedE);
     const float speed_knots = speed_mps * M_PER_SEC_TO_KNOTS;
@@ -651,13 +678,11 @@ void GPS::update_sbp(const struct gps_data *d)
     static const uint16_t SBP_DOPS_MSGTYPE = 0x0206;
     static const uint16_t SBP_POS_LLH_MSGTYPE = 0x0201;
     static const uint16_t SBP_VEL_NED_MSGTYPE = 0x0205;
-    uint16_t time_week;
-    uint32_t time_week_ms;
 
-    gps_time(&time_week, &time_week_ms);
+    const auto gps_tow = gps_time();
 
-    t.wn = time_week;
-    t.tow = time_week_ms;
+    t.wn = gps_tow.week;
+    t.tow = gps_tow.ms;
     t.ns = 0;
     t.flags = 0;
     sbp_send_message(SBP_GPS_TIME_MSGTYPE, 0x2222, sizeof(t), (uint8_t*)&t);
@@ -666,7 +691,7 @@ void GPS::update_sbp(const struct gps_data *d)
         return;
     }
 
-    pos.tow = time_week_ms;
+    pos.tow = gps_tow.ms;
     pos.lon = d->longitude;
     pos.lat= d->latitude;
     pos.height = d->altitude;
@@ -681,7 +706,7 @@ void GPS::update_sbp(const struct gps_data *d)
     pos.flags = 1;
     sbp_send_message(SBP_POS_LLH_MSGTYPE, 0x2222, sizeof(pos), (uint8_t*)&pos);
 
-    velned.tow = time_week_ms;
+    velned.tow = gps_tow.ms;
     velned.n = 1e3 * d->speedN;
     velned.e = 1e3 * d->speedE;
     velned.d = 1e3 * d->speedD;
@@ -694,7 +719,7 @@ void GPS::update_sbp(const struct gps_data *d)
     static uint32_t do_every_count = 0;
     if (do_every_count % 5 == 0) {
 
-        dops.tow = time_week_ms;
+        dops.tow = gps_tow.ms;
         dops.gdop = 1;
         dops.pdop = 1;
         dops.tdop = 1;
@@ -768,13 +793,10 @@ void GPS::update_sbp2(const struct gps_data *d)
     static const uint16_t SBP_POS_LLH_MSGTYPE = 0x020A;
     static const uint16_t SBP_VEL_NED_MSGTYPE = 0x020E;
 
-    uint16_t time_week;
-    uint32_t time_week_ms;
+    const auto gps_tow = gps_time();
 
-    gps_time(&time_week, &time_week_ms);
-
-    t.wn = time_week;
-    t.tow = time_week_ms;
+    t.wn = gps_tow.week;
+    t.tow = gps_tow.ms;
     t.ns = 0;
     t.flags = 1;
     sbp_send_message(SBP_GPS_TIME_MSGTYPE, 0x2222, sizeof(t), (uint8_t*)&t);
@@ -783,7 +805,7 @@ void GPS::update_sbp2(const struct gps_data *d)
         return;
     }
 
-    pos.tow = time_week_ms;
+    pos.tow = gps_tow.ms;
     pos.lon = d->longitude;
     pos.lat= d->latitude;
     pos.height = d->altitude;
@@ -798,7 +820,7 @@ void GPS::update_sbp2(const struct gps_data *d)
     pos.flags = 4;
     sbp_send_message(SBP_POS_LLH_MSGTYPE, 0x2222, sizeof(pos), (uint8_t*)&pos);
 
-    velned.tow = time_week_ms;
+    velned.tow = gps_tow.ms;
     velned.n = 1e3 * d->speedN;
     velned.e = 1e3 * d->speedE;
     velned.d = 1e3 * d->speedD;
@@ -811,7 +833,7 @@ void GPS::update_sbp2(const struct gps_data *d)
     static uint32_t do_every_count = 0;
     if (do_every_count % 5 == 0) {
 
-        dops.tow = time_week_ms;
+        dops.tow = gps_tow.ms;
         dops.gdop = 1;
         dops.pdop = 1;
         dops.tdop = 1;
@@ -913,17 +935,14 @@ void GPS::update_nova(const struct gps_data *d)
         float resv;
     } bestvel {};
     
-    uint16_t time_week;
-    uint32_t time_week_ms;
-    
-    gps_time(&time_week, &time_week_ms);
+    const auto gps_tow = gps_time();
     
     header.preamble[0] = 0xaa;
     header.preamble[1] = 0x44;
     header.preamble[2] = 0x12;
     header.headerlength = sizeof(header);
-    header.week = time_week;
-    header.tow = time_week_ms;
+    header.week = gps_tow.week;
+    header.tow = gps_tow.ms;
     
     header.messageid = 174;
     header.messagelength = sizeof(psrdop);
@@ -998,39 +1017,57 @@ uint32_t GPS::CalculateBlockCRC32(uint32_t length, uint8_t *buffer, uint32_t crc
 }
 
 /*
-  temporary method to use file as GPS data
+  read file data logged from AP_GPS_DEBUG_LOGGING_ENABLED
  */
 #if AP_SIM_GPS_FILE_ENABLED
 void GPS::update_file()
 {
-    static int fd = -1;
-    static int fd2 = -1;
-    int temp_fd;
-    if (instance == 0) {
-        if (fd == -1) {
-            fd = open("/tmp/gps.dat", O_RDONLY|O_CLOEXEC);
-        }
-        temp_fd = fd;
-    } else {
-        if (fd2 == -1) {
-            fd2 = open("/tmp/gps2.dat", O_RDONLY|O_CLOEXEC);
-        }
-        temp_fd = fd2;
-    }
-
-    if (temp_fd == -1) {
+    static int fd[2] = {-1,-1};
+    static uint32_t base_time[2];
+    const uint16_t lognum = uint16_t(_sitl->gps_log_num.get());
+    if (instance > 1) {
         return;
     }
-    char buf[200];
-    ssize_t ret = ::read(temp_fd, buf, sizeof(buf));
-    if (ret > 0) {
-        ::printf("wrote gps %u bytes\n", (unsigned)ret);
-        write_to_autopilot((const char *)buf, ret);
+    if (fd[instance] == -1) {
+        char fname[] = "gpsN_NNN.log";
+        hal.util->snprintf(fname, 13, "gps%u_%03u.log", instance+1, lognum);
+        fd[instance] = open(fname, O_RDONLY|O_CLOEXEC);
+        if (fd[instance] == -1) {
+            return;
+        }
     }
-    if (ret == 0) {
-        ::printf("gps rewind\n");
-        lseek(temp_fd, 0, SEEK_SET);
+    const uint32_t magic = 0x7fe53b04;
+    struct {
+        uint32_t magic;
+        uint32_t time_ms;
+        uint32_t n;
+    } header;
+    uint8_t *buf = nullptr;
+    while (true) {
+        if (::read(fd[instance], (void *)&header, sizeof(header)) != sizeof(header) ||
+            header.magic != magic) {
+            goto rewind_file;
+        }
+        if (header.time_ms+base_time[instance] > AP_HAL::millis()) {
+            // not ready for this data yet
+            ::lseek(fd[instance], -sizeof(header), SEEK_CUR);
+            return;
+        }
+        buf = new uint8_t[header.n];
+        if (buf != nullptr && ::read(fd[instance], buf, header.n) == ssize_t(header.n)) {
+            write_to_autopilot((const char *)buf, header.n);
+            delete[] buf;
+            buf = nullptr;
+            continue;
+        }
+        goto rewind_file;
     }
+
+rewind_file:
+    ::printf("GPS[%u] rewind\n", unsigned(instance));
+    base_time[instance] = AP_HAL::millis();
+    ::lseek(fd[instance], 0, SEEK_SET);
+    delete[] buf;
 }
 #endif  // AP_SIM_GPS_FILE_ENABLED
 

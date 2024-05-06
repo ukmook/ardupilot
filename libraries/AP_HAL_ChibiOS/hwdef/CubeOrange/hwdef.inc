@@ -118,13 +118,8 @@ PC5 PRESSURE_SENS ADC1 SCALE(2)
 PC6 USART6_TX USART6
 PC7 USART6_RX USART6
 
-# Now setup the pins for the microSD card, if available.
-PC8 SDMMC1_D0 SDMMC1
-PC9 SDMMC1_D1 SDMMC1
-PC10 SDMMC1_D2 SDMMC1
-PC11 SDMMC1_D3 SDMMC1
-PC12 SDMMC1_CK SDMMC1
-PD2 SDMMC1_CMD SDMMC1
+# Now setup the pins for the microSD card
+include sdcard.inc
 
 # More CS pins for more sensors. The labels for all CS pins need to
 # match the SPI device table later in this file.
@@ -289,10 +284,6 @@ define HAL_CHIBIOS_ARCH_FMUV3 1
 
 define BOARD_TYPE_DEFAULT 3
 
-# Nnow some defines for logging and terrain data files.
-define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
-define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
-
 # allow to have have a dedicated safety switch pin
 define HAL_HAVE_SAFETY_SWITCH 1
 
@@ -330,8 +321,16 @@ ROMFS io_firmware.bin Tools/IO_Firmware/iofirmware_highpolh.bin
 DMA_NOSHARE SPI1* SPI4* USART6*
 
 # for users who have replaced their CubeSolo with a CubeOrange:
-define HAL_OREO_LED_ENABLED 1
+define AP_NOTIFY_OREOLED_ENABLED 1
 define HAL_SOLO_GIMBAL_ENABLED HAL_MOUNT_ENABLED
+
+undef AP_BATTERY_SMBUS_SOLO_ENABLED
+define AP_BATTERY_SMBUS_SOLO_ENABLED AP_BATTERY_SMBUS_ENABLED
 
 # Enable Sagetech MXS ADSB transponder
 define HAL_ADSB_SAGETECH_MXS_ENABLED HAL_ADSB_ENABLED
+
+# enable DFU reboot for installing bootloader
+# note that if firmware is build with --secure-bl then DFU is
+# disabled
+ENABLE_DFU_BOOT 1

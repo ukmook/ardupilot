@@ -31,6 +31,10 @@
 #include <AP_HAL_ChibiOS/I2CDevice.h>
 #endif
 
+#ifndef HAL_PERIPH_HWESC_SERIAL_PORT
+#define HAL_PERIPH_HWESC_SERIAL_PORT 3
+#endif
+
 extern const AP_HAL::HAL &hal;
 
 AP_Periph_FW periph;
@@ -181,35 +185,51 @@ void AP_Periph_FW::init()
         }
     }
 #endif
-    
-#ifdef HAL_PERIPH_ENABLE_AIRSPEED
-    if (airspeed.enabled()){
-#if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
-        const bool pins_enabled = ChibiOS::I2CBus::check_select_pins(0x01);
-        if (pins_enabled) {
-            ChibiOS::I2CBus::set_bus_to_floating(0);
-#ifdef HAL_GPIO_PIN_LED_CAN_I2C
-            palWriteLine(HAL_GPIO_PIN_LED_CAN_I2C, 1);
+
+#if AP_KDECAN_ENABLED
+    kdecan.init();
 #endif
-        } else {
-            // Note: logging of ARSPD is not enabled currently. To enable, call airspeed.set_log_bit(); here
-            airspeed.init();
-        }
-#else
+
+#ifdef HAL_PERIPH_ENABLE_AIRSPEED
+#if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
+    const bool pins_enabled = ChibiOS::I2CBus::check_select_pins(0x01);
+    if (pins_enabled) {
+        ChibiOS::I2CBus::set_bus_to_floating(0);
+#ifdef HAL_GPIO_PIN_LED_CAN_I2C
+        palWriteLine(HAL_GPIO_PIN_LED_CAN_I2C, 1);
+#endif
+    } else {
         // Note: logging of ARSPD is not enabled currently. To enable, call airspeed.set_log_bit(); here
         airspeed.init();
-#endif
     }
+#else
+    // Note: logging of ARSPD is not enabled currently. To enable, call airspeed.set_log_bit(); here
+    airspeed.init();
+#endif
 
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_RANGEFINDER
-    if (rangefinder.get_type(0) != RangeFinder::Type::NONE && g.rangefinder_port >= 0) {
-        auto *uart = hal.serial(g.rangefinder_port);
+    if (rangefinder.get_type(0) != RangeFinder::Type::NONE) {
+        if (g.rangefinder_port >= 0) {
+            // init uart for serial rangefinders
+            auto *uart = hal.serial(g.rangefinder_port);
+            if (uart != nullptr) {
+                uart->begin(g.rangefinder_baud);
+                serial_manager.set_protocol_and_baud(g.rangefinder_port, AP_SerialManager::SerialProtocol_Rangefinder, g.rangefinder_baud);
+            }
+        }
+        rangefinder.init(ROTATION_NONE);
+    }
+#endif
+
+#if HAL_PROXIMITY_ENABLED
+    if (proximity.get_type(0) != AP_Proximity::Type::None && g.proximity_port >= 0) {
+        auto *uart = hal.serial(g.proximity_port);
         if (uart != nullptr) {
-            uart->begin(g.rangefinder_baud);
-            serial_manager.set_protocol_and_baud(g.rangefinder_port, AP_SerialManager::SerialProtocol_Rangefinder, g.rangefinder_baud);
-            rangefinder.init(ROTATION_NONE);
+            uart->begin(g.proximity_baud);
+            serial_manager.set_protocol_and_baud(g.proximity_port, AP_SerialManager::SerialProtocol_Lidar360, g.proximity_baud);
+            proximity.init();
         }
     }
 #endif
@@ -219,7 +239,16 @@ void AP_Periph_FW::init()
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_HWESC
-    hwesc_telem.init(hal.serial(3));
+    hwesc_telem.init(hal.serial(HAL_PERIPH_HWESC_SERIAL_PORT));
+#endif
+
+#ifdef HAL_PERIPH_ENABLE_ESC_APD
+    for (uint8_t i = 0; i < ESC_NUMBERS; i++) {
+        const uint8_t port = g.esc_serial_port[i];
+        if (port < SERIALMANAGER_NUM_PORTS) { // skip bad ports
+            apd_esc_telem[i] = new ESC_APD_Telem (hal.serial(port), g.pole_count[i]);
+        }
+    }
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_MSP
@@ -228,6 +257,14 @@ void AP_Periph_FW::init()
     }
 #endif
     
+#if AP_TEMPERATURE_SENSOR_ENABLED
+    temperature_sensor.init();
+#endif
+
+#if HAL_NMEA_OUTPUT_ENABLED
+    nmea.init();
+#endif
+
 #ifdef HAL_PERIPH_ENABLE_NOTIFY
     notify.init();
 #endif
@@ -389,13 +426,13 @@ void AP_Periph_FW::update()
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS && CH_DBG_ENABLE_STACK_CHECK == TRUE
     static uint32_t last_debug_ms;
-    if ((g.debug&(1<<DEBUG_SHOW_STACK)) && now - last_debug_ms > 5000) {
+    if (debug_option_is_set(DebugOptions::SHOW_STACK) && now - last_debug_ms > 5000) {
         last_debug_ms = now;
         show_stack_free();
     }
 #endif
 
-    if ((g.debug&(1<<DEBUG_AUTOREBOOT)) && AP_HAL::millis() > 15000) {
+    if (debug_option_is_set(DebugOptions::AUTOREBOOT) && AP_HAL::millis() > 15000) {
         // attempt reboot with HOLD after 15s
         periph.prepare_reboot();
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
@@ -424,6 +461,14 @@ void AP_Periph_FW::update()
         gcs().update_send();
 #endif
     }
+
+#if HAL_NMEA_OUTPUT_ENABLED
+    nmea.update();
+#endif
+
+#if AP_TEMPERATURE_SENSOR_ENABLED
+    temperature_sensor.update();
+#endif
 
 #if HAL_LOGGING_ENABLED
     logger.periodic_tasks();
@@ -471,8 +516,8 @@ void AP_Periph_FW::check_for_serial_reboot_cmd(const int8_t serial_index)
             const char reboot_string_len = sizeof(reboot_string)-1; // -1 is to remove the null termination
             static uint16_t index[hal.num_serial];
 
-            const int16_t data = uart->read();
-            if (data < 0 || data > 0xff) {
+            uint8_t data;
+            if (!uart->read(data)) {
                 // read error
                 continue;
             }

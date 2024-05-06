@@ -1,6 +1,9 @@
 #pragma once
 
+#define AP_PARAM_VEHICLE_NAME plane
+
 #include <AP_Common/AP_Common.h>
+#include <AP_Gripper/AP_Gripper.h>
 
 // Global parameter class.
 //
@@ -40,7 +43,7 @@ public:
         //
         k_param_format_version = 0,
         k_param_software_type, // unused;
-        k_param_num_resets,
+        k_param_num_resets, // unused
         k_param_NavEKF2,
         k_param_g2,
         k_param_avoidance_adsb,
@@ -352,6 +355,7 @@ public:
         k_param_gcs6,          // stream rates
         k_param_fence,         // vehicle fence - unused
         k_param_acro_yaw_rate,
+        k_param_takeoff_throttle_max_t,
     };
 
     AP_Int16 format_version;
@@ -430,7 +434,6 @@ public:
     AP_Float mixing_gain;
     AP_Int16 mixing_offset;
     AP_Int16 dspoiler_rud_rate;
-    AP_Int16 num_resets;
     AP_Int32 log_bitmask;
     AP_Int32 RTL_altitude_cm;
     AP_Int16 pitch_trim_cd;
@@ -513,7 +516,7 @@ public:
     // home reset altitude threshold
     AP_Int8 home_reset_threshold;
 
-#if GRIPPER_ENABLED == ENABLED
+#if AP_GRIPPER_ENABLED
     // Payload Gripper
     AP_Gripper gripper;
 #endif
@@ -527,7 +530,7 @@ public:
     AP_Int8 takeoff_throttle_accel_count;
     AP_Int8 takeoff_timeout;
 
-#if LANDING_GEAR_ENABLED == ENABLED
+#if AP_LANDINGGEAR_ENABLED
     AP_LandingGear landing_gear;
 #endif
 
@@ -561,6 +564,8 @@ public:
     AP_Int8         man_expo_rudder;
 
     AP_Int32        oneshot_mask;
+    
+    AP_Int8         axis_bitmask; // axes to be autotuned
 
     // just to make compilation easier when all things are compiled out...
     uint8_t unused_integer;
