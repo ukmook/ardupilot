@@ -42,14 +42,14 @@ define DMA_RESERVE_SIZE 2048
 # order of UARTs
 #            ---------------------------------------
 #            | sr0 | sr1 | sr2 | sr3 | sr4 | sr5 | sr6
-# AP Name          TELEM         GPS
+# AP Name            RNG         GPS
 #            ---------------------------------------
 SERIAL_ORDER EMPTY USART1 EMPTY USART2
 
 STDOUT_SERIAL SD1
 STDOUT_BAUDRATE 57600
 
-# USART1 SPARE PORT (rangefinder)
+# USART1 RNGF
 PA9 USART1_TX USART1
 PA10 USART1_RX USART1
 
@@ -121,10 +121,6 @@ COMPASS LIS3MDL I2C:0:0x1E false ROTATION_NONE
 
 PA1 TIM2_CH2 TIM2 PWM(1) # WS2812
 PA8 TIM1_CH1 TIM1 GPIO(77) ALARM
-
-# PA1 TIM2_CH2 TIM2 PWM(5) # WS2812
-# PA8 TIM1_CH1 TIM1 GPIO(32) ALARM
-
 
 # ----------------------------------------------------------
 
