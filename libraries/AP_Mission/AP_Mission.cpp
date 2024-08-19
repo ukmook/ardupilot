@@ -16,6 +16,7 @@
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <GCS_MAVLink/GCS.h>
 #include <RC_Channel/RC_Channel_config.h>
+#include <AC_Fence/AC_Fence.h>
 
 const AP_Param::GroupInfo AP_Mission::var_info[] = {
 
@@ -94,7 +95,7 @@ void AP_Mission::init()
     init_jump_tracking();
 
     // If Mission Clear bit is set then it should clear the mission, otherwise retain the mission.
-    if (AP_MISSION_MASK_MISSION_CLEAR & _options) {
+    if (option_is_set(Option::CLEAR_ON_BOOT)) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Clearing Mission");
         clear();
     }
@@ -447,6 +448,10 @@ bool AP_Mission::start_command(const Mission_Command& cmd)
     case MAV_CMD_VIDEO_START_CAPTURE:
     case MAV_CMD_VIDEO_STOP_CAPTURE:
         return start_command_camera(cmd);
+#endif
+#if AP_FENCE_ENABLED
+    case MAV_CMD_DO_FENCE_ENABLE:
+        return start_command_fence(cmd);
 #endif
     case MAV_CMD_DO_PARACHUTE:
         return start_command_parachute(cmd);
@@ -964,6 +969,9 @@ MAV_MISSION_RESULT AP_Mission::sanity_check_params(const mavlink_mission_item_in
     case MAV_CMD_NAV_WAYPOINT:
         nan_mask = ~(1 << 3); // param 4 can be nan
         break;
+    case MAV_CMD_NAV_LOITER_UNLIM:
+        nan_mask = ~(1 << 3); // param 4 can be nan
+        break;
     case MAV_CMD_NAV_LAND:
         nan_mask = ~(1 << 3); // param 4 can be nan
         break;
@@ -1230,7 +1238,7 @@ MAV_MISSION_RESULT AP_Mission::mavlink_int_to_mission_cmd(const mavlink_mission_
         break;
 
     case MAV_CMD_DO_FENCE_ENABLE:                       // MAV ID: 207
-        cmd.p1 = packet.param1;                         // action 0=disable, 1=enable
+        cmd.p1 = packet.param1;                         // action 0=disable, 1=enable, 2=disable floor
         break;
 
     case MAV_CMD_DO_AUX_FUNCTION:
@@ -1743,7 +1751,7 @@ bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& c
         break;
 
     case MAV_CMD_DO_FENCE_ENABLE:                       // MAV ID: 207
-        packet.param1 = cmd.p1;                         // action 0=disable, 1=enable
+        packet.param1 = cmd.p1;                         // action 0=disable, 1=enable, 2=disable floor, 3=enable except floor
         break;
 
     case MAV_CMD_DO_PARACHUTE:                          // MAV ID: 208
@@ -1813,7 +1821,7 @@ bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& c
 
 #if AP_MISSION_NAV_PAYLOAD_PLACE_ENABLED
     case MAV_CMD_NAV_PAYLOAD_PLACE:
-        packet.param1 = cmd.p1/100.0f; // copy max-descend parameter (cm->m)
+        packet.param1 = cmd.p1*0.01f; // copy max-descend parameter (cm->m)
         break;
 #endif
 
@@ -2153,24 +2161,18 @@ bool AP_Mission::get_next_cmd(uint16_t start_index, Mission_Command& cmd, bool i
                 jump_index = cmd_index;
             }
 
-            // check if jump command is 'repeat forever'
-            if (temp_cmd.content.jump.num_times == AP_MISSION_JUMP_REPEAT_FOREVER) {
+            // get number of times jump command has already been run
+            if (temp_cmd.content.jump.num_times == AP_MISSION_JUMP_REPEAT_FOREVER ||
+                get_jump_times_run(temp_cmd) < temp_cmd.content.jump.num_times) {
+                // update the record of the number of times run
+                if (increment_jump_num_times_if_found && !_flags.resuming_mission) {
+                    increment_jump_times_run(temp_cmd, send_gcs_msg);
+                }
                 // continue searching from jump target
                 cmd_index = temp_cmd.content.jump.target;
             } else {
-                // get number of times jump command has already been run
-                int16_t jump_times_run = get_jump_times_run(temp_cmd);
-                if (jump_times_run < temp_cmd.content.jump.num_times) {
-                    // update the record of the number of times run
-                    if (increment_jump_num_times_if_found && !_flags.resuming_mission) {
-                        increment_jump_times_run(temp_cmd, send_gcs_msg);
-                    }
-                    // continue searching from jump target
-                    cmd_index = temp_cmd.content.jump.target;
-                } else {
-                    // jump has been run specified number of times so move search to next command in mission
-                    cmd_index++;
-                }
+                // jump has been run specified number of times so move search to next command in mission
+                cmd_index++;
             }
         } else {
             // this is a non-jump command so return it
@@ -2306,7 +2308,11 @@ void AP_Mission::increment_jump_times_run(Mission_Command& cmd, bool send_gcs_ms
         if (_jump_tracking[i].index == cmd.index) {
             _jump_tracking[i].num_times_run++;
             if (send_gcs_msg) {
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Mission: %u Jump %i/%i", _jump_tracking[i].index, _jump_tracking[i].num_times_run, cmd.content.jump.num_times);
+                if (cmd.content.jump.num_times == AP_MISSION_JUMP_REPEAT_FOREVER) {
+                    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Mission: %u Jump %i/unlimited", _jump_tracking[i].index, _jump_tracking[i].num_times_run);
+                } else {
+                    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "Mission: %u Jump %i/%i", _jump_tracking[i].index, _jump_tracking[i].num_times_run, cmd.content.jump.num_times);
+                }
             }
             return;
         } else if (_jump_tracking[i].index == AP_MISSION_CMD_INDEX_NONE) {
@@ -2496,7 +2502,7 @@ bool AP_Mission::is_best_land_sequence(const Location &current_loc)
     }
 
     // check if MIS_OPTIONS bit set to allow distance calculation to be done
-    if (!(_options & AP_MISSION_MASK_DIST_TO_LAND_CALC)) {
+    if (!option_is_set(Option::FAILSAFE_TO_BEST_LANDING)) {
         return false;
     }
 

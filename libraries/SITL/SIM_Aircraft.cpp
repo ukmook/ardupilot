@@ -22,12 +22,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#if defined(__CYGWIN__) || defined(__CYGWIN64__)
-#include <windows.h>
-#include <time.h>
-#include <mmsystem.h>
-#endif
-
 #include <GCS_MAVLink/GCS.h>
 #include <AP_Logger/AP_Logger.h>
 #include <AP_Param/AP_Param.h>
@@ -38,10 +32,16 @@
 #include <AP_JSON/AP_JSON.h>
 #include <AP_Filesystem/AP_Filesystem.h>
 #include <AP_AHRS/AP_AHRS.h>
+#include <AP_HAL_SITL/HAL_SITL_Class.h>
 
 using namespace SITL;
 
 extern const AP_HAL::HAL& hal;
+
+// the SITL HAL can add information about pausing the simulation and its effect on the UART.  Not present when we're compiling for simulation-on-hardware
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+extern const HAL_SITL& hal_sitl;
+#endif
 
 /*
   parent class for all simulator types
@@ -181,7 +181,7 @@ void Aircraft::update_position(void)
         uint32_t now = AP_HAL::millis();
         if (now - last_one_hz_ms >= 1000) {
             // shift origin of position at 1Hz to current location
-            // this prevents sperical errors building up in the GPS data
+            // this prevents spherical errors building up in the GPS data
             last_one_hz_ms = now;
             Vector2d diffNE = origin.get_distance_NE_double(location);
             position.xy() -= diffNE;
@@ -458,6 +458,14 @@ void Aircraft::fill_fdm(struct sitl_fdm &fdm)
     }
 
 #if HAL_LOGGING_ENABLED
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+    // the SITL HAL can add information about pausing the simulation
+    // and its effect on the UART.  Not present when we're compiling
+    // for simulation-on-hardware
+    const uint32_t full_count = hal_sitl.get_uart_output_full_queue_count();
+#else
+    const uint32_t full_count = 0;
+#endif
     // for EKF comparison log relhome pos and velocity at loop rate
     static uint16_t last_ticks;
     uint16_t ticks = AP::scheduler().ticks();
@@ -474,15 +482,20 @@ void Aircraft::fill_fdm(struct sitl_fdm &fdm)
 // @Field: VD: Velocity down
 // @Field: As: Airspeed
 // @Field: ASpdU: Achieved simulation speedup value
+// @Field: UFC: Number of times simulation paused for serial0 output
         Vector3d pos = get_position_relhome();
         Vector3f vel = get_velocity_ef();
-        AP::logger().WriteStreaming("SIM2", "TimeUS,PN,PE,PD,VN,VE,VD,As,ASpdU",
-                                    "Qdddfffff",
-                                    AP_HAL::micros64(),
-                                    pos.x, pos.y, pos.z,
-                                    vel.x, vel.y, vel.z,
-                                    airspeed_pitot,
-                                    achieved_rate_hz/rate_hz);
+        AP::logger().WriteStreaming(
+            "SIM2",
+            "TimeUS,PN,PE,PD,VN,VE,VD,As,ASpdU,UFC",
+            "QdddfffffI",
+            AP_HAL::micros64(),
+            pos.x, pos.y, pos.z,
+            vel.x, vel.y, vel.z,
+            airspeed_pitot,
+            achieved_rate_hz/rate_hz,
+            full_count
+        );
     }
 #endif
 }
@@ -561,18 +574,21 @@ float Aircraft::rangefinder_range() const
     return altitude;
 }
 
+#if defined(__CYGWIN__) || defined(__CYGWIN64__)
+extern "C" { uint32_t timeGetTime(); }
+#endif
 
 // potentially replace this with a call to AP_HAL::Util::get_hw_rtc
 uint64_t Aircraft::get_wall_time_us() const
 {
 #if defined(__CYGWIN__) || defined(__CYGWIN64__)
-    static DWORD tPrev;
+    static uint32_t tPrev;
     static uint64_t last_ret_us;
     if (tPrev == 0) {
         tPrev = timeGetTime();
         return 0;
     }
-    DWORD now = timeGetTime();
+    uint32_t now = timeGetTime();
     last_ret_us += (uint64_t)((now - tPrev)*1000UL);
     tPrev = now;
     return last_ret_us;
@@ -630,6 +646,10 @@ void Aircraft::update_dynamics(const Vector3f &rot_accel)
 
     const float delta_time = frame_time_us * 1.0e-6f;
 
+    // update eas2tas and air density
+    eas2tas = AP_Baro::get_EAS2TAS_for_alt_amsl(location.alt*0.01);
+    air_density = AP_Baro::get_air_density_for_alt_amsl(location.alt*0.01);
+
     // update rotational rates in body frame
     gyro += rot_accel * delta_time;
 
@@ -674,10 +694,7 @@ void Aircraft::update_dynamics(const Vector3f &rot_accel)
     velocity_air_bf = dcm.transposed() * velocity_air_ef;
 
     // airspeed
-    airspeed = velocity_air_ef.length();
-
-    // airspeed as seen by a fwd pitot tube (limited to 120m/s)
-    airspeed_pitot = constrain_float(velocity_air_bf * Vector3f(1.0f, 0.0f, 0.0f), 0.0f, 120.0f);
+    update_eas_airspeed();
 
     // constrain height to the ground
     if (on_ground()) {
@@ -778,6 +795,11 @@ void Aircraft::update_dynamics(const Vector3f &rot_accel)
         }
         }
     }
+
+    // update slung payload
+#if AP_SIM_SLUNGPAYLOAD_ENABLED
+    sitl->models.slung_payload_sim.update(get_position_relhome(), velocity_ef, accel_earth);
+#endif
 
     // allow for changes in physics step
     adjust_frame_time(constrain_float(sitl->loop_rate_hz, rate_hz-1, rate_hz+1));
@@ -956,6 +978,45 @@ void Aircraft::extrapolate_sensors(float delta_time)
     velocity_air_bf = dcm.transposed() * velocity_air_ef;
 }
 
+bool Aircraft::Clamp::clamped(Aircraft &aircraft, const struct sitl_input &input)
+{
+    const auto clamp_ch = AP::sitl()->clamp_ch;
+    if (clamp_ch < 1) {
+        return false;
+    }
+    const uint32_t clamp_idx = clamp_ch - 1;
+    if (clamp_idx > ARRAY_SIZE(input.servos)) {
+        return false;
+    }
+    const uint16_t servo_pos = input.servos[clamp_idx];
+    bool new_clamped = currently_clamped;
+    if (servo_pos < 1200) {
+        if (currently_clamped) {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "SITL: Clamp: released vehicle");
+            new_clamped = false;
+        }
+        grab_attempted = false;
+    } else {
+        // re-clamp if < 10cm from home
+        if (servo_pos > 1800 && !grab_attempted) {
+            const Vector3d pos = aircraft.get_position_relhome();
+            const float distance_from_home = pos.length();
+            // GCS_SEND_TEXT(MAV_SEVERITY_INFO, "SITL: Clamp: dist=%f", distance_from_home);
+            if (distance_from_home < 0.5) {
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "SITL: Clamp: grabbed vehicle");
+                new_clamped = true;
+            } else if (!grab_attempted) {
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "SITL: Clamp: missed vehicle");
+            }
+            grab_attempted = true;
+        }
+    }
+
+    currently_clamped = new_clamped;
+
+    return currently_clamped;
+}
+
 void Aircraft::update_external_payload(const struct sitl_input &input)
 {
     external_payload_mass = 0;
@@ -1036,6 +1097,19 @@ void Aircraft::update_external_payload(const struct sitl_input &input)
     if (dronecan) {
         dronecan->update();
     }
+#endif
+
+#if AP_SIM_GPIO_LED_1_ENABLED
+    sim_led1.update(*this);
+#endif
+#if AP_SIM_GPIO_LED_2_ENABLED
+    sim_led2.update(*this);
+#endif
+#if AP_SIM_GPIO_LED_3_ENABLED
+    sim_led3.update(*this);
+#endif
+#if AP_SIM_GPIO_LED_RGB_ENABLED
+    sim_ledrgb.update(*this);
 #endif
 }
 
@@ -1158,6 +1232,19 @@ void Aircraft::add_twist_forces(Vector3f &rot_accel)
     }
 }
 
+#if AP_SIM_SLUNGPAYLOAD_ENABLED
+// add body-frame force due to slung payload
+void Aircraft::add_slungpayload_forces(Vector3f &body_accel)
+{
+    Vector3f forces_ef;
+    sitl->models.slung_payload_sim.get_forces_on_vehicle(forces_ef);
+
+    // convert ef forces to body-frame accelerations (acceleration = force / mass)
+    const Vector3f accel_bf = dcm.transposed() * forces_ef / mass;
+    body_accel += accel_bf;
+}
+#endif
+
 /*
   get position relative to home
  */
@@ -1171,10 +1258,33 @@ Vector3d Aircraft::get_position_relhome() const
 // get air density in kg/m^3
 float Aircraft::get_air_density(float alt_amsl) const
 {
-    float sigma, delta, theta;
+    return AP_Baro::get_air_density_for_alt_amsl(alt_amsl);
+}
 
-    AP_Baro::SimpleAtmosphere(alt_amsl * 0.001f, sigma, delta, theta);
+/*
+  update EAS airspeed and pitot speed
+ */
+void Aircraft::update_eas_airspeed()
+{
+    airspeed = velocity_air_ef.length() / eas2tas;
 
-    const float air_pressure = SSL_AIR_PRESSURE * delta;
-    return air_pressure / (ISA_GAS_CONSTANT * SSL_AIR_TEMPERATURE);
+    /*
+      airspeed as seen by a fwd pitot tube (limited to 120m/s)
+    */
+    airspeed_pitot = airspeed;
+
+    // calculate angle between the local flow vector and a pitot tube aligned with the X body axis
+    const float pitot_aoa =  atan2f(sqrtf(sq(velocity_air_bf.y) + sq(velocity_air_bf.z)), velocity_air_bf.x);
+
+    /*
+      assume the pitot can correctly capture airspeed up to 20 degrees off the nose
+      and follows a cose law outside that range
+    */
+    const float max_pitot_aoa = radians(20);
+    if (pitot_aoa > radians(90)) {
+        airspeed_pitot = 0;
+    } else if (pitot_aoa > max_pitot_aoa) {
+        const float gain_factor = M_PI_2 / (radians(90) - max_pitot_aoa);
+        airspeed_pitot *= cosf((pitot_aoa - max_pitot_aoa) * gain_factor);
+    }
 }

@@ -185,7 +185,7 @@ static void readUniqueID(uint8_t* out_uid)
 void AP_Periph_FW::handle_get_node_info(CanardInstance* canard_instance,
                                         CanardRxTransfer* transfer)
 {
-    uint8_t buffer[UAVCAN_PROTOCOL_GETNODEINFO_RESPONSE_MAX_SIZE] {};
+    uint8_t buffer[UAVCAN_PROTOCOL_GETNODEINFO_RESPONSE_MAX_SIZE];
     uavcan_protocol_GetNodeInfoResponse pkt {};
 
     node_status.uptime_sec = AP_HAL::millis() / 1000U;
@@ -324,7 +324,7 @@ void AP_Periph_FW::handle_param_getset(CanardInstance* canard_instance, CanardRx
         pkt.name.len = strnlen((char *)pkt.name.data, sizeof(pkt.name.data));
     }
 
-    uint8_t buffer[UAVCAN_PROTOCOL_PARAM_GETSET_RESPONSE_MAX_SIZE] {};
+    uint8_t buffer[UAVCAN_PROTOCOL_PARAM_GETSET_RESPONSE_MAX_SIZE];
     uint16_t total_size = uavcan_protocol_param_GetSetResponse_encode(&pkt, buffer, !canfdout());
 
     canard_respond(canard_instance,
@@ -373,7 +373,7 @@ void AP_Periph_FW::handle_param_executeopcode(CanardInstance* canard_instance, C
 
     pkt.ok = true;
 
-    uint8_t buffer[UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_RESPONSE_MAX_SIZE] {};
+    uint8_t buffer[UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_RESPONSE_MAX_SIZE];
     uint16_t total_size = uavcan_protocol_param_ExecuteOpcodeResponse_encode(&pkt, buffer, !canfdout());
 
     canard_respond(canard_instance,
@@ -406,7 +406,7 @@ void AP_Periph_FW::handle_begin_firmware_update(CanardInstance* canard_instance,
     memcpy(comms->path, req.image_file_remote_path.path.data, req.image_file_remote_path.path.len);
     comms->my_node_id = canardGetLocalNodeID(canard_instance);
 
-    uint8_t buffer[UAVCAN_PROTOCOL_FILE_BEGINFIRMWAREUPDATE_RESPONSE_MAX_SIZE] {};
+    uint8_t buffer[UAVCAN_PROTOCOL_FILE_BEGINFIRMWAREUPDATE_RESPONSE_MAX_SIZE];
     uavcan_protocol_file_BeginFirmwareUpdateResponse reply {};
     reply.error = UAVCAN_PROTOCOL_FILE_BEGINFIRMWAREUPDATE_RESPONSE_ERROR_OK;
 
@@ -753,7 +753,7 @@ void AP_Periph_FW::can_safety_button_update(void)
     pkt.button = ARDUPILOT_INDICATION_BUTTON_BUTTON_SAFETY;
     pkt.press_time = counter;
 
-    uint8_t buffer[ARDUPILOT_INDICATION_BUTTON_MAX_SIZE] {};
+    uint8_t buffer[ARDUPILOT_INDICATION_BUTTON_MAX_SIZE];
     uint16_t total_size = ardupilot_indication_Button_encode(&pkt, buffer, !canfdout());
 
     canard_broadcast(ARDUPILOT_INDICATION_BUTTON_SIGNATURE,
@@ -1622,15 +1622,15 @@ void AP_Periph_FW::can_start()
 
     for (uint8_t i=0; i<HAL_NUM_CAN_IFACES; i++) {
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
-        can_iface_periph[i] = new ChibiOS::CANIface();
+        can_iface_periph[i] = NEW_NOTHROW ChibiOS::CANIface();
 #elif CONFIG_HAL_BOARD == HAL_BOARD_SITL
-        can_iface_periph[i] = new HALSITL::CANIface();
+        can_iface_periph[i] = NEW_NOTHROW HALSITL::CANIface();
 #endif
         instances[i].iface = can_iface_periph[i];
         instances[i].index = i;
 #if HAL_PERIPH_CAN_MIRROR
         if ((g.can_mirror_ports & (1U << i)) != 0) {
-            instances[i].mirror_queue = new ObjectBuffer<AP_HAL::CANFrame> (HAL_PERIPH_CAN_MIRROR_QUEUE_SIZE);
+            instances[i].mirror_queue = NEW_NOTHROW ObjectBuffer<AP_HAL::CANFrame> (HAL_PERIPH_CAN_MIRROR_QUEUE_SIZE);
         }
 #endif //HAL_PERIPH_CAN_MIRROR
 #if HAL_NUM_CAN_IFACES >= 2
@@ -1711,7 +1711,7 @@ void AP_Periph_FW::esc_telem_update()
         pkt.power_rating_pct = 0;
         pkt.error_count = 0;
 
-        uint8_t buffer[UAVCAN_EQUIPMENT_ESC_STATUS_MAX_SIZE] {};
+        uint8_t buffer[UAVCAN_EQUIPMENT_ESC_STATUS_MAX_SIZE];
         uint16_t total_size = uavcan_equipment_esc_Status_encode(&pkt, buffer, !canfdout());
         canard_broadcast(UAVCAN_EQUIPMENT_ESC_STATUS_SIGNATURE,
                          UAVCAN_EQUIPMENT_ESC_STATUS_ID,
@@ -1744,7 +1744,7 @@ void AP_Periph_FW::apd_esc_telem_update()
             pkt.power_rating_pct = t.power_rating_pct;
             pkt.error_count = t.error_count;
 
-            uint8_t buffer[UAVCAN_EQUIPMENT_ESC_STATUS_MAX_SIZE] {};
+            uint8_t buffer[UAVCAN_EQUIPMENT_ESC_STATUS_MAX_SIZE];
             uint16_t total_size = uavcan_equipment_esc_Status_encode(&pkt, buffer, !canfdout());
             canard_broadcast(UAVCAN_EQUIPMENT_ESC_STATUS_SIGNATURE,
                             UAVCAN_EQUIPMENT_ESC_STATUS_ID,
@@ -1913,7 +1913,7 @@ void can_vprintf(uint8_t severity, const char *fmt, va_list ap)
         memcpy(pkt.text.data, &buffer_data[buffer_offset], pkt.text.len);
         buffer_offset += pkt.text.len;
 
-        uint8_t buffer_packet[UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_MAX_SIZE] {};
+        uint8_t buffer_packet[UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_MAX_SIZE];
         const uint32_t len = uavcan_protocol_debug_LogMessage_encode(&pkt, buffer_packet, !periph.canfdout());
 
         periph.canard_broadcast(UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_SIGNATURE,
@@ -1925,7 +1925,7 @@ void can_vprintf(uint8_t severity, const char *fmt, va_list ap)
     
 #else
     uavcan_protocol_debug_LogMessage pkt {};
-    uint8_t buffer[UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_MAX_SIZE] {};
+    uint8_t buffer[UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_MAX_SIZE];
     uint32_t n = vsnprintf((char*)pkt.text.data, sizeof(pkt.text.data), fmt, ap);
     pkt.level.value = level;
     pkt.text.len = MIN(n, sizeof(pkt.text.data));

@@ -347,6 +347,20 @@ bool Copter::set_mode(Mode::Number mode, ModeReason reason)
         return false;
     }
 
+#if AP_FENCE_ENABLED
+    // may not be allowed to change mode if recovering from fence breach
+    if (!ignore_checks &&
+        fence.enabled() &&
+        fence.option_enabled(AC_Fence::OPTIONS::DISABLE_MODE_CHANGE) &&
+        fence.get_breaches() &&
+        motors->armed() &&
+        get_control_mode_reason() == ModeReason::FENCE_BREACHED &&
+        !ap.land_complete) {
+        mode_change_failed(new_flightmode, "in fence recovery");
+        return false;
+    }
+#endif
+
     if (!new_flightmode->init(ignore_checks)) {
         mode_change_failed(new_flightmode, "init failed");
         return false;
@@ -371,10 +385,12 @@ bool Copter::set_mode(Mode::Number mode, ModeReason reason)
 #endif
 
 #if AP_FENCE_ENABLED
-    // pilot requested flight mode change during a fence breach indicates pilot is attempting to manually recover
-    // this flight mode change could be automatic (i.e. fence, battery, GPS or GCS failsafe)
-    // but it should be harmless to disable the fence temporarily in these situations as well
-    fence.manual_recovery_start();
+    if (fence.get_action() != AC_FENCE_ACTION_REPORT_ONLY) {
+        // pilot requested flight mode change during a fence breach indicates pilot is attempting to manually recover
+        // this flight mode change could be automatic (i.e. fence, battery, GPS or GCS failsafe)
+        // but it should be harmless to disable the fence temporarily in these situations as well
+        fence.manual_recovery_start();
+    }
 #endif
 
 #if AP_CAMERA_ENABLED
@@ -420,7 +436,10 @@ bool Copter::set_mode(const uint8_t new_mode, const ModeReason reason)
 // called at 100hz or more
 void Copter::update_flight_mode()
 {
+#if AP_RANGEFINDER_ENABLED
     surface_tracking.invalidate_for_logging();  // invalidate surface tracking alt, flight mode will set to true if used
+#endif
+    attitude_control->landed_gain_reduction(copter.ap.land_complete); // Adjust gains when landed to attenuate ground oscillation
 
     flightmode->run();
 }
@@ -973,19 +992,19 @@ Mode::AltHoldModeState Mode::get_alt_hold_state(float target_climb_rate_cms)
         switch (motors->get_spool_state()) {
 
         case AP_Motors::SpoolState::SHUT_DOWN:
-            return AltHold_MotorStopped;
+            return AltHoldModeState::MotorStopped;
 
         case AP_Motors::SpoolState::GROUND_IDLE:
-            return AltHold_Landed_Ground_Idle;
+            return AltHoldModeState::Landed_Ground_Idle;
 
         default:
-            return AltHold_Landed_Pre_Takeoff;
+            return AltHoldModeState::Landed_Pre_Takeoff;
         }
 
     } else if (takeoff.running() || takeoff.triggered(target_climb_rate_cms)) {
         // the aircraft is currently landed or taking off, asking for a positive climb rate and in THROTTLE_UNLIMITED
         // the aircraft should progress through the take off procedure
-        return AltHold_Takeoff;
+        return AltHoldModeState::Takeoff;
 
     } else if (!copter.ap.auto_armed || copter.ap.land_complete) {
         // the aircraft is armed and landed
@@ -1000,17 +1019,17 @@ Mode::AltHoldModeState Mode::get_alt_hold_state(float target_climb_rate_cms)
 
         if (motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE) {
             // the aircraft is waiting in ground idle
-            return AltHold_Landed_Ground_Idle;
+            return AltHoldModeState::Landed_Ground_Idle;
 
         } else {
             // the aircraft can leave the ground at any time
-            return AltHold_Landed_Pre_Takeoff;
+            return AltHoldModeState::Landed_Pre_Takeoff;
         }
 
     } else {
         // the aircraft is in a flying state
         motors->set_desired_spool_state(AP_Motors::DesiredSpoolState::THROTTLE_UNLIMITED);
-        return AltHold_Flying;
+        return AltHoldModeState::Flying;
     }
 }
 

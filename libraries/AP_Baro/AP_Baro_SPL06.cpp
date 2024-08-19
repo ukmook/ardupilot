@@ -17,6 +17,7 @@
 #if AP_BARO_SPL06_ENABLED
 
 #include <utility>
+#include <strings.h>
 #include <AP_Math/definitions.h>
 
 extern const AP_HAL::HAL &hal;
@@ -86,7 +87,7 @@ AP_Baro_Backend *AP_Baro_SPL06::probe(AP_Baro &baro,
         dev->set_read_flag(0x80);
     }
 
-    AP_Baro_SPL06 *sensor = new AP_Baro_SPL06(baro, std::move(dev));
+    AP_Baro_SPL06 *sensor = NEW_NOTHROW AP_Baro_SPL06(baro, std::move(dev));
     if (!sensor || !sensor->_init()) {
         delete sensor;
         return nullptr;

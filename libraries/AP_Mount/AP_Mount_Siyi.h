@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include "AP_Mount_Backend.h"
+#include "AP_Mount_Backend_Serial.h"
 
 #if HAL_MOUNT_SIYI_ENABLED
 
@@ -27,20 +27,17 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_Common/AP_Common.h>
 
-#define AP_MOUNT_SIYI_PACKETLEN_MAX     38  // maximum number of bytes in a packet sent to or received from the gimbal
+#define AP_MOUNT_SIYI_PACKETLEN_MAX     42  // maximum number of bytes in a packet sent to or received from the gimbal
 
-class AP_Mount_Siyi : public AP_Mount_Backend
+class AP_Mount_Siyi : public AP_Mount_Backend_Serial
 {
 
 public:
     // Constructor
-    using AP_Mount_Backend::AP_Mount_Backend;
+    using AP_Mount_Backend_Serial::AP_Mount_Backend_Serial;
 
     /* Do not allow copies */
     CLASS_NO_COPY(AP_Mount_Siyi);
-
-    // init - performs any required initialisation for this instance
-    void init() override;
 
     // update mount position - should be called periodically
     void update() override;
@@ -123,6 +120,7 @@ private:
         READ_RANGEFINDER = 0x15,
         EXTERNAL_ATTITUDE = 0x22,
         SET_TIME = 0x30,
+        POSITION_DATA = 0x3e,
     };
 
     // Function Feedback Info packet info_type values
@@ -166,6 +164,7 @@ private:
         A8,
         ZR10,
         ZR30,
+        ZT6,
         ZT30
     } _hardware_model;
 
@@ -293,8 +292,6 @@ private:
     void check_firmware_version() const;
 
     // internal variables
-    AP_HAL::UARTDriver *_uart;                      // uart connected to gimbal
-    bool _initialised;                              // true once the driver has been initialised
     bool _got_hardware_id;                          // true once hardware id ha been received
 
     FirmwareVersion _fw_version;                    // firmware version (for reporting for GCS)
@@ -337,9 +334,9 @@ private:
     uint32_t _last_rangefinder_dist_ms;             // system time of last successful read of rangefinder distance
     float _rangefinder_dist_m;                      // distance received from rangefinder
 
-    // sending of attitude to gimbal
+    // sending of attitude and position to gimbal
     uint32_t _last_attitude_send_ms;
-    void send_attitude(void);
+    void send_attitude_position(void);
 
     // hardware lookup table indexed by HardwareModel enum values (see above)
     struct HWInfo {

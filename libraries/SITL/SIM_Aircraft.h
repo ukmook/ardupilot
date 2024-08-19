@@ -38,6 +38,10 @@
 #include <Filter/Filter.h>
 #include "SIM_JSON_Master.h"
 #include "ServoModel.h"
+#include "SIM_GPIO_LED_1.h"
+#include "SIM_GPIO_LED_2.h"
+#include "SIM_GPIO_LED_3.h"
+#include "SIM_GPIO_LED_RGB.h"
 
 namespace SITL {
 
@@ -103,6 +107,7 @@ public:
         return velocity_ef;
     }
 
+    // return TAS airspeed in earth frame
     const Vector3f &get_velocity_air_ef(void) const {
         return velocity_air_ef;
     }
@@ -180,15 +185,15 @@ protected:
     Vector3f gyro;                       // rad/s
     Vector3f velocity_ef;                // m/s, earth frame
     Vector3f wind_ef;                    // m/s, earth frame
-    Vector3f velocity_air_ef;            // velocity relative to airmass, earth frame
+    Vector3f velocity_air_ef;            // velocity relative to airmass, earth frame (true airspeed)
     Vector3f velocity_air_bf;            // velocity relative to airmass, body frame
     Vector3d position;                   // meters, NED from origin
     float mass;                          // kg
     float external_payload_mass;         // kg
     Vector3f accel_body{0.0f, 0.0f, -GRAVITY_MSS}; // m/s/s NED, body frame
-    float airspeed;                      // m/s, apparent airspeed
-    float airspeed_pitot;                // m/s, apparent airspeed, as seen by fwd pitot tube
-    float battery_voltage = 0.0f;
+    float airspeed;                      // m/s, EAS airspeed
+    float airspeed_pitot;                // m/s, EAS airspeed, as seen by fwd pitot tube
+    float battery_voltage;
     float battery_current;
     float local_ground_level;            // ground level at local position
     bool lock_step_scheduled;
@@ -317,8 +322,25 @@ protected:
     void add_shove_forces(Vector3f &rot_accel, Vector3f &body_accel);
     void add_twist_forces(Vector3f &rot_accel);
 
+#if AP_SIM_SLUNGPAYLOAD_ENABLED
+    // add body-frame force due to slung payload
+    void add_slungpayload_forces(Vector3f &body_accel);
+#endif
+
     // get local thermal updraft
     float get_local_updraft(const Vector3d &currentPos);
+
+    // update EAS speeds
+    void update_eas_airspeed();
+
+    // clamp support
+    class Clamp {
+    public:
+        bool clamped(class Aircraft&, const struct sitl_input &input);  // true if the vehicle is currently clamped down
+    private:
+        bool currently_clamped;
+        bool grab_attempted;  // avoid warning multiple times about missed grab
+    } clamp;
 
 private:
     uint64_t last_time_us;
@@ -359,6 +381,21 @@ private:
 #if AP_TEST_DRONECAN_DRIVERS
     DroneCANDevice *dronecan;
 #endif
+
+
+#if AP_SIM_GPIO_LED_1_ENABLED
+    GPIO_LED_1 sim_led1{8};  // pin to match sitl.h
+#endif
+#if AP_SIM_GPIO_LED_2_ENABLED
+    GPIO_LED_2 sim_led2{13, 14};  // pins to match sitl.h
+#endif
+#if AP_SIM_GPIO_LED_3_ENABLED
+    GPIO_LED_3 sim_led3{13, 14, 15};  // pins to match sitl.h
+#endif
+#if AP_SIM_GPIO_LED_RGB_ENABLED
+    GPIO_LED_RGB sim_ledrgb{8, 9, 10};  // pins to match sitl.h
+#endif
+
 };
 
 } // namespace SITL

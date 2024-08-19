@@ -85,7 +85,7 @@ bool HALSITL::Util::get_system_id(char buf[50])
     return get_system_id_unformatted((uint8_t *)buf, len);
 }
 
-#ifdef ENABLE_HEAP
+#if ENABLE_HEAP
 void *HALSITL::Util::allocate_heap_memory(size_t size)
 {
     struct heap *new_heap = (struct heap*)malloc(sizeof(struct heap));
@@ -160,8 +160,11 @@ enum AP_HAL::Util::safety_state HALSITL::Util::safety_switch_state(void)
 
 void HALSITL::Util::set_cmdline_parameters()
 {
-    for (auto param: sitlState->cmdline_param) {
-        AP_Param::set_default_by_name(param.name, param.value);
+    for (uint16_t i=0; i<sitlState->cmdline_param.available(); i++) {
+        const auto param = sitlState->cmdline_param[i];
+        if (param != nullptr) {
+            AP_Param::set_default_by_name(param->name, param->value);
+        }
     }
 }
 #endif

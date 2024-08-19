@@ -192,11 +192,14 @@ struct dirent *AP_Filesystem_ROMFS::readdir(void *dirp)
     const char* slash = strchr(name, '/');
     if (slash == nullptr) {
         // File
+#if AP_FILESYSTEM_HAVE_DIRENT_DTYPE
         dir[idx].de.d_type = DT_REG;
-
+#endif
     } else {
         // Directory
+#if AP_FILESYSTEM_HAVE_DIRENT_DTYPE
         dir[idx].de.d_type = DT_DIR;
+#endif
 
         // Add null termination after directory name
         const size_t index = slash - name;
@@ -245,7 +248,7 @@ bool AP_Filesystem_ROMFS::set_mtime(const char *filename, const uint32_t mtime_s
 */
 FileData *AP_Filesystem_ROMFS::load_file(const char *filename)
 {
-    FileData *fd = new FileData(this);
+    FileData *fd = NEW_NOTHROW FileData(this);
     if (!fd) {
         return nullptr;
     }

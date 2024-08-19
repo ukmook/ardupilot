@@ -26,7 +26,7 @@ public:
 
     static AP_Logger_Backend  *probe(AP_Logger &front,
                                      LoggerMessageWriter_DFLogStart *ls) {
-        return new AP_Logger_File(front, ls);
+        return NEW_NOTHROW AP_Logger_File(front, ls);
     }
 
     // initialisation
@@ -111,8 +111,6 @@ private:
 
     /* construct a file name given a log number. Caller must free. */
     char *_log_file_name(const uint16_t log_num) const;
-    char *_log_file_name_long(const uint16_t log_num) const;
-    char *_log_file_name_short(const uint16_t log_num) const;
     char *_lastlog_file_name() const;
     uint32_t _get_log_size(const uint16_t log_num);
     uint32_t _get_log_time(const uint16_t log_num);
