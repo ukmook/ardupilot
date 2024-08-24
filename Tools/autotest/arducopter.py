@@ -1789,7 +1789,6 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.user_takeoff(alt_min=25)
 
         # Check fence is enabled
-        self.do_fence_enable()
         self.assert_fence_enabled()
 
         # Change to RC controlled mode
@@ -1810,11 +1809,14 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         # lower throttle and try and land
         self.set_rc(3, 1300)
         self.wait_altitude(0, 2, relative=True)
-        self.wait_disarmed()
+        self.zero_throttle()
+        self.wait_landed_and_disarmed()
         self.assert_fence_enabled()
+        # must not be in RTL
+        self.assert_mode("LOITER")
 
-        # Assert fence is not healthy since it was enabled manually
-        self.assert_sensor_state(fence_bit, healthy=False)
+        # Assert fence is healthy since it was enabled automatically
+        self.assert_sensor_state(fence_bit, healthy=True)
 
         # Disable the fence using mavlink command to ensure cleaned up SITL state
         self.do_fence_disable()
@@ -11729,6 +11731,36 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 "id": 1
             })
 
+    def MAV_CMD_MISSION_START_p1_p2(self):
+        '''make sure we deny MAV_CMD_MISSION_START if either p1 or p2 non-zero'''
+        self.upload_simple_relhome_mission([
+            (mavutil.mavlink.MAV_CMD_NAV_TAKEOFF, 0, 0, 20),
+        ])
+        self.set_parameters({
+            "AUTO_OPTIONS": 3,
+        })
+        self.change_mode('AUTO')
+        self.wait_ready_to_arm()
+
+        self.run_cmd(
+            mavutil.mavlink.MAV_CMD_MISSION_START,
+            p1=1,
+            want_result=mavutil.mavlink.MAV_RESULT_DENIED,
+        )
+
+        self.run_cmd(
+            mavutil.mavlink.MAV_CMD_MISSION_START,
+            p2=1,
+            want_result=mavutil.mavlink.MAV_RESULT_DENIED,
+        )
+
+        self.run_cmd(
+            mavutil.mavlink.MAV_CMD_MISSION_START,
+            p1=1,
+            p2=1,
+            want_result=mavutil.mavlink.MAV_RESULT_DENIED,
+        )
+
     def tests2b(self):  # this block currently around 9.5mins here
         '''return list of all tests'''
         ret = ([
@@ -11828,6 +11860,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.LoggingFormat,
             self.MissionRTLYawBehaviour,
             self.BatteryInternalUseOnly,
+            self.MAV_CMD_MISSION_START_p1_p2,
         ])
         return ret
 
