@@ -1,0 +1,214 @@
+# hw definition file for processing by chibios_hwdef.py
+# for H743 bootloader QMHV7
+
+# ------- CPU --------------
+
+# MCU class and specific type
+MCU STM32H7xx STM32H743xx
+
+# ------------ Clocks ----------
+
+# crystal frequency
+OSCILLATOR_HZ 16000000
+
+# ------ ID ----------------
+
+# board ID for firmware load
+APJ_BOARD_ID 7012
+
+# ---------- Storage -----------
+
+env OPTIMIZE -O2
+
+FLASH_SIZE_KB 2048
+
+FLASH_RESERVE_START_KB 128
+
+define HAL_STORAGE_SIZE 16384
+
+# --------- Board Timer ---------
+
+# Move board timer to timer 2
+define STM32_ST_USE_TIMER 2
+define CH_CFG_ST_RESOLUTION 32
+
+# ---------I2C-------------------
+
+I2C_ORDER I2C2
+
+# J1
+# PB6 I2C1_SCL I2C1
+# PB7 I2C1_SDA I2C1
+
+# J3
+PB10 I2C2_SCL I2C2
+PB11 I2C2_SDA I2C2
+
+-----# PPM_rcinput-----------
+
+PA0 TIM5_CH1 TIM5 RCININT PULLDOWN LOW
+
+# ---------ADC---------------
+
+# analog pins
+PC5 BATT_VOLTAGE_SENS ADC1 SCALE(1)
+PC4 BATT_CURRENT_SENS ADC1 SCALE(1)
+
+
+# define default battery setup
+define HAL_BATT_VOLT_PIN 8
+define HAL_BATT_CURR_PIN 4
+define HAL_BATT_VOLT_SCALE 9.3
+define HAL_BATT_CURR_SCALE 10.0
+
+# ---------UARTS-----------
+
+# order of UARTs (and USB)
+# Order    USB   sr1    sr2    sr3    sr4     sr5
+# AP Name  USB   GPS1  TELM1  TELM2  GPS2   DEBUG
+SERIAL_ORDER OTG1 USART3 USART6 UART7 USART1
+
+# USB
+PA11 OTG_FS_DM OTG1
+PA12 OTG_FS_DP OTG1
+
+PA9 VBUS INPUT OPENDRAIN
+
+# I2C1 swapped to USART1 J1
+PB6 USART1_TX USART1
+PB7 USART1_RX USART1
+
+# SBUS out port servo rail TX only UNUSED
+# PA2 USART2_TX USART2
+# PA3 USART2_RX USART2
+
+# port for gps1 J3
+PD8 USART3_TX USART3
+PD9 USART3_RX USART3
+
+# port for telem1 J2
+PC6 USART6_TX USART6
+PC7 USART6_RX USART6
+
+# port for gps2 J4
+PE8 UART7_TX UART7 NODMA
+PE7 UART7_RX UART7 NODMA
+
+# --------SPI-------------
+
+# SPI1
+
+# spi bus for MPU9250 & BARO MS5611
+PA5 SPI1_SCK SPI1
+PA6 SPI1_MISO SPI1
+PA7 SPI1_MOSI SPI1
+
+PA14 MPU9250_CS CS
+PB15 DRDY_MPU9250 INPUT
+PD5 MS5611_CS CS
+
+# SPI3
+
+# spi bus for MPU60XX & BARO BMP280
+PB3 SPI3_SCK SPI3
+PB4 SPI3_MISO SPI3
+PD6 SPI3_MOSI SPI3
+
+PD4 MPU6000_CS CS
+PB8 DRDY_MPU6000 INPUT
+PE2 BMP280_CS CS
+
+# --------PWM------------
+
+# Pins changed for bdshot
+# PWM out pins TH RD C1 C2 C3
+# PB9 TIM4_CH4 TIM4 PWM(1) GPIO(50)
+# PE5 TIM15_CH1 TIM15 PWM(2) GPIO(51)
+PB5 TIM3_CH2 TIM3 PWM(1) GPIO(50) BIDIR # 3 C1
+PB1 TIM3_CH4 TIM3 PWM(2) GPIO(51) BIDIR # 4 C2
+PB0 TIM3_CH3 TIM3 PWM(3) GPIO(52)       # 5 C3
+
+# PWM aux A1 A2 A3
+PA1 TIM5_CH2 TIM5 PWM(4) GPIO(53) BIDIR # 6 A1
+# PE11 TIM1_CH2 TIM1 PWM(7) GPIO(56)
+# PE13 TIM1_CH3 TIM1 PWM(8) GPIO(57)
+
+
+# --------RPM------------
+# RPM sensor
+# PA4 EXTERN_GPIO1 INPUT GPIO(4)
+
+# --------SAFETY SW------------
+
+# setup safety switch
+# PE14 LED_SAFETY OUTPUT
+# PE15 SAFETY_IN INPUT PULLDOWN
+
+# --------LEDs-----------
+
+PE9 LED_BLUE OUTPUT LOW GPIO(0)
+PE10 LED_RED OUTPUT LOW GPIO(1)
+
+define HAL_GPIO_A_LED_PIN 0
+define HAL_GPIO_B_LED_PIN 1
+
+define HAL_GPIO_LED_ON  0
+define HAL_GPIO_LED_OFF 1
+
+# --------SENSORS-----------
+
+# Two IMU
+# Two IMU MPU60XX & MPU9250
+IMU Invensense SPI:mpu9250 ROTATION_NONE
+IMU Invensense SPI:mpu6000 ROTATION_YAW_270
+
+# Two Baros BMP280
+BARO MS56XX SPI:ms5611
+BARO BMP280 SPI:bmp280
+
+# One compass AK8963
+COMPASS AK8963:probe_mpu9250 0 ROTATION_NONE
+
+define HAL_PROBE_EXTERNAL_I2C_COMPASSES
+define HAL_I2C_INTERNAL_MASK 0
+define HAL_COMPASS_AUTO_ROT_DEFAULT 2
+
+# SPI devices
+SPIDEV mpu6000     SPI3 DEVID1  MPU6000_CS  MODE3 1*MHZ 8*MHZ
+SPIDEV bmp280      SPI3 DEVID4  BMP280_CS   MODE3 1*MHZ 8*MHZ
+SPIDEV mpu9250     SPI1 DEVID2  MPU9250_CS  MODE3 1*MHZ 4*MHZ
+SPIDEV ms5611      SPI1 DEVID3  MS5611_CS   MODE0 20*MHZ 20*MHZ
+
+
+# --------SD CARD-----------
+
+# Setup microSD card
+PC8 SDMMC1_D0 SDMMC1
+PC9 SDMMC1_D1 SDMMC1
+PC10 SDMMC1_D2 SDMMC1
+PC11 SDMMC1_D3 SDMMC1
+PC12 SDMMC1_CK SDMMC1
+PD2 SDMMC1_CMD SDMMC1
+
+define HAL_OS_FATFS_IO 1
+
+# Now some defines for logging and terrain data files.
+define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
+define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
+
+# define STM32_PWM_USE_ADVANCED TRUE
+
+define BOARD_PWM_COUNT_DEFAULT 4
+
+DMA_NOSHARE SPI1* SPI3*
+
+
+# -----------Debug---------------
+
+# define CH_DBG_ENABLE_ASSERTS TRUE
+# define CH_DBG_ENABLE_CHECKS TRUE
+# define CH_DBG_SYSTEM_STATE_CHECK TRUE
+# define CH_DBG_ENABLE_STACK_CHECK TRUE
+
+# STDOUT_SERIAL SD6
+# STDOUT_BAUDRATE 57600

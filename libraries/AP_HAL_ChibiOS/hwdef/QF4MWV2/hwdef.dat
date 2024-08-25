@@ -1,0 +1,39 @@
+# hw definition file for processing by chibios_pins.py
+# for qUarkMini_Wing_V1 hardware
+# This is the qUarkMini_Wing_V2 variant
+
+include ../QF4MWV1/hwdef.dat
+
+
+# Change pin order
+undef PA10
+undef PB0
+undef PB4
+undef PB5
+undef TIM1_CH3 TIM1 PWM(1) GPIO(50)
+undef TIM3_CH3 TIM3 PWM(2) GPIO(51)
+undef TIM3_CH1 TIM3 PWM(3) GPIO(52)
+undef TIM3_CH2 TIM3 PWM(4) GPIO(53)
+
+undef PC13
+undef PC14
+undef LED_BLUE OUTPUT LOW GPIO(0)
+undef LED_RED OUTPUT LOW GPIO(1)
+
+# Update pin order
+# PB8 TIM4_CH3 TIM4 PWM(1) GPIO(50)
+# PB9 TIM11_CH1 TIM11 PWM(2) GPIO(51) NODMA
+
+PB8 CAN1_RX CAN1
+PB9 CAN1_TX CAN1
+
+
+PB4 TIM3_CH1 TIM3 PWM(1) GPIO(52)
+PB5 TIM3_CH2 TIM3 PWM(2) GPIO(53)
+
+# LED
+PC15 LED_BLUE OUTPUT LOW GPIO(0)
+PC14 LED_RED OUTPUT LOW GPIO(1)
+
+# Aux pin
+PA10 TIM1_CH3 TIM1 PWM(3) GPIO(54)
