@@ -267,8 +267,12 @@ void Plane::calc_airspeed_errors()
         target_airspeed_cm += airspeed_nudge_cm;
     }
 
+    float airspeed_lower_bound = is_positive(aparm.airspeed_stall)
+                                     ? aparm.airspeed_stall
+                                     : aparm.airspeed_min;
+
     // Apply airspeed limit
-    target_airspeed_cm = constrain_int32(target_airspeed_cm, aparm.airspeed_min*100, aparm.airspeed_max*100);
+    target_airspeed_cm = constrain_int32(target_airspeed_cm, airspeed_lower_bound*100, aparm.airspeed_max*100);
 
     // use the TECS view of the target airspeed for reporting, to take
     // account of the landing speed
@@ -321,7 +325,7 @@ void Plane::update_loiter_update_nav(uint16_t radius)
     if ((loiter.start_time_ms == 0 &&
          (control_mode == &mode_auto || control_mode == &mode_guided) &&
          auto_state.crosstrack &&
-         current_loc.get_distance(next_WP_loc) > radius*3) ||
+         current_loc.get_distance(next_WP_loc) > 3 * nav_controller->loiter_radius(radius)) ||
         quadplane_qrtl_switch) {
         /*
           if never reached loiter point and using crosstrack and somewhat far away from loiter point

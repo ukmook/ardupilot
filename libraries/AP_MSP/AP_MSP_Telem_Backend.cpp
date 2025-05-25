@@ -25,7 +25,6 @@
 #include <AP_Notify/AP_Notify.h>
 #include <AP_OpticalFlow/AP_OpticalFlow.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>
-#include <AP_RCMapper/AP_RCMapper.h>
 #include <AP_RSSI/AP_RSSI.h>
 #include <AP_RTC/AP_RTC.h>
 #include <GCS_MAVLink/GCS.h>
@@ -218,7 +217,7 @@ void AP_MSP_Telem_Backend::update_gps_state(gps_state_t &gps_state)
         gps_state.lon = loc.lng;
         gps_state.alt_m = loc.alt/100; // 1m resolution
         gps_state.speed_cms = gps.ground_speed() * 100;
-        gps_state.ground_course_cd = gps.ground_course_cd();
+        gps_state.ground_course_dd = gps.ground_course_cd() / 10;
     }
 }
 #endif
@@ -1068,17 +1067,10 @@ MSPCommandResult AP_MSP_Telem_Backend::msp_process_out_rtc(sbuf_t *dst)
 #if AP_RC_CHANNEL_ENABLED
 MSPCommandResult AP_MSP_Telem_Backend::msp_process_out_rc(sbuf_t *dst)
 {
-#if AP_RCMAPPER_ENABLED
-    const RCMapper* rcmap = AP::rcmap();
-    if (rcmap == nullptr) {
-        return MSP_RESULT_ERROR;
-    }
-
-    // note: rcmap channels start at 1
-    float roll = rc().rc_channel(rcmap->roll()-1)->norm_input_dz();
-    float pitch = -rc().rc_channel(rcmap->pitch()-1)->norm_input_dz();
-    float yaw = rc().rc_channel(rcmap->yaw()-1)->norm_input_dz();
-    float throttle = rc().rc_channel(rcmap->throttle()-1)->norm_input_dz();
+    float roll = rc().get_roll_channel().norm_input_dz();
+    float pitch = -rc().get_pitch_channel().norm_input_dz();
+    float yaw = rc().get_yaw_channel().norm_input_dz();
+    float throttle = rc().get_throttle_channel().norm_input_dz();
 
     const struct PACKED {
         uint16_t a;
@@ -1095,9 +1087,6 @@ MSPCommandResult AP_MSP_Telem_Backend::msp_process_out_rc(sbuf_t *dst)
 
     sbuf_write_data(dst, &rc, sizeof(rc));
     return MSP_RESULT_ACK;
-#else
-    return MSP_RESULT_ERROR;
-#endif
 }
 #endif  // AP_RC_CHANNEL_ENABLED
 
@@ -1272,7 +1261,7 @@ void AP_MSP_Telem_Backend::msp_displayport_draw_screen()
     msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, subcmd, sizeof(subcmd), false);
 }
 
-void AP_MSP_Telem_Backend::msp_displayport_write_string(uint8_t col, uint8_t row, bool blink, const char *string)
+void AP_MSP_Telem_Backend::msp_displayport_write_string(uint8_t col, uint8_t row, bool blink, const char *string, const uint8_t font_table)
 {
     const uint8_t len = strnlen(string, OSD_MSP_DISPLAYPORT_MAX_STRING_LENGTH);
 
@@ -1287,6 +1276,7 @@ void AP_MSP_Telem_Backend::msp_displayport_write_string(uint8_t col, uint8_t row
     packet.sub_cmd = msp_displayport_subcmd_e::MSP_DISPLAYPORT_WRITE_STRING;
     packet.row = row;
     packet.col = col;
+    packet.attr |= (font_table & 0x03); // first 2 bits are for the table index
     if (blink) {
         packet.attr |= DISPLAYPORT_MSP_ATTR_BLINK;
     }

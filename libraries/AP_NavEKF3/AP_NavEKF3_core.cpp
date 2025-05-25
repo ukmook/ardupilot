@@ -8,9 +8,9 @@
 #include <AP_DAL/AP_DAL.h>
 
 // constructor
-NavEKF3_core::NavEKF3_core(NavEKF3 *_frontend) :
+NavEKF3_core::NavEKF3_core(NavEKF3 *_frontend, AP_DAL &_dal) :
+    dal(_dal),
     frontend(_frontend),
-    dal(AP::dal()),
     public_origin(frontend->common_EKF_origin)
 {
     firstInitTime_ms = 0;
@@ -203,7 +203,7 @@ void NavEKF3_core::InitialiseVariables()
     prevBetaDragStep_ms = imuSampleTime_ms;
     lastBaroReceived_ms = imuSampleTime_ms;
     lastVelPassTime_ms = 0;
-    lastPosPassTime_ms = 0;
+    lastGpsPosPassTime_ms = 0;
     lastHgtPassTime_ms = 0;
     lastTasPassTime_ms = 0;
     lastSynthYawTime_ms = 0;
@@ -249,7 +249,9 @@ void NavEKF3_core::InitialiseVariables()
     memset(&nextP[0][0], 0, sizeof(nextP));
     flowDataValid = false;
     rangeDataToFuse  = false;
+#if EK3_FEATURE_OPTFLOW_FUSION
     Popt = 0.0f;
+#endif
     terrainState = 0.0f;
     prevPosN = stateStruct.position.x;
     prevPosE = stateStruct.position.y;
@@ -318,7 +320,9 @@ void NavEKF3_core::InitialiseVariables()
     ZERO_FARRAY(statesArray);
     memset(&vertCompFiltState, 0, sizeof(vertCompFiltState));
     posVelFusionDelayed = false;
+#if EK3_FEATURE_OPTFLOW_FUSION
     optFlowFusionDelayed = false;
+#endif
     flowFusionActive = false;
     airSpdFusionDelayed = false;
     sideSlipFusionDelayed = false;
@@ -609,8 +613,10 @@ void NavEKF3_core::CovarianceInit()
     P[23][23]  = P[22][22];
 
 
+#if EK3_FEATURE_OPTFLOW_FUSION
     // optical flow ground height covariance
     Popt = 0.25f;
+#endif
 
 }
 
@@ -667,8 +673,10 @@ void NavEKF3_core::UpdateFilter(bool predict)
         SelectRngBcnFusion();
 #endif
 
+#if EK3_FEATURE_OPTFLOW_FUSION
         // Update states using optical flow data
         SelectFlowFusion();
+#endif
 
 #if EK3_FEATURE_BODY_ODOM
         // Update states using body frame odometry data
@@ -994,8 +1002,8 @@ void NavEKF3_core::calcOutputStates()
 
 /*
  * Calculate the predicted state covariance matrix using algebraic equations generated using SymPy
- * See AP_NavEKF3/derivation/main.py for derivation
- * Output for change reference: AP_NavEKF3/derivation/generated/covariance_generated.cpp
+ * See derivation/generate_1.py for derivation
+ * Output for change reference: derivation/generated/covariance_generated.cpp
  * Argument rotVarVecPtr is pointer to a vector defining the earth frame uncertainty variance of the quaternion states
  * used to perform a reset of the quaternion state covariances only. Set to null for normal operation.
 */
@@ -1865,6 +1873,22 @@ void NavEKF3_core::ForceSymmetry()
 // if states are inactive, zero the corresponding off-diagonals
 void NavEKF3_core::ConstrainVariances()
 {
+    // Covariance constraints as of March 2025
+    // This table assumes normal operations, there are additional constraints for specific failure modes like "badIMUdata" and "inhibitDelAngBiasStates".
+    // +----------------------------------------------------------------------------------------------+
+    // | State Index  |      State Name                 |  State Units  | Variance Constraint Range   |
+    // +----------------------------------------------------------------------------------------------+
+    // |  0 .. 3      | Attitude Quaternion             | unitless      | [0.0, 1.0]                  |
+    // |  4 .. 5      | Velocity (North, East)          | m/s           | [1e-4, 1e3]                 |
+    // |  6           | Velocity (Down)                 | m/s           | dynamic                     |
+    // |  7 .. 9      | Position (North, East, Down)    | m             | [1e-4, 1e6]                 |
+    // | 10 .. 12     | Gyro Bias (X, Y, Z)             | rad           | [0.0, (0.175 * dtEkfAvg)^2] |
+    // | 13 .. 15     | Accel Bias (X, Y, Z)            | m/s^2         | dynamic                     |
+    // | 16 .. 18     | Earth Magnetic Field (X, Y, Z)  | Gauss         | [0.0, 0.01]                 |
+    // | 19 .. 21     | Body Magnetic Field (X, Y, Z)   | Gauss         | [0.0, 0.01]                 |
+    // | 22 .. 23     | Wind Velocity (North, East)     | m/s           | [0.0, 400]                  |
+    // +----------------------------------------------------------------------------------------------+
+
     for (uint8_t i=0; i<=3; i++) P[i][i] = constrain_ftype(P[i][i],0.0,1.0); // attitude error
     for (uint8_t i=4; i<=5; i++) P[i][i] = constrain_ftype(P[i][i], VEL_STATE_MIN_VARIANCE, 1.0e3); // NE velocity
 
@@ -1988,6 +2012,23 @@ void NavEKF3_core::MagTableConstrain(void)
 // constrain states to prevent ill-conditioning
 void NavEKF3_core::ConstrainStates()
 {
+    // State constraints as of March 2025
+    // This table documents the limits applied to each EKF state.
+    // These are designed to keep state estimates within physically realistic bounds and prevent divergence.
+    // +---------------------------------------------------------------------------------------------------------+
+    // | State Index  |      State Name                 |  State Units  | State Constraint Range                 |
+    // +---------------------------------------------------------------------------------------------------------+
+    // |  0 .. 3      | Attitude Quaternion             | unitless      | [-1.0, 1.0]                            |
+    // |  4 .. 6      | Velocity (North, East, Down)    | m/s           | [-500, 500]                            |
+    // |  7 .. 8      | Position (North, East)          | m             | [-50e6,50e6]                           |
+    // |  9 (z)       | Position (Down / Altitude)      | m             | [-40000, 10000]                        |
+    // | 10 .. 12     | Gyro Bias (X, Y, Z)             | rad           | [-0.5, 0.5] * dtEkfAvg                 |
+    // | 13 .. 15     | Accel Bias (X, Y, Z)            | m/s²          | [-_accBiasLim, _accBiasLim] * dtEkfAvg |
+    // | 16 .. 18     | Earth Magnetic Field (X, Y, Z)  | Gauss         | [-1.0, 1.0]                            | or constrained by MagTableConstrain() if available
+    // | 19 .. 21     | Body Magnetic Field (X, Y, Z)   | Gauss         | [-0.5, 0.5]                            |
+    // | 22 .. 23     | Wind Velocity (North, East)     | m/s           | [-100, 100]                            |
+    // +---------------------------------------------------------------------------------------------------------+
+
     // quaternions are limited between +-1
     for (uint8_t i=0; i<=3; i++) statesArray[i] = constrain_ftype(statesArray[i],-1.0f,1.0f);
     // velocity limit 500 m/sec (could set this based on some multiple of max airspeed * EAS2TAS)
@@ -2114,7 +2155,7 @@ void NavEKF3_core::calcTiltErrorVariance()
     const ftype &q2 = stateStruct.quat[2];
     const ftype &q3 = stateStruct.quat[3];
 
-    // equations generated by quaternion_error_propagation(): in AP_NavEKF3/derivation/main.py
+    // equations generated by quaternion_error_propagation(): in derivation/generate_2.py
     // only diagonals have been used
     // dq0 ... dq3  terms have been zeroed
     const ftype PS1 = q0*q1 + q2*q3;

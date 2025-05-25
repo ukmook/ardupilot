@@ -39,6 +39,7 @@
 #include "AP_InertialSensor_Invensensev3.h"
 #include "AP_InertialSensor_NONE.h"
 #include "AP_InertialSensor_SCHA63T.h"
+#include <AP_Scheduler/AP_Scheduler.h>
 
 /* Define INS_TIMING_DEBUG to track down scheduling issues with the main loop.
  * Output is on the debug console. */
@@ -704,7 +705,6 @@ AP_InertialSensor::AP_InertialSensor() :
 
     for (uint8_t i=0; i<INS_MAX_INSTANCES; i++) {
         _gyro_cal_ok[i] = true;
-        _accel_max_abs_offsets[i] = 3.5f;
     }
     for (uint8_t i=0; i<INS_VIBRATION_CHECK_INSTANCES; i++) {
         _accel_vibe_floor_filter[i].set_cutoff_frequency(AP_INERTIAL_SENSOR_ACCEL_VIBE_FLOOR_FILT_HZ);
@@ -854,9 +854,11 @@ void AP_InertialSensor::_start_backends()
         _backends[i]->start();
     }
 
+#if AP_INERTIALSENSOR_ALLOW_NO_SENSORS
     if (_gyro_count == 0 || _accel_count == 0) {
         AP_HAL::panic("INS needs at least 1 gyro and 1 accel");
     }
+#endif
 
     // clear IDs for unused sensor instances
     for (uint8_t i=get_accel_count(); i<INS_MAX_INSTANCES; i++) {
@@ -949,7 +951,7 @@ AP_InertialSensor::init(uint16_t loop_rate)
     }
 
     // calibrate gyros unless gyro calibration has been disabled
-    if (gyro_calibration_timing() != GYRO_CAL_NEVER) {
+    if (gyro_calibration_timing() != GYRO_CAL_NEVER && _gyro_count > 0) {
         init_gyro();
     }
 
@@ -1004,6 +1006,16 @@ AP_InertialSensor::init(uint16_t loop_rate)
 #endif
 
 #if AP_INERTIALSENSOR_HARMONICNOTCH_ENABLED
+
+#if APM_BUILD_TYPE(APM_BUILD_Heli)
+    // Throttle tracking does not make sense with heli because "throttle" is actually collective position in AP_MotorsHeli
+    for (auto &notch : harmonic_notches) {
+        if (notch.params.enabled() && notch.params.tracking_mode() == HarmonicNotchDynamicMode::UpdateThrottle) {
+            AP_BoardConfig::config_error("Throttle notch unavailable with heli");
+        }
+    }
+#endif
+
     // the center frequency of the harmonic notch is always taken from the calculated value so that it can be updated
     // dynamically, the calculated value is always some multiple of the configured center frequency, so start with the
     // configured value
@@ -1169,7 +1181,7 @@ AP_InertialSensor::detect_backends(void)
 // macro for use by HAL_INS_PROBE_LIST
 #define GET_I2C_DEVICE(bus, address) hal.i2c_mgr->get_device(bus, address)
 
-#if HAL_EXTERNAL_AHRS_ENABLED
+#if AP_EXTERNAL_AHRS_ENABLED
     // if enabled, make the first IMU the external AHRS
     const int8_t serial_port = AP::externalAHRS().get_port(AP_ExternalAHRS::AvailableSensor::IMU);
     if (serial_port >= 0) {
@@ -1324,7 +1336,9 @@ AP_InertialSensor::detect_backends(void)
         #else
         DEV_PRINTF("INS: unable to initialise driver\n");
         GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "INS: unable to initialise driver");
+        #if !AP_INERTIALSENSOR_ALLOW_NO_SENSORS
         AP_BoardConfig::config_error("INS: unable to initialise driver");
+        #endif
         #endif
     }
 }
@@ -1486,6 +1500,27 @@ bool AP_InertialSensor::gyro_calibrated_ok_all() const
         }
     }
     return (get_gyro_count() > 0);
+}
+
+// Prearm check to verify that we have sane sched loop rates set based on Gyro backend rates
+bool AP_InertialSensor::pre_arm_check_gyro_backend_rate_hz(char* fail_msg, uint16_t fail_msg_len) const
+{
+#if AP_SCHEDULER_ENABLED
+    const auto gyro_count = get_gyro_count();
+    const auto threshold = 1.8 * _loop_rate;
+    for (uint8_t i=0; i<gyro_count; i++) {
+        if (!_use(i) || _backends[i] == nullptr) {
+            continue;
+        }
+        const auto rate_hz = _backends[i]->get_gyro_backend_rate_hz();
+        if (rate_hz < threshold && (AP_HAL::Device::devid_get_devtype(_gyro_id(i)) != AP_InertialSensor_Backend::DEVTYPE_SERIAL)) {
+            hal.util->snprintf(fail_msg, fail_msg_len, "Gyro %d rate %dHz < loop ratex1.8 %dHz",
+                               i, int(rate_hz), int(threshold));
+            return false;
+        }
+    }
+#endif
+    return true;
 }
 
 // return true if gyro instance should be used (must be healthy and have it's use parameter set to 1)
@@ -1859,8 +1894,7 @@ void AP_InertialSensor::HarmonicNotch::update_params(uint8_t instance, bool conv
 {
     if (!is_equal(last_bandwidth_hz[instance], params.bandwidth_hz()) ||
         !is_equal(last_attenuation_dB[instance], params.attenuation_dB()) ||
-        (params.tracking_mode() == HarmonicNotchDynamicMode::Fixed &&
-         !is_equal(last_center_freq_hz[instance], params.center_freq_hz())) ||
+        !is_equal(last_center_freq_hz[instance], params.center_freq_hz()) ||
         converging) {
         filter[instance].init(gyro_rate, params);
         last_center_freq_hz[instance] = params.center_freq_hz();
@@ -1877,6 +1911,12 @@ void AP_InertialSensor::HarmonicNotch::update_params(uint8_t instance, bool conv
     }
 }
 #endif
+
+// notify IMUs of the new primary
+void AP_InertialSensor::set_primary(uint8_t instance)
+{
+    _primary = instance;
+}
 
 /*
   update gyro and accel values from backends
@@ -1950,6 +1990,9 @@ void AP_InertialSensor::update(void)
         for (uint8_t i=0; i<INS_MAX_INSTANCES; i++) {
             if (_gyro_healthy[i] && _use(i)) {
                 _first_usable_gyro = i;
+#if !AP_AHRS_ENABLED
+                _primary = _first_usable_gyro;
+#endif
                 break;
             }
         }
@@ -2327,7 +2370,7 @@ void AP_InertialSensor::acal_update()
 */
 void AP_InertialSensor::HarmonicNotch::update_freq_hz(float scaled_freq)
 {
-    calculated_notch_freq_hz[0] = scaled_freq;
+    calculated_notch_freq_hz[0] = fabsf(scaled_freq);
     num_calculated_notch_frequencies = 1;
 }
 
@@ -2335,7 +2378,7 @@ void AP_InertialSensor::HarmonicNotch::update_freq_hz(float scaled_freq)
 void AP_InertialSensor::HarmonicNotch::update_frequencies_hz(uint8_t num_freqs, const float scaled_freq[]) {
     // note that we allow zero through, which will disable the notch
     for (uint8_t i = 0; i < num_freqs; i++) {
-        calculated_notch_freq_hz[i] = scaled_freq[i];
+        calculated_notch_freq_hz[i] = fabsf(scaled_freq[i]);
     }
     // any uncalculated frequencies will float at the previous value or the initialized freq if none
     num_calculated_notch_frequencies = num_freqs;
@@ -2775,14 +2818,14 @@ void AP_InertialSensor::send_uart_data(void)
 }
 #endif // AP_SERIALMANAGER_IMUOUT_ENABLED
 
-#if HAL_EXTERNAL_AHRS_ENABLED
+#if AP_EXTERNAL_AHRS_ENABLED
 void AP_InertialSensor::handle_external(const AP_ExternalAHRS::ins_data_message_t &pkt)
 {
     for (uint8_t i = 0; i < _backend_count; i++) {
         _backends[i]->handle_external(pkt);
     }
 }
-#endif // HAL_EXTERNAL_AHRS_ENABLED
+#endif // AP_EXTERNAL_AHRS_ENABLED
 
 // force save of current calibration as valid
 void AP_InertialSensor::force_save_calibration(void)

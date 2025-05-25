@@ -37,7 +37,7 @@ void Copter::init_ardupilot()
     // setup telem slots with serial ports
     gcs().setup_uarts();
 
-#if OSD_ENABLED == ENABLED
+#if OSD_ENABLED
     osd.init();
 #endif
 
@@ -157,12 +157,15 @@ void Copter::init_ardupilot()
     rpm_sensor.init();
 #endif
 
-#if MODE_AUTO_ENABLED == ENABLED
+#if MODE_AUTO_ENABLED
     // initialise mission library
     mode_auto.mission.init();
+#if HAL_LOGGING_ENABLED
+    mode_auto.mission.set_log_start_mission_item_bit(MASK_LOG_CMD);
+#endif
 #endif
 
-#if MODE_SMARTRTL_ENABLED == ENABLED
+#if MODE_SMARTRTL_ENABLED
     // initialize SmartRTL
     g2.smart_rtl.init();
 #endif
@@ -174,7 +177,7 @@ void Copter::init_ardupilot()
 
     startup_INS_ground();
 
-#if AC_CUSTOMCONTROL_MULTI_ENABLED == ENABLED
+#if AC_CUSTOMCONTROL_MULTI_ENABLED
     custom_control.init();
 #endif
 
@@ -197,7 +200,6 @@ void Copter::init_ardupilot()
 
     pos_variance_filt.set_cutoff_frequency(g2.fs_ekf_filt_hz);
     vel_variance_filt.set_cutoff_frequency(g2.fs_ekf_filt_hz);
-    hgt_variance_filt.set_cutoff_frequency(g2.fs_ekf_filt_hz);
 
     // flag that initialisation has completed
     ap.initialised = true;
@@ -344,7 +346,6 @@ void Copter::update_auto_armed()
  */
 bool Copter::should_log(uint32_t mask)
 {
-    ap.logging_started = logger.logging_started();
     return logger.should_log(mask);
 }
 #endif
@@ -447,30 +448,30 @@ void Copter::allocate_motors(void)
     }
     AP_Param::load_object_from_eeprom(attitude_control, attitude_control_var_info);
         
-    pos_control = NEW_NOTHROW AC_PosControl(*ahrs_view, inertial_nav, *motors, *attitude_control);
+    pos_control = NEW_NOTHROW AC_PosControl(*ahrs_view, *motors, *attitude_control);
     if (pos_control == nullptr) {
         AP_BoardConfig::allocation_error("PosControl");
     }
     AP_Param::load_object_from_eeprom(pos_control, pos_control->var_info);
 
 #if AP_OAPATHPLANNER_ENABLED
-    wp_nav = NEW_NOTHROW AC_WPNav_OA(inertial_nav, *ahrs_view, *pos_control, *attitude_control);
+    wp_nav = NEW_NOTHROW AC_WPNav_OA(*ahrs_view, *pos_control, *attitude_control);
 #else
-    wp_nav = NEW_NOTHROW AC_WPNav(inertial_nav, *ahrs_view, *pos_control, *attitude_control);
+    wp_nav = NEW_NOTHROW AC_WPNav(*ahrs_view, *pos_control, *attitude_control);
 #endif
     if (wp_nav == nullptr) {
         AP_BoardConfig::allocation_error("WPNav");
     }
     AP_Param::load_object_from_eeprom(wp_nav, wp_nav->var_info);
 
-    loiter_nav = NEW_NOTHROW AC_Loiter(inertial_nav, *ahrs_view, *pos_control, *attitude_control);
+    loiter_nav = NEW_NOTHROW AC_Loiter(*ahrs_view, *pos_control, *attitude_control);
     if (loiter_nav == nullptr) {
         AP_BoardConfig::allocation_error("LoiterNav");
     }
     AP_Param::load_object_from_eeprom(loiter_nav, loiter_nav->var_info);
 
-#if MODE_CIRCLE_ENABLED == ENABLED
-    circle_nav = NEW_NOTHROW AC_Circle(inertial_nav, *ahrs_view, *pos_control);
+#if MODE_CIRCLE_ENABLED
+    circle_nav = NEW_NOTHROW AC_Circle(*ahrs_view, *pos_control);
     if (circle_nav == nullptr) {
         AP_BoardConfig::allocation_error("CircleNav");
     }
@@ -505,7 +506,6 @@ void Copter::allocate_motors(void)
     // upgrade parameters. This must be done after allocating the objects
     convert_pid_parameters();
 #if FRAME_CONFIG == HELI_FRAME
-    convert_tradheli_parameters();
     motors->heli_motors_param_conversions();
 #endif
 

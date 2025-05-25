@@ -28,7 +28,7 @@ do {                                            \
 #endif
 
 int
-AP_GSOF::parse(const uint8_t temp, const uint8_t n_expected)
+AP_GSOF::parse(const uint8_t temp, MsgTypes& parsed_msgs)
 {
     // https://receiverhelp.trimble.com/oem-gnss/index.html#API_DataCollectorFormatPacketStructure.html
     switch (msg.state) {
@@ -67,11 +67,10 @@ AP_GSOF::parse(const uint8_t temp, const uint8_t n_expected)
         msg.checksum = temp;
         msg.state = Msg_Parser::State::ENDTX;
         if (msg.checksum == msg.checksumcalc) {
-            const auto n_processed = process_message();
-            if (n_processed != n_expected ) {
-                return UNEXPECTED_NUM_GSOF_PACKETS;
+            if (!process_message(parsed_msgs)) {
+                return NO_GSOF_DATA;
             }
-            return n_processed;
+            return PARSED_GSOF_DATA;
         }
         break;
     case Msg_Parser::State::ENDTX:
@@ -83,58 +82,8 @@ AP_GSOF::parse(const uint8_t temp, const uint8_t n_expected)
     return NO_GSOF_DATA;
 }
 
-double
-AP_GSOF::SwapDouble(const uint8_t* src, const uint32_t pos) const
-{
-    union {
-        double d;
-        char bytes[sizeof(double)];
-    } doubleu;
-    doubleu.bytes[0] = src[pos + 7];
-    doubleu.bytes[1] = src[pos + 6];
-    doubleu.bytes[2] = src[pos + 5];
-    doubleu.bytes[3] = src[pos + 4];
-    doubleu.bytes[4] = src[pos + 3];
-    doubleu.bytes[5] = src[pos + 2];
-    doubleu.bytes[6] = src[pos + 1];
-    doubleu.bytes[7] = src[pos + 0];
-
-    return doubleu.d;
-}
-
-float
-AP_GSOF::SwapFloat(const uint8_t* src, const uint32_t pos) const
-{
-    union {
-        float f;
-        char bytes[sizeof(float)];
-    } floatu;
-    floatu.bytes[0] = src[pos + 3];
-    floatu.bytes[1] = src[pos + 2];
-    floatu.bytes[2] = src[pos + 1];
-    floatu.bytes[3] = src[pos + 0];
-
-    return floatu.f;
-}
-
-uint32_t
-AP_GSOF::SwapUint32(const uint8_t* src, const uint32_t pos) const
-{
-    uint32_t u;
-    memcpy(&u, &src[pos], sizeof(u));
-    return be32toh(u);
-}
-
-uint16_t
-AP_GSOF::SwapUint16(const uint8_t* src, const uint32_t pos) const
-{
-    uint16_t u;
-    memcpy(&u, &src[pos], sizeof(u));
-    return be16toh(u);
-}
-
-int
-AP_GSOF::process_message(void)
+bool
+AP_GSOF::process_message(MsgTypes& parsed_msgs)
 {
     if (msg.packettype == 0x40) { // GSOF
         // https://receiverhelp.trimble.com/oem-gnss/index.html#GSOFmessages_TIME.html?TocPath=Output%2520Messages%257CGSOF%2520Messages%257C_____25
@@ -147,12 +96,9 @@ AP_GSOF::process_message(void)
               pageidx, maxpageidx, trans_number);
 #endif
 
-        // This counts up the number of received packets.
-        int valid = 0;
-
-        // want 1 2 8 9 12
         for (uint32_t a = 3; a < msg.length; a++) {
             const uint8_t output_type = msg.data[a];
+            parsed_msgs.set(output_type);
             a++;
             const uint8_t output_length = msg.data[a];
             a++;
@@ -161,23 +107,18 @@ AP_GSOF::process_message(void)
             switch (output_type) {
             case POS_TIME:
                 parse_pos_time(a);
-                valid++;
                 break;
             case POS:
                 parse_pos(a);
-                valid++;
                 break;
             case VEL:
                 parse_vel(a);
-                valid++;
                 break;
             case DOP:
                 parse_dop(a);
-                valid++;
                 break;
             case POS_SIGMA:
                 parse_pos_sigma(a);
-                valid++;
                 break;
             default:
                 break;
@@ -186,18 +127,18 @@ AP_GSOF::process_message(void)
             a += output_length - 1u;
         }
 
-        return valid;
+        return true;
     }
 
     // No GSOF packets.
-    return NO_GSOF_DATA;
+    return false;
 }
 
 void AP_GSOF::parse_pos_time(uint32_t a)
 {
     // https://receiverhelp.trimble.com/oem-gnss/index.html#GSOFmessages_TIME.html?TocPath=Output%2520Messages%257CGSOF%2520Messages%257C_____25
-    pos_time.time_week_ms = SwapUint32(msg.data, a);
-    pos_time.time_week = SwapUint16(msg.data, a + 4);
+    pos_time.time_week_ms = be32toh_ptr(msg.data + a);
+    pos_time.time_week = be32toh_ptr(msg.data + a + 4);
     pos_time.num_sats = msg.data[a + 6];
     pos_time.pos_flags1 = msg.data[a + 7];
     pos_time.pos_flags2 = msg.data[a + 8];
@@ -206,9 +147,9 @@ void AP_GSOF::parse_pos_time(uint32_t a)
 void AP_GSOF::parse_pos(uint32_t a)
 {
     // This packet is not documented in Trimble's receiver help as of May 18, 2023
-    position.latitude_rad = SwapDouble(msg.data, a);
-    position.longitude_rad = SwapDouble(msg.data, a + 8);
-    position.altitude = SwapDouble(msg.data, a + 16);
+    position.latitude_rad = be64todouble_ptr(msg.data, a);
+    position.longitude_rad = be64todouble_ptr(msg.data, a + 8);
+    position.altitude = be64todouble_ptr(msg.data, a + 16);
 }
 
 void AP_GSOF::parse_vel(uint32_t a)
@@ -218,13 +159,13 @@ void AP_GSOF::parse_vel(uint32_t a)
 
     constexpr uint8_t BIT_VELOCITY_VALID = 0;
     if (BIT_IS_SET(vel.velocity_flags, BIT_VELOCITY_VALID)) {
-        vel.horizontal_velocity = SwapFloat(msg.data, a + 1);
-        vel.vertical_velocity = SwapFloat(msg.data, a + 9);
+        vel.horizontal_velocity = be32tofloat_ptr(msg.data, a + 1);
+        vel.vertical_velocity = be32tofloat_ptr(msg.data, a + 9);
     }
 
     constexpr uint8_t BIT_HEADING_VALID = 2;
     if (BIT_IS_SET(vel.velocity_flags, BIT_HEADING_VALID)) {
-        vel.heading = SwapFloat(msg.data, a + 5);
+        vel.heading = be32tofloat_ptr(msg.data, a + 5);
     }
 }
 
@@ -232,16 +173,16 @@ void AP_GSOF::parse_dop(uint32_t a)
 {
     // https://receiverhelp.trimble.com/oem-gnss/index.html#GSOFmessages_PDOP.html?TocPath=Output%2520Messages%257CGSOF%2520Messages%257C_____12
     // Skip pdop.
-    dop.hdop = SwapFloat(msg.data, a + 4);
+    dop.hdop = be32tofloat_ptr(msg.data, a + 4);
 }
 
 void AP_GSOF::parse_pos_sigma(uint32_t a)
 {
     // https://receiverhelp.trimble.com/oem-gnss/index.html#GSOFmessages_SIGMA.html?TocPath=Output%2520Messages%257CGSOF%2520Messages%257C_____24
     // Skip pos_rms
-    pos_sigma.sigma_east = SwapFloat(msg.data, a + 4);
-    pos_sigma.sigma_north = SwapFloat(msg.data, a + 8);
-    pos_sigma.sigma_up = SwapFloat(msg.data, a + 16);
+    pos_sigma.sigma_east = be32tofloat_ptr(msg.data, a + 4);
+    pos_sigma.sigma_north = be32tofloat_ptr(msg.data, a + 8);
+    pos_sigma.sigma_up = be32tofloat_ptr(msg.data, a + 16);
 }
 #endif // AP_GSOF_ENABLED
 

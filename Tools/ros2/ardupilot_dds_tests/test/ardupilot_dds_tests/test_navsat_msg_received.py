@@ -14,13 +14,10 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 """Bring up ArduPilot SITL and check the NavSat message is being published."""
-import launch_pytest
 import pytest
 import rclpy
 import rclpy.node
 import threading
-
-from launch import LaunchDescription
 
 from launch_pytest.tools import process as process_tools
 
@@ -30,9 +27,16 @@ from rclpy.qos import QoSHistoryPolicy
 
 from sensor_msgs.msg import NavSatFix
 
+TOPIC = "ap/navsat"
+
+from launch_fixtures import (
+    launch_sitl_copter_dds_serial,
+    launch_sitl_copter_dds_udp,
+)
+
 
 class NavSatFixListener(rclpy.node.Node):
-    """Subscribe to NavSatFix messages on /ap/navsat/navsat0."""
+    """Subscribe to NavSatFix messages."""
 
     def __init__(self):
         """Initialise the node."""
@@ -40,7 +44,7 @@ class NavSatFixListener(rclpy.node.Node):
         self.msg_event_object = threading.Event()
 
         # Declare and acquire `topic` parameter
-        self.declare_parameter("topic", "ap/navsat/navsat0")
+        self.declare_parameter("topic", TOPIC)
         self.topic = self.get_parameter("topic").get_parameter_value().string_value
 
     def start_subscriber(self):
@@ -67,36 +71,6 @@ class NavSatFixListener(rclpy.node.Node):
             self.get_logger().info("From AP : False")
 
 
-@launch_pytest.fixture
-def launch_sitl_copter_dds_serial(sitl_copter_dds_serial):
-    """Fixture to create the launch description."""
-    sitl_ld, sitl_actions = sitl_copter_dds_serial
-
-    ld = LaunchDescription(
-        [
-            sitl_ld,
-            launch_pytest.actions.ReadyToTest(),
-        ]
-    )
-    actions = sitl_actions
-    yield ld, actions
-
-
-@launch_pytest.fixture
-def launch_sitl_copter_dds_udp(sitl_copter_dds_udp):
-    """Fixture to create the launch description."""
-    sitl_ld, sitl_actions = sitl_copter_dds_udp
-
-    ld = LaunchDescription(
-        [
-            sitl_ld,
-            launch_pytest.actions.ReadyToTest(),
-        ]
-    )
-    actions = sitl_actions
-    yield ld, actions
-
-
 @pytest.mark.launch(fixture=launch_sitl_copter_dds_serial)
 def test_dds_serial_navsat_msg_recv(launch_context, launch_sitl_copter_dds_serial):
     """Test NavSatFix messages are published by AP_DDS."""
@@ -117,7 +91,7 @@ def test_dds_serial_navsat_msg_recv(launch_context, launch_sitl_copter_dds_seria
         node = NavSatFixListener()
         node.start_subscriber()
         msgs_received_flag = node.msg_event_object.wait(timeout=10.0)
-        assert msgs_received_flag, "Did not receive 'ap/navsat/navsat0' msgs."
+        assert msgs_received_flag, f"Did not receive '{TOPIC}' msgs."
     finally:
         rclpy.shutdown()
     yield
@@ -141,7 +115,7 @@ def test_dds_udp_navsat_msg_recv(launch_context, launch_sitl_copter_dds_udp):
         node = NavSatFixListener()
         node.start_subscriber()
         msgs_received_flag = node.msg_event_object.wait(timeout=10.0)
-        assert msgs_received_flag, "Did not receive 'ap/navsat/navsat0' msgs."
+        assert msgs_received_flag, f"Did not receive '{TOPIC}' msgs."
     finally:
         rclpy.shutdown()
     yield

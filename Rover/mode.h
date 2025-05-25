@@ -28,6 +28,7 @@ public:
         SMART_RTL    = 12,
         GUIDED       = 15,
         INITIALISING = 16,
+        // Mode number 30 reserved for "offboard" for external/lua control.
     };
 
     // Constructor
@@ -418,6 +419,9 @@ public:
     Number mode_number() const override { return Number::CIRCLE; }
     const char *name4() const override { return "CIRC"; }
 
+    // return the distance at which the vehicle is considered to be on track along the circle
+    float get_reached_distance() const;
+
     // initialise with specific center location, radius (in meters) and direction
     // replaces use of _enter when initialised from within Auto mode
     bool set_center(const Location& center_loc, float radius_m, bool dir_ccw);
@@ -499,6 +503,7 @@ protected:
     float angle_total_rad;  // total angle in radians that vehicle has circled
     bool reached_edge;      // true once vehicle has reached edge of circle
     float dist_to_edge_m;   // distance to edge of circle in meters (equivalent to crosstrack error)
+    bool tracking_back;     // true if the vehicle is trying to track back onto the circle
 };
 
 class ModeGuided : public Mode

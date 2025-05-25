@@ -130,13 +130,13 @@ void Copter::failsafe_gcs_check()
         return;
     }
 
-    const uint32_t gcs_last_seen_ms = gcs().sysid_myggcs_last_seen_time_ms();
+    const uint32_t gcs_last_seen_ms = gcs().sysid_mygcs_last_seen_time_ms();
     if (gcs_last_seen_ms == 0) {
         return;
     }
 
     // calc time since last gcs update
-    // note: this only looks at the heartbeat from the device id set by g.sysid_my_gcs
+    // note: this only looks at the heartbeat from the device id set by sysid_mygcs
     const uint32_t last_gcs_update_ms = millis() - gcs_last_seen_ms;
     const uint32_t gcs_timeout_ms = uint32_t(constrain_float(g2.fs_gcs_timeout * 1000.0f, 0.0f, UINT32_MAX));
 
@@ -286,7 +286,7 @@ void Copter::failsafe_terrain_on_event()
 
     if (should_disarm_on_failsafe()) {
         arming.disarm(AP_Arming::Method::TERRAINFAILSAFE);
-#if MODE_RTL_ENABLED == ENABLED
+#if MODE_RTL_ENABLED
     } else if (flightmode->mode_number() == Mode::Number::RTL) {
         mode_rtl.restart_without_terrain();
 #endif
@@ -425,7 +425,7 @@ void Copter::set_mode_SmartRTL_or_RTL(ModeReason reason)
 // This can come from failsafe or RC option
 void Copter::set_mode_auto_do_land_start_or_RTL(ModeReason reason)
 {
-#if MODE_AUTO_ENABLED == ENABLED
+#if MODE_AUTO_ENABLED
     if (set_mode(Mode::Number::AUTO_RTL, reason)) {
         AP_Notify::events.failsafe_mode_change = 1;
         return;
@@ -440,7 +440,7 @@ void Copter::set_mode_auto_do_land_start_or_RTL(ModeReason reason)
 // This can come from failsafe or RC option
 void Copter::set_mode_brake_or_land_with_pause(ModeReason reason)
 {
-#if MODE_BRAKE_ENABLED == ENABLED
+#if MODE_BRAKE_ENABLED
     if (set_mode(Mode::Number::BRAKE, reason)) {
         AP_Notify::events.failsafe_mode_change = 1;
         return;
@@ -492,7 +492,7 @@ void Copter::do_failsafe_action(FailsafeAction action, ModeReason reason){
             set_mode_SmartRTL_or_land_with_pause(reason);
             break;
         case FailsafeAction::TERMINATE: {
-#if ADVANCED_FAILSAFE == ENABLED
+#if AP_COPTER_ADVANCED_FAILSAFE_ENABLED
             g2.afs.gcs_terminate(true, "Failsafe");
 #else
             arming.disarm(AP_Arming::Method::FAILSAFE_ACTION_TERMINATE);

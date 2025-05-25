@@ -1,6 +1,6 @@
 #include "Copter.h"
 
-#if TOY_MODE_ENABLED == ENABLED
+#if TOY_MODE_ENABLED
 
 // times in 0.1s units
 #define TOY_COMMAND_DELAY 15
@@ -490,7 +490,7 @@ void ToyMode::update()
         break;
 
     case ACTION_MODE_ACRO:
-#if MODE_ACRO_ENABLED == ENABLED
+#if MODE_ACRO_ENABLED
         new_mode = Mode::Number::ACRO;
 #else
         gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: ACRO is disabled");
@@ -542,7 +542,7 @@ void ToyMode::update()
         break;
 
     case ACTION_MODE_THROW:
-#if MODE_THROW_ENABLED == ENABLED
+#if MODE_THROW_ENABLED
         new_mode = Mode::Number::THROW;
 #else
         gcs().send_text(MAV_SEVERITY_ERROR, "Tmode: THROW is disabled");
@@ -1079,9 +1079,9 @@ void ToyMode::arm_check_compass(void)
     if (offsets.length() > copter.compass.get_offsets_max() ||
         field < 200 || field > 800 ||
         !copter.compass.configured(unused_compass_configured_error_message, ARRAY_SIZE(unused_compass_configured_error_message))) {
-        if (copter.compass.get_learn_type() != Compass::LEARN_INFLIGHT) {
+        if (copter.compass.get_learn_type() != Compass::LearnType::INFLIGHT) {
             gcs().send_text(MAV_SEVERITY_INFO, "Tmode: enable compass learning");
-            copter.compass.set_learn_type(Compass::LEARN_INFLIGHT, false);
+            copter.compass.set_learn_type(Compass::LearnType::INFLIGHT, false);
         }
     }
 }

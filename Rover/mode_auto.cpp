@@ -5,7 +5,7 @@
 bool ModeAuto::_enter()
 {
     // fail to enter auto if no mission commands
-    if (mission.num_commands() <= 1) {
+    if (!mission.present()) {
         gcs().send_text(MAV_SEVERITY_NOTICE, "No Mission. Can't set AUTO.");
         return false;
     }
@@ -47,7 +47,7 @@ void ModeAuto::update()
     // check if mission exists (due to being cleared while disarmed in AUTO,
     // if no mission, then stop...needs mode change out of AUTO, mission load,
     // and change back to AUTO to run a mission at this point
-    if (!hal.util->get_soft_armed() && mission.num_commands() <= 1) {
+    if (!hal.util->get_soft_armed() && !mission.present()) {
         start_stop();
     }
     // start or update mission
@@ -512,13 +512,6 @@ void ModeAuto::send_guided_position_target()
 /********************************************************************************/
 bool ModeAuto::start_command(const AP_Mission::Mission_Command& cmd)
 {
-#if HAL_LOGGING_ENABLED
-    // log when new commands start
-    if (rover.should_log(MASK_LOG_CMD)) {
-        rover.logger.Write_Mission_Cmd(mission, cmd);
-    }
-#endif
-
     switch (cmd.id) {
     case MAV_CMD_NAV_WAYPOINT:  // Navigate to Waypoint
         return do_nav_wp(cmd, false);
@@ -576,6 +569,9 @@ bool ModeAuto::start_command(const AP_Mission::Mission_Command& cmd)
     // system to control the vehicle attitude and the attitude of various
     // devices such as cameras.
     //    |Region of interest mode. (see MAV_ROI enum)| Waypoint index/ target ID. (see MAV_ROI enum)| ROI index (allows a vehicle to manage multiple cameras etc.)| Empty| x the location of the fixed ROI (see MAV_FRAME)| y| z|
+    // ROI_NONE can be handled by the regular ROI handler because lat, lon, alt are always zero
+    case MAV_CMD_DO_SET_ROI_LOCATION:
+    case MAV_CMD_DO_SET_ROI_NONE:
     case MAV_CMD_DO_SET_ROI:
         if (cmd.content.location.alt == 0 && cmd.content.location.lat == 0 && cmd.content.location.lng == 0) {
             // switch off the camera tracking if enabled
@@ -703,6 +699,8 @@ bool ModeAuto::verify_command(const AP_Mission::Mission_Command& cmd)
     case MAV_CMD_DO_CHANGE_SPEED:
     case MAV_CMD_DO_SET_HOME:
     case MAV_CMD_DO_SET_CAM_TRIGG_DIST:
+    case MAV_CMD_DO_SET_ROI_LOCATION:
+    case MAV_CMD_DO_SET_ROI_NONE:
     case MAV_CMD_DO_SET_ROI:
     case MAV_CMD_DO_SET_REVERSE:
     case MAV_CMD_DO_FENCE_ENABLE:

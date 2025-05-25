@@ -1,6 +1,5 @@
 #pragma once
 
-#include <AP_Logger/AP_Logger.h>
 #include <AP_Logger/LogStructure.h>
 #include <AP_Param/AP_Param.h>
 #include <AP_Vehicle/AP_FixedWing.h>
@@ -64,6 +63,8 @@ public:
 
     // are we running?
     bool running;
+
+    static const char *axis_string(ATType _type);
 
 private:
     // the current gains
